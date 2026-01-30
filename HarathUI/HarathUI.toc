@@ -1,4 +1,4 @@
-## Interface: 120007, 110207, 50503, 40400, 11508
+## Interface: 120000, 120001
 ## Title: HaraUI
 ## Notes: Modular quality-of-life UI suite (XP/Rep bar, cast bar, menu scale, loot toasts).
 ## Author: Harath
