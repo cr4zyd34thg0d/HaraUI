@@ -230,17 +230,15 @@ local function OnUpdate()
   end
 
   if now >= state.endMS then
+    local shouldPreview = db.castbar.previewWhenUnlocked and not db.general.framesLocked
     if state.preview then
-      if db.castbar.previewWhenUnlocked then
+      if shouldPreview then
         StartCast(true)
       else
         Stop()
       end
     else
       Stop()
-      if db.castbar.previewWhenUnlocked then
-        StartCast(true)
-      end
     end
   end
 end
@@ -319,7 +317,9 @@ function M:Apply()
 
   M:SetLocked(db.general.framesLocked)
 
-  if db.castbar.previewWhenUnlocked then
+  -- Only show preview when unlocked (move mode) AND previewWhenUnlocked is enabled
+  local shouldPreview = db.castbar.previewWhenUnlocked and not db.general.framesLocked
+  if shouldPreview then
     if not state.active then
       local name = UnitCastingInfo("player")
       local cname = UnitChannelInfo("player")
