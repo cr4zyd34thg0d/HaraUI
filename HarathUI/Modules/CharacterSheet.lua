@@ -46,23 +46,28 @@ local ShowDungeonPortalTooltip
 local pendingSecureUpdate = false
 
 local CUSTOM_CHAR_WIDTH = 640
-local CUSTOM_CHAR_HEIGHT = 620
+local CUSTOM_CHAR_HEIGHT = 675
 local CUSTOM_STATS_WIDTH = 230
 local CUSTOM_PANE_GAP = 6
-local PRIMARY_SHEET_WIDTH = 640
+local PRIMARY_SHEET_WIDTH = 820
 local INTEGRATED_RIGHT_GAP = 8
-local STAT_ROW_HEIGHT = 15
-local STAT_SECTION_GAP = 6
+local STAT_ROW_HEIGHT = 16
+local STAT_ROW_GAP = 2
+local STAT_SECTION_GAP = 7
+local STAT_SECTION_BOTTOM_PAD = 2
 local SIMPLE_BASE_PANEL_MODE = true
 local SLOT_ICON_SIZE = 38
+local GEAR_ROW_WIDTH = 272
+local GEAR_ROW_HEIGHT = 46
+local GEAR_TEXT_GAP = 10
 local MODEL_ZOOM_OUT_FACTOR = 0.80
-local STAT_GRADIENT_SPLIT = 0.52
-local STAT_TOPINFO_GRADIENT_SPLIT = 0.56
-local STAT_BODY_GRADIENT_SPLIT = 0.74
-local STAT_ROW_GRADIENT_SPLIT = 0.74
-local STAT_HEADER_GRADIENT_ALPHA = 0.92
-local STAT_BODY_GRADIENT_ALPHA = 0.52
-local STAT_ROW_GRADIENT_ALPHA = 0.56
+local STAT_GRADIENT_SPLIT = 0.82
+local STAT_TOPINFO_GRADIENT_SPLIT = 0.86
+local STAT_BODY_GRADIENT_SPLIT = 0.90
+local STAT_ROW_GRADIENT_SPLIT = 0.92
+local STAT_HEADER_GRADIENT_ALPHA = 1.00
+local STAT_BODY_GRADIENT_ALPHA = 0.72
+local STAT_ROW_GRADIENT_ALPHA = 0.74
 
 local ATTR_YELLOW = { 0.96, 0.96, 0.96, 1.0 }
 local VALUE_WHITE = { 0.96, 0.96, 0.96, 1.0 }
@@ -71,17 +76,18 @@ local LEFT_GEAR_SLOTS = {
   "HeadSlot",
   "NeckSlot",
   "ShoulderSlot",
-  "ShirtSlot",
+  "BackSlot",
   "ChestSlot",
-  "WaistSlot",
-  "LegsSlot",
-  "FeetSlot",
+  "ShirtSlot",
+  "SecondaryHandSlot",
+  "WristSlot",
 }
 
 local RIGHT_GEAR_SLOTS = {
-  "BackSlot",
-  "WristSlot",
   "HandsSlot",
+  "WaistSlot",
+  "LegsSlot",
+  "FeetSlot",
   "Finger0Slot",
   "Finger1Slot",
   "Trinket0Slot",
@@ -404,6 +410,29 @@ local function EnsureCustomCharacterFrame()
   })
   customCharacterFrame:SetBackdropColor(0, 0, 0, 0)
   customCharacterFrame:SetBackdropBorderColor(0.34, 0.17, 0.52, 0.95)
+  customCharacterFrame:EnableMouse(true)
+  customCharacterFrame:SetMovable(true)
+  customCharacterFrame:RegisterForDrag("LeftButton")
+  customCharacterFrame:SetScript("OnDragStart", function()
+    if InCombatLockdown and InCombatLockdown() then return end
+    if CharacterFrame and CharacterFrame.SetMovable then
+      CharacterFrame:SetMovable(true)
+    end
+    if CharacterFrame and CharacterFrame.SetClampedToScreen then
+      CharacterFrame:SetClampedToScreen(true)
+    end
+    if CharacterFrame and CharacterFrame.SetUserPlaced then
+      CharacterFrame:SetUserPlaced(true)
+    end
+    if CharacterFrame and CharacterFrame.StartMoving then
+      CharacterFrame:StartMoving()
+    end
+  end)
+  customCharacterFrame:SetScript("OnDragStop", function()
+    if CharacterFrame and CharacterFrame.StopMovingOrSizing then
+      CharacterFrame:StopMovingOrSizing()
+    end
+  end)
   customCharacterFrame:Hide()
 
   customCharacterFrame.innerGlow = customCharacterFrame:CreateTexture(nil, "BACKGROUND")
@@ -638,7 +667,7 @@ local function EnsureCustomStatsFrame()
   })
   customStatsFrame.topInfo:SetBackdropColor(0.02, 0.02, 0.03, 0.75)
   customStatsFrame.topInfo:SetBackdropBorderColor(0.32, 0.18, 0.48, 0.9)
-  customStatsFrame.topInfo:SetHeight(72)
+  customStatsFrame.topInfo:SetHeight(66)
 
   customStatsFrame.topInfo.ilvl = customStatsFrame.topInfo:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
   customStatsFrame.topInfo.ilvl:SetPoint("TOP", customStatsFrame.topInfo, "TOP", 0, -4)
@@ -646,8 +675,8 @@ local function EnsureCustomStatsFrame()
   customStatsFrame.topInfo.ilvl:SetText("0.00 / 0.00")
 
   customStatsFrame.topInfo.healthRow = CreateFrame("Frame", nil, customStatsFrame.topInfo)
-  customStatsFrame.topInfo.healthRow:SetPoint("TOPLEFT", customStatsFrame.topInfo, "TOPLEFT", 8, -30)
-  customStatsFrame.topInfo.healthRow:SetPoint("TOPRIGHT", customStatsFrame.topInfo, "TOPRIGHT", -8, -30)
+  customStatsFrame.topInfo.healthRow:SetPoint("TOPLEFT", customStatsFrame.topInfo, "TOPLEFT", 0, -30)
+  customStatsFrame.topInfo.healthRow:SetPoint("TOPRIGHT", customStatsFrame.topInfo, "TOPRIGHT", 0, -30)
   customStatsFrame.topInfo.healthRow:SetHeight(16)
   customStatsFrame.topInfo.healthRow.bg = customStatsFrame.topInfo.healthRow:CreateTexture(nil, "BACKGROUND")
   customStatsFrame.topInfo.healthRow.bg:SetAllPoints()
@@ -660,8 +689,8 @@ local function EnsureCustomStatsFrame()
   customStatsFrame.topInfo.healthRow.right:SetJustifyH("RIGHT")
 
   customStatsFrame.topInfo.powerRow = CreateFrame("Frame", nil, customStatsFrame.topInfo)
-  customStatsFrame.topInfo.powerRow:SetPoint("TOPLEFT", customStatsFrame.topInfo.healthRow, "BOTTOMLEFT", 0, -3)
-  customStatsFrame.topInfo.powerRow:SetPoint("TOPRIGHT", customStatsFrame.topInfo.healthRow, "TOPRIGHT", 0, -3)
+  customStatsFrame.topInfo.powerRow:SetPoint("TOPLEFT", customStatsFrame.topInfo.healthRow, "BOTTOMLEFT", 0, -2)
+  customStatsFrame.topInfo.powerRow:SetPoint("TOPRIGHT", customStatsFrame.topInfo.healthRow, "TOPRIGHT", 0, -2)
   customStatsFrame.topInfo.powerRow:SetHeight(16)
   customStatsFrame.topInfo.powerRow.bg = customStatsFrame.topInfo.powerRow:CreateTexture(nil, "BACKGROUND")
   customStatsFrame.topInfo.powerRow.bg:SetAllPoints()
@@ -972,7 +1001,7 @@ local function UpdateCustomStatsFrame(db)
   local statsX = PRIMARY_SHEET_WIDTH - statsWidth - 8
   frame:ClearAllPoints()
   frame:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", statsX, -52)
-  frame:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", statsX, 66)
+  frame:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", statsX, 52)
   frame:SetWidth(statsWidth)
 
   local sections = BuildCustomStatsData()
@@ -1004,9 +1033,11 @@ local function UpdateCustomStatsFrame(db)
     frame.topInfo.healthRow.left:SetTextColor(1, 1, 1, 1)
     frame.topInfo.healthRow.right:SetTextColor(1, 1, 1, 1)
     frame.topInfo.healthRow.bg:ClearAllPoints()
-    frame.topInfo.healthRow.bg:SetPoint("TOPLEFT", frame.topInfo.healthRow, "TOPLEFT", 1, 0)
-    frame.topInfo.healthRow.bg:SetPoint("BOTTOMRIGHT", frame.topInfo.healthRow, "BOTTOMLEFT", math.floor(width * STAT_TOPINFO_GRADIENT_SPLIT), 0)
-    SetHorizontalGradient(frame.topInfo.healthRow.bg, 0.55, 0.04, 0.04, 0.70, 0.55, 0.04, 0.04, 0.15)
+    frame.topInfo.healthRow.bg:SetPoint("TOPLEFT", frame.topInfo.healthRow, "TOPLEFT", 0, 0)
+    frame.topInfo.healthRow.bg:SetPoint("BOTTOMRIGHT", frame.topInfo.healthRow, "BOTTOMLEFT", math.floor(width * STAT_TOPINFO_GRADIENT_SPLIT), -1)
+    SetHorizontalGradient(frame.topInfo.healthRow.bg, 0.55, 0.04, 0.04, 0.78, 0, 0, 0, 0.08)
+    if frame.topInfo.healthRow.bg.SetBlendMode then frame.topInfo.healthRow.bg:SetBlendMode("BLEND") end
+    if frame.topInfo.healthRow.bg.SetAlpha then frame.topInfo.healthRow.bg:SetAlpha(1) end
 
     local powerType, powerToken = 0, "MANA"
     if UnitPowerType then
@@ -1022,9 +1053,11 @@ local function UpdateCustomStatsFrame(db)
     frame.topInfo.powerRow.left:SetTextColor(1, 1, 1, 1)
     frame.topInfo.powerRow.right:SetTextColor(1, 1, 1, 1)
     frame.topInfo.powerRow.bg:ClearAllPoints()
-    frame.topInfo.powerRow.bg:SetPoint("TOPLEFT", frame.topInfo.powerRow, "TOPLEFT", 1, 0)
+    frame.topInfo.powerRow.bg:SetPoint("TOPLEFT", frame.topInfo.powerRow, "TOPLEFT", 0, 1)
     frame.topInfo.powerRow.bg:SetPoint("BOTTOMRIGHT", frame.topInfo.powerRow, "BOTTOMLEFT", math.floor(width * STAT_TOPINFO_GRADIENT_SPLIT), 0)
-    SetHorizontalGradient(frame.topInfo.powerRow.bg, pr, pg, pb, 0.70, pr, pg, pb, 0.15)
+    SetHorizontalGradient(frame.topInfo.powerRow.bg, pr, pg, pb, 0.78, 0, 0, 0, 0.08)
+    if frame.topInfo.powerRow.bg.SetBlendMode then frame.topInfo.powerRow.bg:SetBlendMode("BLEND") end
+    if frame.topInfo.powerRow.bg.SetAlpha then frame.topInfo.powerRow.bg:SetAlpha(1) end
     frame.topInfo:Show()
   end
 
@@ -1035,7 +1068,7 @@ local function UpdateCustomStatsFrame(db)
     local secData = sections[i] or { title = "", rows = {} }
     local rowCount = #secData.rows
     if rowCount < 1 then rowCount = 1 end
-    local secHeight = 24 + (rowCount * STAT_ROW_HEIGHT) + 8
+    local secHeight = 24 + (rowCount * STAT_ROW_HEIGHT) + ((rowCount - 1) * STAT_ROW_GAP) + STAT_SECTION_BOTTOM_PAD
 
     secFrame:ClearAllPoints()
     secFrame:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y)
@@ -1074,9 +1107,11 @@ local function UpdateCustomStatsFrame(db)
       if rowData then
         if rowFrame.bg and color then
           local a = STAT_ROW_GRADIENT_ALPHA
+          local topBleed = (r > 1) and math.ceil(STAT_ROW_GAP * 0.5) or 0
+          local bottomBleed = (r < rowCount) and math.floor((STAT_ROW_GAP + 1) * 0.5) or 0
           rowFrame.bg:ClearAllPoints()
-          rowFrame.bg:SetPoint("TOPLEFT", rowFrame, "TOPLEFT", 1, 0)
-          rowFrame.bg:SetPoint("BOTTOMRIGHT", rowFrame, "BOTTOMLEFT", math.floor(width * STAT_ROW_GRADIENT_SPLIT), 0)
+          rowFrame.bg:SetPoint("TOPLEFT", rowFrame, "TOPLEFT", 1, topBleed)
+          rowFrame.bg:SetPoint("BOTTOMRIGHT", rowFrame, "BOTTOMLEFT", math.floor(width * STAT_ROW_GRADIENT_SPLIT), -bottomBleed)
           SetHorizontalGradient(
             rowFrame.bg,
             color[1], color[2], color[3], a,
@@ -1096,7 +1131,7 @@ local function UpdateCustomStatsFrame(db)
         if rowFrame.bg then rowFrame.bg:Hide() end
         rowFrame:Hide()
       end
-      rowY = rowY - STAT_ROW_HEIGHT
+      rowY = rowY - STAT_ROW_HEIGHT - STAT_ROW_GAP
     end
 
     secFrame:Show()
@@ -1123,6 +1158,260 @@ local function ParseEnchantName(itemLink)
     end
   end
   return ""
+end
+
+local TIER_CLASS_COLOR_FALLBACK = { 0.20, 1.00, 0.60 }
+local ENCHANT_QUALITY_ATLAS = {
+  [1] = { "Professions-Quality-Tier1-Small", "Professions-Quality-Tier1", "Professions-ChatIcon-Quality-Tier1" },
+  [2] = { "Professions-Quality-Tier2-Small", "Professions-Quality-Tier2", "Professions-ChatIcon-Quality-Tier2" },
+  [3] = { "Professions-Quality-Tier3-Small", "Professions-Quality-Tier3", "Professions-ChatIcon-Quality-Tier3" },
+}
+local UPGRADE_TRACK_COLORS = {
+  ["explorer"] = { 0.62, 0.62, 0.62 },   -- gray
+  ["adventurer"] = { 0.12, 1.00, 0.12 }, -- green
+  ["veteran"] = { 0.00, 0.44, 0.87 },    -- blue
+  ["champion"] = { 0.64, 0.21, 0.93 },   -- purple
+  ["hero"] = { 1.00, 0.50, 0.00 },       -- HaraUI orange
+  ["myth"] = { 0.90, 0.12, 0.12 },       -- red
+  ["mythic"] = { 0.90, 0.12, 0.12 },     -- red
+}
+
+local function Trim(s)
+  if type(s) ~= "string" then return "" end
+  return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function StripColorAndTextureCodes(s)
+  if type(s) ~= "string" then return "" end
+  s = s:gsub("|c%x%x%x%x%x%x%x%x", "")
+  s = s:gsub("|r", "")
+  s = s:gsub("|A.-|a", "")
+  s = s:gsub("|T.-|t", "")
+  return Trim(s)
+end
+
+local function GetTooltipInfoLinesForInventorySlot(invID)
+  if not (C_TooltipInfo and C_TooltipInfo.GetInventoryItem and invID) then
+    return {}
+  end
+  local ok, info = pcall(C_TooltipInfo.GetInventoryItem, "player", invID)
+  if not ok or type(info) ~= "table" or type(info.lines) ~= "table" then
+    return {}
+  end
+
+  return info.lines
+end
+
+local function GetUpgradeTrackText(invID)
+  local lines = GetTooltipInfoLinesForInventorySlot(invID)
+  for _, line in ipairs(lines) do
+    if type(line) == "table" then
+      local candidates = { line.leftText, line.rightText }
+      for _, raw in ipairs(candidates) do
+        if type(raw) == "string" and raw ~= "" then
+          local clean = StripColorAndTextureCodes(raw)
+          if clean:find("%d+/%d+") then
+            local inParens = clean:match("%(([^)]*%d+/%d+[^)]*)%)")
+            if inParens and inParens ~= "" then
+              return Trim(inParens)
+            end
+            local bare = clean:match("([%a][%a%s%-']-%d+/%d+)")
+            if bare and bare ~= "" then
+              return Trim(bare)
+            end
+          end
+        end
+      end
+    end
+  end
+  return ""
+end
+
+local function GetEnchantQualityTier(invID)
+  local function ParseTierToken(s)
+    if type(s) ~= "string" then return nil end
+    local tier = tonumber(s:match("Professions[^|]-Tier(%d)"))
+      or tonumber(s:match("[Qq]uality%-Tier(%d)"))
+      or tonumber(s:match("Tier(%d)"))
+    if tier and tier >= 1 and tier <= 3 then
+      return tier
+    end
+    return nil
+  end
+
+  local function ScanForTier(value, depth)
+    depth = depth or 0
+    if depth > 5 or value == nil then return nil end
+    if type(value) == "string" then
+      return ParseTierToken(value)
+    end
+    if type(value) == "table" then
+      for _, v in pairs(value) do
+        local tier = ScanForTier(v, depth + 1)
+        if tier then return tier end
+      end
+    end
+    return nil
+  end
+
+  local lines = GetTooltipInfoLinesForInventorySlot(invID)
+  for _, line in ipairs(lines) do
+    local tier = ScanForTier(line, 0)
+    if tier then return tier end
+  end
+  return nil
+end
+
+local function GetEnchantQualityAtlasFromTooltip(invID)
+  local function Scan(value, depth)
+    depth = depth or 0
+    if depth > 6 or value == nil then return nil end
+    if type(value) == "string" then
+      -- Inline texture markup: |A:Atlas-Name:...
+      local atlas = value:match("|A:([^:|]+):")
+      if atlas and (atlas:lower():find("quality", 1, true) or atlas:lower():find("tier", 1, true)) then
+        return atlas
+      end
+      -- Bare atlas token in text payload.
+      atlas = value:match("(Professions[%w%-_]*Quality[%w%-_]*)")
+        or value:match("(Professions[%w%-_]*Tier[%w%-_]*)")
+      if atlas then
+        return atlas
+      end
+      return nil
+    end
+    if type(value) == "table" then
+      for _, v in pairs(value) do
+        local atlas = Scan(v, depth + 1)
+        if atlas then return atlas end
+      end
+    end
+    return nil
+  end
+
+  local lines = GetTooltipInfoLinesForInventorySlot(invID)
+  for _, line in ipairs(lines) do
+    local atlas = Scan(line, 0)
+    if atlas then
+      return atlas
+    end
+  end
+  return nil
+end
+
+local function ResolveEnchantQualityAtlas(tier)
+  local candidates = ENCHANT_QUALITY_ATLAS[tier]
+  if type(candidates) ~= "table" then return nil end
+  for _, atlas in ipairs(candidates) do
+    if atlas and atlas ~= "" then
+      if C_Texture and C_Texture.GetAtlasInfo then
+        local ok, info = pcall(C_Texture.GetAtlasInfo, atlas)
+        if ok and info then
+          return atlas
+        end
+      else
+        return atlas
+      end
+    end
+  end
+  return candidates[1]
+end
+
+local function GetEnchantQualityAtlasMarkup(invID, enchantText, tierHint)
+  if type(enchantText) ~= "string" or enchantText == "" then
+    return ""
+  end
+  local tier = tierHint or GetEnchantQualityTier(invID) or 1
+  if tier < 1 then tier = 1 end
+  if tier > 3 then tier = 3 end
+
+  local atlas = GetEnchantQualityAtlasFromTooltip(invID) or ResolveEnchantQualityAtlas(tier)
+  if not atlas or atlas == "" then
+    atlas = ("Professions-ChatIcon-Quality-Tier%d"):format(tier)
+  end
+  return (" |A:%s:12:12:0:0|a"):format(atlas)
+end
+
+local function HasSetBonusTooltipMarker(invID)
+  local lines = GetTooltipInfoLinesForInventorySlot(invID)
+  for _, line in ipairs(lines) do
+    if type(line) == "table" then
+      local candidates = { line.leftText, line.rightText }
+      for _, raw in ipairs(candidates) do
+        if type(raw) == "string" and raw ~= "" then
+          local clean = StripColorAndTextureCodes(raw)
+          if clean:find("%(%d+/%d+%)") then
+            local lower = clean:lower()
+            if not lower:find("adventurer", 1, true)
+              and not lower:find("veteran", 1, true)
+              and not lower:find("champion", 1, true)
+              and not lower:find("hero", 1, true)
+              and not lower:find("myth", 1, true)
+              and not lower:find("explorer", 1, true)
+            then
+              return true
+            end
+          end
+        end
+      end
+    end
+  end
+  return false
+end
+
+local function GetUpgradeTrackColor(trackText)
+  if type(trackText) ~= "string" or trackText == "" then
+    return 0.98, 0.90, 0.35
+  end
+  local lower = trackText:lower()
+  for key, color in pairs(UPGRADE_TRACK_COLORS) do
+    if lower:find(key, 1, true) then
+      return color[1], color[2], color[3]
+    end
+  end
+  return 0.98, 0.90, 0.35
+end
+
+local function RGBToHex(r, g, b)
+  local function Clamp255(v)
+    v = tonumber(v) or 0
+    if v < 0 then v = 0 end
+    if v > 1 then v = 1 end
+    return math.floor((v * 255) + 0.5)
+  end
+  return ("%02x%02x%02x"):format(Clamp255(r), Clamp255(g), Clamp255(b))
+end
+
+local function IsTierSetItem(itemLink, invID)
+  if type(itemLink) ~= "string" or type(GetItemInfoInstant) ~= "function" then
+    return invID and HasSetBonusTooltipMarker(invID) or false
+  end
+  local _, _, _, equipLoc, _, _, _, _, _, setID = GetItemInfoInstant(itemLink)
+  if not setID or setID <= 0 then
+    return invID and HasSetBonusTooltipMarker(invID) or false
+  end
+  -- Limit the override to typical tier slots.
+  return equipLoc == "INVTYPE_HEAD"
+    or equipLoc == "INVTYPE_SHOULDER"
+    or equipLoc == "INVTYPE_CHEST"
+    or equipLoc == "INVTYPE_ROBE"
+    or equipLoc == "INVTYPE_HAND"
+    or equipLoc == "INVTYPE_LEGS"
+end
+
+local function GetPlayerClassColor()
+  local _, classTag = UnitClass("player")
+  if classTag and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classTag] then
+    local c = RAID_CLASS_COLORS[classTag]
+    return c.r or 1, c.g or 1, c.b or 1
+  end
+  if C_ClassColor and C_ClassColor.GetClassColor and classTag then
+    local c = C_ClassColor.GetClassColor(classTag)
+    if c then
+      return c:GetRGB()
+    end
+  end
+  return TIER_CLASS_COLOR_FALLBACK[1], TIER_CLASS_COLOR_FALLBACK[2], TIER_CLASS_COLOR_FALLBACK[3]
 end
 
 local function EnsureCustomGearFrame()
@@ -1162,48 +1451,76 @@ local function EnsureCustomGearFrame()
   customGearFrame.rightRows = {}
   for i = 1, #LEFT_GEAR_SLOTS do
     local row = CreateFrame("Frame", nil, customGearFrame)
-    row:SetSize(240, 38)
-    row:SetClipsChildren(true)
+    row:SetSize(GEAR_ROW_WIDTH, GEAR_ROW_HEIGHT)
+    row:SetClipsChildren(false)
     row.bg = row:CreateTexture(nil, "BACKGROUND")
+    row.bg:SetTexture("Interface/Buttons/WHITE8x8")
+    row.bg:SetDrawLayer("ARTWORK", 0)
     row.bg:SetAllPoints(true)
     row.bg:SetColorTexture(0.14, 0.02, 0.20, 0.32)
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -5)
     row.name:SetJustifyH("LEFT")
-    row.name:SetWidth(222)
+    row.name:SetWidth(GEAR_ROW_WIDTH - 16)
     row.name:SetMaxLines(1)
     if row.name.SetWordWrap then row.name:SetWordWrap(false) end
     row.name:SetTextColor(0.92, 0.46, 1.0, 1)
-    row.meta = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.meta:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
-    row.meta:SetJustifyH("LEFT")
-    row.meta:SetWidth(222)
-    row.meta:SetMaxLines(1)
-    if row.meta.SetWordWrap then row.meta:SetWordWrap(false) end
-    row.meta:SetTextColor(0.1, 1, 0.75, 1)
+    row.track = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.track:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -1)
+    row.track:SetJustifyH("LEFT")
+    row.track:SetWidth(GEAR_ROW_WIDTH - 16)
+    row.track:SetMaxLines(1)
+    if row.track.SetWordWrap then row.track:SetWordWrap(false) end
+    row.track:SetTextColor(0.98, 0.90, 0.35, 1)
+    row.enchant = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.enchant:SetPoint("TOPLEFT", row.track, "BOTTOMLEFT", 0, -1)
+    row.enchant:SetJustifyH("LEFT")
+    row.enchant:SetWidth(GEAR_ROW_WIDTH - 30)
+    row.enchant:SetMaxLines(1)
+    if row.enchant.SetWordWrap then row.enchant:SetWordWrap(false) end
+    row.enchant:SetTextColor(0.1, 1, 0.75, 1)
+    row.enchantQualityIcon = row:CreateTexture(nil, "OVERLAY")
+    row.enchantQualityIcon:SetDrawLayer("OVERLAY", 7)
+    row.enchantQualityIcon:SetSize(12, 12)
+    row.enchantQualityIcon:SetPoint("LEFT", row.enchant, "RIGHT", 2, 0)
+    row.enchantQualityIcon:Hide()
     customGearFrame.leftRows[i] = row
   end
   for i = 1, #RIGHT_GEAR_SLOTS do
     local row = CreateFrame("Frame", nil, customGearFrame)
-    row:SetSize(240, 38)
-    row:SetClipsChildren(true)
+    row:SetSize(GEAR_ROW_WIDTH, GEAR_ROW_HEIGHT)
+    row:SetClipsChildren(false)
     row.bg = row:CreateTexture(nil, "BACKGROUND")
+    row.bg:SetTexture("Interface/Buttons/WHITE8x8")
+    row.bg:SetDrawLayer("ARTWORK", 0)
     row.bg:SetAllPoints(true)
     row.bg:SetColorTexture(0.14, 0.02, 0.20, 0.32)
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -5)
     row.name:SetJustifyH("RIGHT")
-    row.name:SetWidth(222)
+    row.name:SetWidth(GEAR_ROW_WIDTH - 16)
     row.name:SetMaxLines(1)
     if row.name.SetWordWrap then row.name:SetWordWrap(false) end
     row.name:SetTextColor(0.92, 0.46, 1.0, 1)
-    row.meta = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.meta:SetPoint("TOPRIGHT", row.name, "BOTTOMRIGHT", 0, -2)
-    row.meta:SetJustifyH("RIGHT")
-    row.meta:SetWidth(222)
-    row.meta:SetMaxLines(1)
-    if row.meta.SetWordWrap then row.meta:SetWordWrap(false) end
-    row.meta:SetTextColor(0.1, 1, 0.75, 1)
+    row.track = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.track:SetPoint("TOPRIGHT", row.name, "BOTTOMRIGHT", 0, -1)
+    row.track:SetJustifyH("RIGHT")
+    row.track:SetWidth(GEAR_ROW_WIDTH - 16)
+    row.track:SetMaxLines(1)
+    if row.track.SetWordWrap then row.track:SetWordWrap(false) end
+    row.track:SetTextColor(0.98, 0.90, 0.35, 1)
+    row.enchant = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.enchant:SetPoint("TOPRIGHT", row.track, "BOTTOMRIGHT", 0, -1)
+    row.enchant:SetJustifyH("RIGHT")
+    row.enchant:SetWidth(GEAR_ROW_WIDTH - 30)
+    row.enchant:SetMaxLines(1)
+    if row.enchant.SetWordWrap then row.enchant:SetWordWrap(false) end
+    row.enchant:SetTextColor(0.1, 1, 0.75, 1)
+    row.enchantQualityIcon = row:CreateTexture(nil, "OVERLAY")
+    row.enchantQualityIcon:SetDrawLayer("OVERLAY", 7)
+    row.enchantQualityIcon:SetSize(12, 12)
+    row.enchantQualityIcon:SetPoint("RIGHT", row.enchant, "LEFT", -2, 0)
+    row.enchantQualityIcon:Hide()
     customGearFrame.rightRows[i] = row
   end
 
@@ -1212,16 +1529,17 @@ end
 
 local function UpdateGearRows(rows, slots, rightAlign)
   local anchorFrame = _G.PaperDollFrame or customGearFrame
+  local classR, classG, classB = GetPlayerClassColor()
   for i, slotName in ipairs(slots) do
     local row = rows[i]
     local btn = _G["Character" .. slotName]
     if row and btn then
       row:ClearAllPoints()
-      row:SetWidth(210)
+      row:SetWidth(GEAR_ROW_WIDTH)
       if rightAlign then
-        row:SetPoint("RIGHT", btn, "LEFT", -6, 0)
+        row:SetPoint("RIGHT", btn, "LEFT", -GEAR_TEXT_GAP, 0)
       else
-        row:SetPoint("LEFT", btn, "RIGHT", 6, 0)
+        row:SetPoint("LEFT", btn, "RIGHT", GEAR_TEXT_GAP, 0)
       end
       local invID = GetInventorySlotInfo(slotName)
       local link = invID and GetInventoryItemLink("player", invID) or nil
@@ -1229,26 +1547,127 @@ local function UpdateGearRows(rows, slots, rightAlign)
         local name, _, quality = GetItemInfo(link)
         local ilvl = C_Item and C_Item.GetDetailedItemLevelInfo and C_Item.GetDetailedItemLevelInfo(link) or nil
         local enchant = ParseEnchantName(link)
+        local upgradeTrack = GetUpgradeTrackText(invID)
+        local enchantQualityTier = GetEnchantQualityTier(invID)
         local r, g, b = 0.92, 0.46, 1.0
         if quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality] then
           r = ITEM_QUALITY_COLORS[quality].r
           g = ITEM_QUALITY_COLORS[quality].g
           b = ITEM_QUALITY_COLORS[quality].b
         end
+        local isTier = IsTierSetItem(link, invID)
+        if isTier then
+          r, g, b = classR, classG, classB
+        end
         row.name:SetText(name or slotName)
         row.name:SetTextColor(r, g, b, 1)
-        local meta = (ilvl and tostring(math.floor(ilvl + 0.5)) or "")
-        if enchant ~= "" then
-          if meta ~= "" then
-            meta = meta .. "  "
+
+        local skin = EnsureSlotSkin(btn)
+        if skin and skin.SetBackdropBorderColor then
+          if isTier then
+            skin:SetBackdropBorderColor(classR, classG, classB, 0.98)
+          elseif quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality] then
+            local qc = ITEM_QUALITY_COLORS[quality]
+            skin:SetBackdropBorderColor(qc.r or 0.35, qc.g or 0.18, qc.b or 0.55, 0.95)
+          else
+            skin:SetBackdropBorderColor(0.35, 0.18, 0.55, 0.95)
           end
-          meta = meta .. enchant
         end
-        row.meta:SetText(meta)
+        if skin and skin.SetBackdropColor then
+          skin:SetBackdropColor(0.04, 0.02, 0.06, 0.92)
+        end
+        local iconBorder = btn.IconBorder or _G[btn:GetName() .. "IconBorder"]
+        if iconBorder then
+          if iconBorder.SetAlpha then iconBorder:SetAlpha(0) end
+          if iconBorder.Hide then iconBorder:Hide() end
+        end
+
+        local ilvlText = ilvl and tostring(math.floor(ilvl + 0.5)) or ""
+        local trackText = ""
+        if upgradeTrack ~= "" then
+          trackText = ("(%s)"):format(upgradeTrack)
+        end
+        local tr, tg, tb = GetUpgradeTrackColor(upgradeTrack)
+        local ilvlPart = ilvlText ~= "" and ("|cffffffff%s|r"):format(ilvlText) or ""
+        local trackPart = trackText ~= "" and ("|cff%s%s|r"):format(RGBToHex(tr, tg, tb), trackText) or ""
+        local meta = ""
+        if rightAlign then
+          if trackPart ~= "" then
+            meta = trackPart
+          end
+          if ilvlPart ~= "" then
+            if meta ~= "" then
+              meta = meta .. " "
+            end
+            meta = meta .. ilvlPart
+          end
+        else
+          if ilvlPart ~= "" then
+            meta = ilvlPart
+          end
+          if trackPart ~= "" then
+            if meta ~= "" then
+              meta = meta .. " "
+            end
+            meta = meta .. trackPart
+          end
+        end
+        row.track:SetText(meta)
+        row.track:SetTextColor(1, 1, 1, 1)
+
+        local enchantText = enchant or ""
+        local enchantMarkup = GetEnchantQualityAtlasMarkup(invID, enchantText, enchantQualityTier)
+        row.enchant:SetText(enchantText ~= "" and (enchantText .. enchantMarkup) or "")
+        if row.enchantQualityIcon then
+          row.enchantQualityIcon:Hide()
+        end
+
+        if row.bg then
+          local grad = RARITY_GRADIENT[quality or 1]
+          local c1r, c1g, c1b, c1a
+          if isTier then
+            c1r, c1g, c1b, c1a = classR, classG, classB, 0.92
+          else
+            c1r, c1g, c1b, c1a = grad[5], grad[6], grad[7], 0.92
+          end
+          local isWeapon = (slotName == "MainHandSlot" or slotName == "SecondaryHandSlot")
+          local split = math.floor((row:GetWidth() > 0 and row:GetWidth() or GEAR_ROW_WIDTH) * 0.96)
+          local iconSpan = SLOT_ICON_SIZE + GEAR_TEXT_GAP + 2
+          row.bg:ClearAllPoints()
+          row.bg:SetColorTexture(c1r, c1g, c1b, 0.30)
+          -- Make the bar slightly taller than the icon for a nested look.
+          local iconPad = math.max(0, math.floor((row:GetHeight() - SLOT_ICON_SIZE) * 0.25))
+          if rightAlign then
+            row.bg:SetPoint("TOPLEFT", row, "TOPRIGHT", -split, -iconPad)
+            row.bg:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", iconSpan, iconPad)
+            if isWeapon then
+              -- Bottom weapon rows: grow outward from center.
+              SetHorizontalGradient(row.bg, c1r, c1g, c1b, 0.92, c1r, c1g, c1b, 0.00)
+            else
+              SetHorizontalGradient(row.bg, c1r, c1g, c1b, 0.00, c1r, c1g, c1b, 0.92)
+            end
+          else
+            row.bg:SetPoint("TOPLEFT", row, "TOPLEFT", -iconSpan, -iconPad)
+            row.bg:SetPoint("BOTTOMRIGHT", row, "BOTTOMLEFT", split, iconPad)
+            if isWeapon then
+              -- Bottom weapon rows: grow outward from center.
+              SetHorizontalGradient(row.bg, c1r, c1g, c1b, 0.00, c1r, c1g, c1b, 0.92)
+            else
+              SetHorizontalGradient(row.bg, c1r, c1g, c1b, 0.92, c1r, c1g, c1b, 0.00)
+            end
+          end
+          if row.bg.SetBlendMode then row.bg:SetBlendMode("BLEND") end
+          if row.bg.SetAlpha then row.bg:SetAlpha(1) end
+          row.bg:Show()
+        end
         row:Show()
       else
         row.name:SetText("")
-        row.meta:SetText("")
+        row.track:SetText("")
+        row.enchant:SetText("")
+        if row.enchantQualityIcon then
+          row.enchantQualityIcon:Hide()
+        end
         row:Hide()
       end
     end
@@ -1276,20 +1695,10 @@ local function UpdateCustomGearFrame(db)
     frame.topRight:SetPoint("TOPRIGHT", paper, "TOPRIGHT", -34, -24)
   end
 
-  local rating = 0
-  if C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary then
-    local info = C_PlayerInfo.GetPlayerMythicPlusRatingSummary("player")
-    if type(info) == "table" then
-      rating = info.currentSeasonScore or 0
-    end
-  end
-  frame.topLeftValue:SetText(tostring(math.floor((rating or 0) + 0.5)))
-
-  local name = UnitName("player") or ""
-  local className = UnitClass("player") or ""
-  local level = UnitLevel("player") or 0
-  frame.topCenter:SetText(name)
-  frame.topSub:SetText(("Level %d %s"):format(level, className))
+  frame.topLeft:SetText("")
+  frame.topLeftValue:SetText("")
+  frame.topCenter:SetText("")
+  frame.topSub:SetText("")
 
   frame.topRight:SetText("")
 
@@ -1304,11 +1713,13 @@ local function UpdateCustomGearFrame(db)
   if frame.topRight and frame.topRight.SetFont then frame.topRight:SetFont(fontPath, size + 1, outline) end
   for _, row in ipairs(frame.leftRows or {}) do
     if row.name and row.name.SetFont then row.name:SetFont(fontPath, math.max(10, size), outline) end
-    if row.meta and row.meta.SetFont then row.meta:SetFont(fontPath, math.max(9, size - 1), outline) end
+    if row.track and row.track.SetFont then row.track:SetFont(fontPath, math.max(9, size - 1), outline) end
+    if row.enchant and row.enchant.SetFont then row.enchant:SetFont(fontPath, math.max(9, size - 1), outline) end
   end
   for _, row in ipairs(frame.rightRows or {}) do
     if row.name and row.name.SetFont then row.name:SetFont(fontPath, math.max(10, size), outline) end
-    if row.meta and row.meta.SetFont then row.meta:SetFont(fontPath, math.max(9, size - 1), outline) end
+    if row.track and row.track.SetFont then row.track:SetFont(fontPath, math.max(9, size - 1), outline) end
+    if row.enchant and row.enchant.SetFont then row.enchant:SetFont(fontPath, math.max(9, size - 1), outline) end
   end
 
   frame:Show()
@@ -1493,17 +1904,29 @@ local function StylePaperDollSlots()
       if btn.SetSize then
         btn:SetSize(SLOT_ICON_SIZE, SLOT_ICON_SIZE)
       end
+      if btn.SetFrameStrata then
+        btn:SetFrameStrata("DIALOG")
+      end
       if btn.SetSnapToPixelGrid then btn:SetSnapToPixelGrid(true) end
       if btn.SetTexelSnappingBias then btn:SetTexelSnappingBias(0) end
       if btn.SetScale then btn:SetScale(1) end
       local skin = EnsureSlotSkin(btn)
       if skin then skin:Show() end
+      if skin and skin.SetFrameLevel and btn.GetFrameLevel then
+        skin:SetFrameLevel(math.max(0, (btn:GetFrameLevel() or 1) - 1))
+      end
+      if btn.SetFrameLevel and customGearFrame and customGearFrame.GetFrameLevel then
+        btn:SetFrameLevel((customGearFrame:GetFrameLevel() or 1) + 30)
+      end
 
       local icon = _G[name .. "IconTexture"] or btn.icon or btn.Icon
       if icon and icon.SetTexCoord then
         icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
         if icon.SetSnapToPixelGrid then icon:SetSnapToPixelGrid(true) end
         if icon.SetTexelSnappingBias then icon:SetTexelSnappingBias(0) end
+      end
+      if icon and icon.SetDrawLayer then
+        icon:SetDrawLayer("ARTWORK", 7)
       end
 
       SaveAndHideRegion(_G[name .. "NormalTexture"])
@@ -1573,7 +1996,7 @@ local function ApplyChonkySlotLayout()
     SaveAndHideRegion(_G[name])
   end
 
-  local vpad = 18
+  local vpad = 24
 
   local head = _G.CharacterHeadSlot
   local neck = _G.CharacterNeckSlot
@@ -1644,7 +2067,7 @@ local function ApplyChonkySlotLayout()
   local mainHandX = math.floor((centerX - (pairGapX * 0.5) - (slotSize * 0.5)) + 0.5)
 
   mainHand:ClearAllPoints()
-  mainHand:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", mainHandX, 32)
+  mainHand:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", mainHandX, 54)
   offHand:ClearAllPoints()
   offHand:SetPoint("TOPLEFT", mainHand, "TOPLEFT", pairGapX, 0)
 end
@@ -3403,9 +3826,7 @@ function M:Refresh()
       end
       -- Re-enable custom stat panels on the right side of the character panel.
       UpdateCustomStatsFrame(db)
-      if customGearFrame then
-        customGearFrame:Hide()
-      end
+      UpdateCustomGearFrame(db)
     else
       StyleCorePanels()
       StyleStatRows(db)
@@ -3417,9 +3838,7 @@ function M:Refresh()
       HideCharacterTabsButtons()
       HideDefaultCharacterStats()
       UpdateCustomStatsFrame(db)
-      if customGearFrame then
-        customGearFrame:Hide()
-      end
+      UpdateCustomGearFrame(db)
     end
   else
     for _, bg in pairs(statRows) do
