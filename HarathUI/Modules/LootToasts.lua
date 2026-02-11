@@ -22,6 +22,46 @@ local pool, active = {}, {}
 local anchorFrame
 local pendingIcons = nil
 local toastTimers = {}
+local ShowItemTooltip
+
+local function ResolveToastItemData(toast)
+  if not toast then return nil, nil end
+  local itemID = toast._huiItemID
+  local itemLink = toast._huiItemLink
+  local itemName = toast._huiItemName
+
+  if not itemLink and not itemID and itemName and itemName ~= "" then
+    local _, link = GetItemInfo(itemName)
+    if link then
+      itemLink = link
+    end
+  end
+
+  if not itemLink and toast.text and toast.text.GetText then
+    local txt = toast.text:GetText()
+    if txt and txt ~= "" then
+      itemLink = txt:match("(|Hitem:.-|h%[.-%]|h)") or txt:match("(|c%x+|Hitem:.-|h%[.-%]|h|r)")
+      if not itemName then
+        itemName = txt:match("%[(.-)%]")
+      end
+      if not itemLink and itemName and itemName ~= "" then
+        local _, link = GetItemInfo(itemName)
+        if link then
+          itemLink = link
+        end
+      end
+    end
+  end
+
+  if not itemID and itemLink then
+    local id = itemLink:match("|Hitem:(%d+)")
+    if id then
+      itemID = tonumber(id)
+    end
+  end
+
+  return itemID, itemLink
+end
 
 local function ApplyToastFont(fontString, size)
   if not fontString then return end
@@ -99,6 +139,9 @@ local function AcquireToast()
 
   t = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
   t:SetSize(280, 32)
+  t:EnableMouse(true)
+  if t.SetMouseClickEnabled then t:SetMouseClickEnabled(false) end
+  if t.SetMouseMotionEnabled then t:SetMouseMotionEnabled(true) end
 
   -- Pixel-perfect positioning
   if t.SetSnapToPixelGrid then
@@ -113,6 +156,9 @@ local function AcquireToast()
   t.iconFrame = CreateFrame("Frame", nil, t)
   t.iconFrame:SetSize(40, 40)
   t.iconFrame:SetPoint("LEFT", t, "LEFT", 10, 0)
+  t.iconFrame:EnableMouse(true)
+  if t.iconFrame.SetMouseClickEnabled then t.iconFrame:SetMouseClickEnabled(false) end
+  if t.iconFrame.SetMouseMotionEnabled then t.iconFrame:SetMouseMotionEnabled(true) end
 
   -- No background on icon frame for cleaner look
   t.iconFrame.bg = t.iconFrame:CreateTexture(nil, "BACKGROUND")
@@ -130,6 +176,34 @@ local function AcquireToast()
     t.icon:SetSnapToPixelGrid(false)
     t.icon:SetTexelSnappingBias(0)
   end
+
+  t.iconFrame:SetScript("OnEnter", function(self)
+    local toast = self:GetParent()
+    if not toast then return end
+    ShowItemTooltip(self, toast)
+  end)
+
+  t.iconFrame:SetScript("OnLeave", function()
+    if GameTooltip then
+      GameTooltip:Hide()
+    end
+  end)
+
+  t:SetScript("OnEnter", function(self)
+    ShowItemTooltip(self.iconFrame or self, self)
+  end)
+
+  t:SetScript("OnLeave", function()
+    if GameTooltip then
+      GameTooltip:Hide()
+    end
+  end)
+
+  t:SetScript("OnHide", function()
+    if GameTooltip then
+      GameTooltip:Hide()
+    end
+  end)
 
   t.title = t:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   t.title:SetPoint("TOP", t, "TOP", 0, -6)
@@ -220,6 +294,12 @@ local function LayoutToasts()
 end
 
 local function ReleaseToast(t)
+  if t and t.SetScript then
+    t:SetScript("OnUpdate", nil)
+  end
+  if GameTooltip and t and t.iconFrame and GameTooltip:IsOwned(t.iconFrame) then
+    GameTooltip:Hide()
+  end
   t:Hide()
   if toastTimers[t] then
     toastTimers[t]:Cancel()
@@ -284,11 +364,33 @@ local function ApplyToastRarity(toast, quality, hexColor)
   end
 end
 
-local function ShowToast(icon, text, durationOverride)
+ShowItemTooltip = function(owner, toast)
+  if not owner or not toast or not GameTooltip then return end
+  local itemID, itemLink = ResolveToastItemData(toast)
+  if not itemID and not itemLink then return end
+
+  -- Toasts are commonly anchored near screen right; force tooltip to the left of icon.
+  GameTooltip:SetOwner(owner, "ANCHOR_NONE")
+  GameTooltip:ClearAllPoints()
+  GameTooltip:SetPoint("TOPRIGHT", owner, "TOPLEFT", -8, 0)
+  if itemID and GameTooltip.SetItemByID then
+    GameTooltip:SetItemByID(itemID)
+  elseif itemLink then
+    local hyperlink = itemLink:match("(|Hitem:.-|h%[.-%]|h)")
+    GameTooltip:SetHyperlink(hyperlink or itemLink)
+  end
+  GameTooltip:Show()
+end
+
+local function ShowToast(icon, text, durationOverride, itemID, itemLink, itemName)
   local db = NS:GetDB()
   if not db.loot.enabled then return nil end
 
   local t = AcquireToast()
+  t._huiItemLink = itemLink
+  t._huiItemID = itemID and tonumber(itemID) or nil
+  t._huiItemName = itemName
+  t._huiCount = nil
   ApplyToastLayout(t, db)
   t:SetScale(db.loot.scale or 1.0)
   t.icon:SetTexture(icon or 134400)
@@ -303,6 +405,16 @@ local function ShowToast(icon, text, durationOverride)
 
   LayoutToasts()
   t:Show()
+  t:SetScript("OnUpdate", function(self)
+    if not self.iconFrame or not self.iconFrame.IsMouseOver then return end
+    if self.iconFrame:IsMouseOver() then
+      if not (GameTooltip and GameTooltip:IsOwned(self.iconFrame) and GameTooltip:IsShown()) then
+        ShowItemTooltip(self.iconFrame, self)
+      end
+    elseif GameTooltip and GameTooltip:IsOwned(self.iconFrame) then
+      GameTooltip:Hide()
+    end
+  end)
 
   if db.loot.playSound then
     PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
@@ -371,17 +483,17 @@ local function GetItemIconAndText(msg)
       if itemTexture then
         local count = msg:match("[xX]([0-9]+)")
         local displayText = count and string.format("[%s] x%s", itemName, count) or string.format("[%s]", itemName)
-        return itemTexture, displayText, nil, nil, quality, nil
+        return itemTexture, displayText, nil, nil, quality, nil, tonumber(count), itemName
       else
         -- Queue the item to be loaded by name
         GetItemInfo(itemName)
         local count = msg:match("[xX]([0-9]+)")
         local displayText = count and string.format("[%s] x%s", itemName, count) or string.format("[%s]", itemName)
-        return 134400, displayText, nil, nil, nil, nil
+        return 134400, displayText, nil, nil, nil, nil, tonumber(count), itemName
       end
     end
 
-    return nil, nil, nil, nil, nil, nil, nil
+    return nil, nil, nil, nil, nil, nil, nil, nil
   end
 
   -- We have a full link, extract itemID
@@ -390,12 +502,13 @@ local function GetItemIconAndText(msg)
   local itemID = link:match("|Hitem:(%d+)")
   local linkColor = link:match("|c(%x%x%x%x%x%x%x%x)")
   local quality
+  local itemName
 
   if itemID then
     itemID = tonumber(itemID)
 
     -- Try GetItemInfo (works if item is cached)
-    local itemName, _, itemQuality, _, _, _, _, _, _, itemTexture = GetItemInfo(itemID)
+    itemName, _, itemQuality, _, _, _, _, _, _, itemTexture = GetItemInfo(itemID)
     quality = itemQuality
     if itemTexture then
       icon = itemTexture
@@ -417,7 +530,7 @@ local function GetItemIconAndText(msg)
     displayText = link
   end
 
-  return icon, displayText, itemID, link, quality, linkColor, tonumber(count)
+  return icon, displayText, itemID, link, quality, linkColor, tonumber(count), itemName
 end
 
 local function GetCurrencyIconAndText(msg)
@@ -430,6 +543,18 @@ local function GetCurrencyIconAndText(msg)
   end
   local linkColor = curLink:match("|c(%x%x%x%x%x%x%x%x)")
   return icon, curLink, linkColor
+end
+
+local function StripReceivePrefix(msg)
+  if not msg or msg == "" then return msg end
+  local clean = msg
+  clean = clean:gsub("^%s*You%s+receive%s+currency:%s*", "")
+  clean = clean:gsub("^%s*You%s+receive%s+loot:%s*", "")
+  clean = clean:gsub("^%s*You%s+receive%s+", "")
+  clean = clean:gsub("^%s*You%s+loot:%s*", "")
+  clean = clean:gsub("^%s*You%s+loot%s+", "")
+  clean = clean:gsub("^%s*Received%s+", "")
+  return clean
 end
 
 local function FindToastByItem(itemID, link)
@@ -466,7 +591,7 @@ end
 local function OnLoot(msg)
   local db = NS:GetDB()
   if not db.loot.showItems then return end
-  local icon, text, itemID, itemLink, quality, linkColor, count = GetItemIconAndText(msg)
+  local icon, text, itemID, itemLink, quality, linkColor, count, itemName = GetItemIconAndText(msg)
 
   -- Ensure we always have valid icon and text
   if not icon or icon == 0 then
@@ -495,9 +620,7 @@ local function OnLoot(msg)
     end
   end
 
-  local toast = ShowToast(icon, text)
-  toast._huiItemLink = itemLink
-  toast._huiItemID = itemID and tonumber(itemID) or nil
+  local toast = ShowToast(icon, text, nil, itemID, itemLink, itemName)
   toast._huiCount = count or 1
   ApplyToastRarity(toast, quality, linkColor)
 end
@@ -518,7 +641,7 @@ end
 local function OnSpecialLoot(link, quantity, isUpgraded)
   local db = NS:GetDB()
   if not db.loot.showItems then return end
-  local icon, text, itemID, itemLink, quality, linkColor = GetItemIconAndText(link)
+  local icon, text, itemID, itemLink, quality, linkColor, _, itemName = GetItemIconAndText(link)
   if not icon or icon == 0 or icon == 134400 then return end
 
   if itemID or itemLink then
@@ -539,9 +662,7 @@ local function OnSpecialLoot(link, quantity, isUpgraded)
     end
   end
 
-  local toast = ShowToast(icon, text)
-  toast._huiItemLink = itemLink
-  toast._huiItemID = itemID and tonumber(itemID) or nil
+  local toast = ShowToast(icon, text, nil, itemID, itemLink, itemName)
   toast._huiCount = quantity or 1
   if toast then
     if isUpgraded then
@@ -559,7 +680,10 @@ local function OnMoney(msg)
   local db = NS:GetDB()
   if not db.loot.showMoney then return end
   if not msg or msg == "" then return end
-  local clean = msg:gsub("^%s*You%s+loot%s+", "")
+  local clean = StripReceivePrefix(msg)
+  if not clean or clean == "" then
+    clean = msg
+  end
   ShowToast(133784, clean)
 end
 
@@ -568,7 +692,8 @@ local function OnCurrency(msg)
   if not db.loot.showCurrency then return end
   if not msg or msg == "" then return end
   local icon, text, linkColor = GetCurrencyIconAndText(msg)
-  local toast = ShowToast(icon or 463446, text or msg)
+  local clean = StripReceivePrefix(msg)
+  local toast = ShowToast(icon or 463446, text or clean or msg)
   ApplyToastRarity(toast, nil, linkColor)
 end
 

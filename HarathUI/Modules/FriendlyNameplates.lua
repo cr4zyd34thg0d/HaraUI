@@ -15,6 +15,20 @@ local lastCVarCheck = 0
 local cvarCheckTicker
 M.active = false
 
+local function EnsureFriendlyDB(db)
+  if not db then return nil end
+  db.friendlyplates = db.friendlyplates or {}
+  local d = db.friendlyplates
+  if d.enabled == nil then d.enabled = true end
+  if not d.nameColor then d.nameColor = { r = 1, g = 1, b = 1 } end
+  if not d.font then d.font = "BigNoodleTilting" end
+  if d.classColor == nil then d.classColor = false end
+  if not d.fontSize then d.fontSize = 12 end
+  if not d.fontOutline then d.fontOutline = "NONE" end
+  if not d.yOffset then d.yOffset = 0 end
+  return d
+end
+
 local function GetCVarSafe(name)
   if GetCVar then return GetCVar(name) end
   return nil
@@ -37,14 +51,24 @@ local function SetCVarSafe(name, value)
 end
 
 local function ApplyFriendlyCVars()
+  local preserveShowAll
+  local showAllCVar = "nameplateShowAll"
+  if CVarExists(showAllCVar) then
+    local cur = GetCVarSafe(showAllCVar)
+    if cur ~= nil then
+      if not friendlyCVarBackup then friendlyCVarBackup = {} end
+      if friendlyCVarBackup[showAllCVar] == nil then
+        friendlyCVarBackup[showAllCVar] = cur
+      end
+      -- Preserve the player's current live preference, not a stale cached value.
+      preserveShowAll = cur
+    end
+  end
+
   -- Detect friendly nameplate CVar
   if not onlyNameCVar then
     if C_CVar and C_CVar.GetCVarInfo and C_CVar.GetCVarInfo("nameplateShowOnlyNameForFriendlyPlayerUnits") ~= nil then
       onlyNameCVar = "nameplateShowOnlyNameForFriendlyPlayerUnits"
-    elseif C_CVar and C_CVar.GetCVarInfo and C_CVar.GetCVarInfo("nameplateShowOnlyNames") ~= nil then
-      onlyNameCVar = "nameplateShowOnlyNames"
-    elseif CVarExists("nameplateShowOnlyNames") then
-      onlyNameCVar = "nameplateShowOnlyNames"
     end
   end
 
@@ -102,6 +126,13 @@ local function ApplyFriendlyCVars()
   end
 
   -- NOTE: We do NOT modify enemy buff settings to avoid interfering with other enemy nameplate addons
+  if preserveShowAll ~= nil and CVarExists(showAllCVar) then
+    local cur = GetCVarSafe(showAllCVar)
+    local want = tostring(preserveShowAll)
+    if cur ~= nil and tostring(cur) ~= want then
+      SetCVarSafe(showAllCVar, want)
+    end
+  end
 
   lastCVarCheck = GetTime()
 
@@ -383,7 +414,8 @@ end
 
 function M:Refresh()
   local db = NS:GetDB()
-  if not db or not db.friendlyplates.enabled then return end
+  local fp = EnsureFriendlyDB(db)
+  if not db or not fp or not fp.enabled then return end
   for plate, f in pairs(plates) do
     local unit = f and f._huiUnit
     if unit then
@@ -395,15 +427,13 @@ end
 
 function M:Apply()
   local db = NS:GetDB()
-  if not db or not db.friendlyplates.enabled then
+  local fp = EnsureFriendlyDB(db)
+  if not db or not fp or not fp.enabled then
     self:Disable()
     return
   end
   M.active = true
 
-  if not db.friendlyplates.font then
-    db.friendlyplates.font = "BigNoodleTilting"
-  end
   ApplyFriendlyCVars()
 
   if not eventFrame then
@@ -422,7 +452,8 @@ function M:Apply()
   eventFrame:SetScript("OnEvent", function(_, event, arg1)
     if not M.active then return end
     local db = NS:GetDB()
-    if not db or not db.friendlyplates.enabled then return end
+    local fp = EnsureFriendlyDB(db)
+    if not db or not fp or not fp.enabled then return end
 
     if event == "PLAYER_ENTERING_WORLD" then
       ApplyFriendlyCVars()

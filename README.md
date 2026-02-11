@@ -2,18 +2,18 @@
 
 A collection of World of Warcraft addons for patch 12.0.1 (Midnight).
 
-**Bundle Version:** 1.1.0
+**Bundle Version:** 1.2.0
 **Target WoW Patch:** 12.0.1 (Interface: 120001)
 
 ## Included Addons
 
 | Addon | Version | Interface | Author |
 |-------|---------|-----------|--------|
-| HarathUI | 1.2.6 | 120001 | Harath |
+| HarathUI | 1.3.0 | 120001 | Harath |
 | OPie | 7.11.3 | 120001 | foxlit |
 | Platynator | 287 | 120001 | plusmouse |
 
-### HarathUI (v1.2.6)
+### HarathUI (v1.3.0)
 Modular quality-of-life UI suite.
 
 **Features:**
@@ -23,11 +23,15 @@ Modular quality-of-life UI suite.
 - Smaller game menu scaling
 - Friendly nameplates toggle
 - Minimap button bar
+- HaraChonk character/player frame replacement with styled character sheet
+- Tracked Bars skinning for Blizzard Cooldown Viewer bars
+- Auto-accept summons module
+- Spell ID tooltip toggle
 
 **Commands:**
 - `/hui` - Open options
 - `/hui lock` - Toggle Move Mode
-- `/hui xp | cast | menu | loot` - Toggle individual modules
+- `/hui xp | cast | loot | summon` - Toggle individual modules
 
 ### OPie (v7.11.3)
 Radial action-binding addon.
@@ -60,6 +64,13 @@ World of Warcraft/_retail_/Interface/AddOns/
 ```
 
 ## Changelog
+
+### v1.2.0 (2026-02-11)
+- Updated HarathUI to v1.3.0 for significant module additions
+- Added HaraChonk character/player frame replacement (Character Sheet module)
+- Added Tracked Bars skinning module
+- Added Auto Accept Summons module
+- Added Spell ID toggle to General settings
 
 ### v1.1.0 (2026-02-11)
 - Updated bundle target to WoW 12.0.1 (Interface 120001)

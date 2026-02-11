@@ -3,6 +3,8 @@ local f = CreateFrame("Frame")
 NS.frame = f
 local LDB = LibStub and LibStub("LibDataBroker-1.1", true)
 local LDBIcon = LibStub and LibStub("LibDBIcon-1.0", true)
+local spellIDTooltipHooked = false
+local spellIDTooltipDataHooked = false
 
 local function DeepCopyDefaults(dst, src)
   if type(dst) ~= "table" then dst = {} end
@@ -141,6 +143,59 @@ local function EnsureMinimapButton()
   end
 end
 
+local function HookSpellIDTooltips()
+  if spellIDTooltipHooked then return end
+  spellIDTooltipHooked = true
+
+  local function ShouldShow()
+    local db = NS:GetDB()
+    return db and db.general and db.general.showSpellIDs
+  end
+
+  local function AddSpellIDLine(tt, spellID)
+    if not tt or type(spellID) ~= "number" then return end
+    tt:AddLine(("Spell ID: %d"):format(spellID), 0.7, 0.7, 0.7)
+    tt:Show()
+  end
+
+  -- Retail 12.x+ spell tooltips are data-driven; use TooltipDataProcessor when available.
+  if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
+    spellIDTooltipDataHooked = true
+    for key, tooltipType in pairs(Enum.TooltipDataType) do
+      if type(key) == "string" and type(tooltipType) == "number" and string.find(string.lower(key), "spell", 1, true) then
+        TooltipDataProcessor.AddTooltipPostCall(tooltipType, function(tt, data)
+          if not ShouldShow() then return end
+          if not tt or type(data) ~= "table" then return end
+          local spellID = data.spellID or data.id
+          if type(spellID) == "number" then
+            AddSpellIDLine(tt, spellID)
+          end
+        end)
+      end
+    end
+  end
+
+  -- Compatibility fallback for clients without TooltipDataProcessor spell callbacks.
+  local function Attach(tooltip)
+    if not tooltip or not tooltip.HookScript then return end
+    tooltip:HookScript("OnTooltipSetItem", function(tt)
+      if not ShouldShow() then return end
+      if not tt or not tt.GetSpell then return end
+      local _, spellID = tt:GetSpell()
+      if type(spellID) == "number" then
+        AddSpellIDLine(tt, spellID)
+      end
+    end)
+  end
+
+  if not spellIDTooltipDataHooked then
+    Attach(GameTooltip)
+    Attach(ItemRefTooltip)
+    Attach(ShoppingTooltip1)
+    Attach(ShoppingTooltip2)
+  end
+end
+
 function NS:UpdateMinimapButton()
   EnsureMinimapButton()
 end
@@ -243,12 +298,22 @@ local function HandleSlash(msg)
     NS:ApplyAll()
     return
   end
+
+  if msg == "summon" or msg == "summons" then
+    local db = NS:GetDB()
+    db.summons = db.summons or {}
+    db.summons.enabled = not (db.summons.enabled == true)
+    Print("Auto Summon Accept: " .. (db.summons.enabled and "On" or "Off"))
+    NS:ApplyAll()
+    return
+  end
+
   if msg == "debug" then
     local db = NS:GetDB(); db.general.debug = not db.general.debug
     Print("Debug: " .. (db.general.debug and "On" or "Off"))
     return
   end
-  Print("Commands: /hui (options) | lock | xp | cast | loot | debug")
+  Print("Commands: /hui (options) | lock | xp | cast | loot | summon | debug")
 end
 
 SLASH_HARATHUI1 = "/harathui"
@@ -264,6 +329,7 @@ f:SetScript("OnEvent", function(_, event, arg1)
     if NS.InitOptions then NS:InitOptions() end
     NS:ApplyAll()
     EnsureMinimapButton()
+    HookSpellIDTooltips()
     local db = NS:GetDB()
     if db and NS.SetFramesLocked then NS:SetFramesLocked(db.general.framesLocked) end
     Print("Loaded. Type /hui for options.")

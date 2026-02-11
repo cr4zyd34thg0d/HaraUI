@@ -7,8 +7,10 @@ NS.DEFAULTS = {
       debug = false,
       framesLocked = true,
       moveOptions = false,
+      trackedBarsSkin = false,
       uiFont = "BigNoodleTilting",
       minimapButton = { hide = false },
+      showSpellIDs = false,
       themeColor = { r = 0.949, g = 0.431, b = 0.031 },
       closeStyle = "round",
     },
@@ -62,6 +64,23 @@ NS.DEFAULTS = {
       barColor = { r = 0.5, g = 0.5, b = 1.0 },
     },
 
+    charsheet = {
+      enabled = true,
+      hideArt = true,
+      styleStats = true,
+      showRightPanel = true,
+      rightPanelDetached = false,
+      rightPanelAnchor = "TOPLEFT",
+      rightPanelX = 0,
+      rightPanelY = 0,
+      rightPanelOffsetX = 8,
+      rightPanelOffsetY = 0,
+      stripeAlpha = 0.22,
+      font = "BigNoodleTilting",
+      fontSize = 12,
+      fontOutline = "NONE",
+    },
+
     friendlyplates = {
       enabled = true,
       nameColor = { r = 1.0, g = 1.0, b = 1.0 },
@@ -107,6 +126,10 @@ NS.DEFAULTS = {
       locked = false,
       popoutAlpha = 0.85,
       popoutStay = 2.0,
+    },
+
+    summons = {
+      enabled = true,
     },
   },
 }
