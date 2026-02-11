@@ -16,21 +16,41 @@ end
 
 local ApplyAnchor = addonTable.Display.ApplyAnchor
 
+local function GetBarBackgroundDetails(preferredAsset, secondaryAsset)
+  local backgrounds = addonTable.Assets.BarBackgrounds
+  local details = preferredAsset and backgrounds[preferredAsset]
+  if details then
+    return details
+  end
+  details = secondaryAsset and backgrounds[secondaryAsset]
+  if details then
+    return details
+  end
+  details = backgrounds["white"] or backgrounds["grey"] or backgrounds["normal/gradient-full"]
+  if details then
+    return details
+  end
+  local _, first = next(backgrounds)
+  return first
+end
+
 local function InitBar(frame, details)
   if frame.Strip then
     frame:Strip()
   end
 
   local borderDetails = addonTable.Assets.BarBordersSliced[details.border.asset]
-  local foregroundDetails = addonTable.Assets.BarBackgrounds[details.foreground.asset]
+  local foregroundDetails = GetBarBackgroundDetails(details.foreground and details.foreground.asset, details.background and details.background.asset)
+  local backgroundDetails = GetBarBackgroundDetails(details.background and details.background.asset, details.foreground and details.foreground.asset)
+  local foregroundFile = foregroundDetails and foregroundDetails.file or "Interface/AddOns/Platynator/Assets/Special/white.png"
+  local backgroundFile = backgroundDetails and backgroundDetails.file or "Interface/AddOns/Platynator/Assets/Special/white.png"
   frame.statusBar:SetScale(1/borderDetails.lowerScale * details.scale)
   frame.statusBar:SetMinMaxValues(0, 1)
   frame.statusBar:SetValue(1)
-  frame.statusBar:SetStatusBarTexture(foregroundDetails.file)
+  frame.statusBar:SetStatusBarTexture(foregroundFile)
   frame.statusBar:GetStatusBarTexture():SetDrawLayer("ARTWORK")
 
-  local backgroundDetails = addonTable.Assets.BarBackgrounds[details.background.asset]
-  frame.background:SetTexture(backgroundDetails.file)
+  frame.background:SetTexture(backgroundFile)
   frame.background:SetAllPoints()
   frame.background:SetScale(1/borderDetails.lowerScale * details.scale)
   frame.background:SetVertexColor(details.background.color.r, details.background.color.g, details.background.color.b, details.background.color.a)
@@ -118,13 +138,16 @@ function addonTable.Display.GetHealthBar(frame, parent)
     InitBar(frame, details)
 
     local borderDetails = addonTable.Assets.BarBordersSliced[details.border.asset]
+    local absorbDetails = GetBarBackgroundDetails(details.absorb and details.absorb.asset, details.foreground and details.foreground.asset)
+    local absorbFile = absorbDetails and absorbDetails.file or "Interface/AddOns/Platynator/Assets/Special/white.png"
+    local absorbColor = (details.absorb and details.absorb.color) or {r = 1, g = 1, b = 1, a = 1}
 
     frame.statusBarAbsorb:SetFrameLevel(frame:GetFrameLevel() + 1)
     frame.statusBar:SetFrameLevel(frame:GetFrameLevel() + 2)
     borderHolder:SetFrameLevel(frame:GetFrameLevel() + 4)
 
-    frame.statusBarAbsorb:SetStatusBarTexture(addonTable.Assets.BarBackgrounds[details.absorb.asset].file)
-    frame.statusBarAbsorb:GetStatusBarTexture():SetVertexColor(details.absorb.color.r, details.absorb.color.g, details.absorb.color.b, details.absorb.color.a)
+    frame.statusBarAbsorb:SetStatusBarTexture(absorbFile)
+    frame.statusBarAbsorb:GetStatusBarTexture():SetVertexColor(absorbColor.r or 1, absorbColor.g or 1, absorbColor.b or 1, absorbColor.a or 1)
     frame.statusBarAbsorb:SetPoint("LEFT", frame.statusBar:GetStatusBarTexture(), "RIGHT")
     frame.statusBarAbsorb:SetScale(1/borderDetails.lowerScale * details.scale)
     frame.statusBarAbsorb:GetStatusBarTexture():RemoveMaskTexture(frame.mask)
@@ -200,7 +223,8 @@ function addonTable.Display.GetCastBar(frame, parent)
       else
         frame.statusBar:SetFillStyle("STANDARD")
       end
-      self.statusBar:SetStatusBarTexture(addonTable.Assets.BarBackgrounds[frame.details.foreground.asset].file)
+      local fallback = GetBarBackgroundDetails(frame.details.foreground and frame.details.foreground.asset, frame.details.background and frame.details.background.asset)
+      self.statusBar:SetStatusBarTexture((fallback and fallback.file) or "Interface/AddOns/Platynator/Assets/Special/white.png")
       self.reverseStatusTexture:Hide()
 
       frame.marker:SetPoint("CENTER", frame.statusBar:GetStatusBarTexture(), "RIGHT")
@@ -234,9 +258,9 @@ function addonTable.Display.GetCastBar(frame, parent)
     frame.interruptMarker:SetFrameLevel(frame:GetFrameLevel() + 5)
     borderHolder:SetFrameLevel(frame:GetFrameLevel() + 6)
 
-    local foregroundDetails = addonTable.Assets.BarBackgrounds[details.foreground.asset]
+    local foregroundDetails = GetBarBackgroundDetails(details.foreground and details.foreground.asset, details.background and details.background.asset)
     frame.reverseStatusTexture:Hide()
-    frame.reverseStatusTexture:SetTexture(foregroundDetails.file)
+    frame.reverseStatusTexture:SetTexture((foregroundDetails and foregroundDetails.file) or "Interface/AddOns/Platynator/Assets/Special/white.png")
     frame.reverseStatusTexture:SetPoint("RIGHT", frame.statusBar:GetStatusBarTexture(), "LEFT")
     frame.reverseStatusTexture:SetHorizTile(true)
 
@@ -249,8 +273,6 @@ function addonTable.Display.GetCastBar(frame, parent)
       local color = details.interruptMarker.color
       frame.interruptMarkerPoint:SetVertexColor(color.r, color.g, color.b)
     end
-
-    local backgroundDetails = addonTable.Assets.BarBackgrounds[details.background.asset]
 
     frame.reverseStatusTexture:RemoveMaskTexture(frame.mask)
     frame.reverseStatusTexture:AddMaskTexture(frame.mask)
