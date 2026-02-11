@@ -1,19 +1,19 @@
 # HaraUI
 
-A collection of World of Warcraft addons for patch 12.0.7 (Midnight).
+A collection of World of Warcraft addons for patch 12.0.1 (Midnight).
 
-**Bundle Version:** 1.0.0
-**Target WoW Patch:** 12.0.7 (Interface: 120007)
+**Bundle Version:** 1.1.0
+**Target WoW Patch:** 12.0.1 (Interface: 120001)
 
 ## Included Addons
 
 | Addon | Version | Interface | Author |
 |-------|---------|-----------|--------|
-| HarathUI | 1.2.4 | 120007 | Harath |
-| OPie | 7.11.3 | 120007 | foxlit |
-| Platynator | 287 | 120007 | plusmouse |
+| HarathUI | 1.2.6 | 120001 | Harath |
+| OPie | 7.11.3 | 120001 | foxlit |
+| Platynator | 287 | 120001 | plusmouse |
 
-### HarathUI (v1.2.4)
+### HarathUI (v1.2.6)
 Modular quality-of-life UI suite.
 
 **Features:**
@@ -61,7 +61,21 @@ World of Warcraft/_retail_/Interface/AddOns/
 
 ## Changelog
 
+### v1.1.0 (2026-02-11)
+- Updated bundle target to WoW 12.0.1 (Interface 120001)
+- Updated OPie TOC interface to 120001-only
+- Updated HarathUI to v1.2.6 and added visible version text in the settings UI
+
 ### v1.0.0 (2026-01-29)
 - Initial release for WoW 12.0.7
 - Updated all addon TOC files to Interface 120007
 - Bundled HarathUI v1.2.4, OPie v7.11.3, Platynator v287
+## Local patch workflow
+
+For upstream addon updates that overwrite local compatibility changes, reapply local patches:
+
+```powershell
+.\scripts\reapply-local-patches.ps1 -Patch platynator-no-friendly
+```
+
+Patch docs are in `patches/README.md`.

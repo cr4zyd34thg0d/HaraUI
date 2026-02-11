@@ -1,0 +1,19 @@
+*
+!.gitignore
+!README.md
+!HarathUI/
+!HarathUI/**
+!OPie/
+!OPie/**
+!Platynator/
+!Platynator/**
+
+# Never track nested repo metadata if present inside addon folder.
+HarathUI/.git/
+HarathUI/.claude/
+HarathUI/.vscode/
+HarathUI/docs/
+HarathUI/AGENTS.md
+HarathUI/.luacheckrc
+HarathUI/.luarc.json
+HarathUI/.stylua.toml

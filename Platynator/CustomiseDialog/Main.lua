@@ -234,39 +234,9 @@ local function SetupBehaviour(parent)
   applyCvarsCheckbox:SetPoint("TOP")
   table.insert(allFrames, applyCvarsCheckbox)
 
-  local friendlyModuleCheckbox = addonTable.CustomiseDialog.Components.GetCheckbox(container, addonTable.Locales.ENABLE_FRIENDLY_NAMEPLATES, 28, function(value)
-    if InCombatLockdown() then
-      return
-    end
-    addonTable.Config.Set(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES, value)
-  end)
-  friendlyModuleCheckbox.option = addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES
-  friendlyModuleCheckbox:SetPoint("TOP", allFrames[#allFrames], "BOTTOM", 0, 0)
-  table.insert(allFrames, friendlyModuleCheckbox)
-
   local applyNameplatesDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.USE_NAMEPLATES_FOR)
   applyNameplatesDropdown:SetPoint("TOP", allFrames[#allFrames], "BOTTOM", 0, -30)
   do
-    local labels
-    local values = {
-      "player",
-      "npc",
-      "enemy",
-    }
-    if C_CVar.GetCVarInfo("nameplateShowFriendlyPlayers") ~= nil then
-      labels = {
-        addonTable.Locales.FRIENDLY_PLAYERS,
-        addonTable.Locales.FRIENDLY_NPCS,
-        addonTable.Locales.ENEMIES,
-      }
-    else
-      labels = {
-        addonTable.Locales.PLAYERS_AND_FRIENDS,
-        addonTable.Locales.FRIENDLY_NPCS,
-        addonTable.Locales.ENEMIES,
-      }
-    end
-
     local function GetCheckbox(rootDescription, label, value)
       return rootDescription:CreateCheckbox(label, function()
         return addonTable.Config.Get(addonTable.Config.Options.SHOW_NAMEPLATES)[value]
@@ -282,21 +252,9 @@ local function SetupBehaviour(parent)
 
     applyNameplatesDropdown.DropDown:SetDefaultText(NONE)
     applyNameplatesDropdown.DropDown:SetupMenu(function(_, rootDescription)
-      if C_CVar.GetCVarInfo("nameplateShowFriendlyPlayers") ~= nil then
-        local friendlyPlayer = GetCheckbox(rootDescription, addonTable.Locales.FRIENDLY_PLAYERS, "friendlyPlayer")
-        GetCheckbox(friendlyPlayer, addonTable.Locales.MINIONS, "friendlyMinion")
-        GetCheckbox(rootDescription, addonTable.Locales.FRIENDLY_NPCS, "friendlyNPC")
-        local enemies = GetCheckbox(rootDescription, addonTable.Locales.ENEMIES, "enemy")
-        GetCheckbox(enemies, addonTable.Locales.MINIONS, "enemyMinion")
-        GetCheckbox(enemies, addonTable.Locales.MINORS, "enemyMinor")
-      else
-        local friendlyPlayer = GetCheckbox(rootDescription, addonTable.Locales.PLAYERS_AND_FRIENDS, "friendlyPlayer")
-        GetCheckbox(friendlyPlayer, addonTable.Locales.FRIENDLY_NPCS, "friendlyNPC")
-        GetCheckbox(friendlyPlayer, addonTable.Locales.MINIONS, "friendlyMinion")
-        local enemies = GetCheckbox(rootDescription, addonTable.Locales.ENEMIES, "enemy")
-        GetCheckbox(enemies, addonTable.Locales.MINIONS, "enemyMinion")
-        GetCheckbox(enemies, addonTable.Locales.MINORS, "enemyMinor")
-      end
+      local enemies = GetCheckbox(rootDescription, addonTable.Locales.ENEMIES, "enemy")
+      GetCheckbox(enemies, addonTable.Locales.MINIONS, "enemyMinion")
+      GetCheckbox(enemies, addonTable.Locales.MINORS, "enemyMinor")
     end)
   end
   table.insert(allFrames, applyNameplatesDropdown)
@@ -344,11 +302,9 @@ local function SetupBehaviour(parent)
   local clickableNameplatesDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.CLICKABLE_NAMEPLATES)
   clickableNameplatesDropdown:SetPoint("TOP", allFrames[#allFrames], "BOTTOM", 0, -30)
   local values = {
-    "friend",
     "enemy",
   }
   local labels = {
-    addonTable.Locales.FRIENDLY,
     addonTable.Locales.ENEMY,
   }
   clickableNameplatesDropdown.DropDown:SetDefaultText(NONE)
@@ -364,33 +320,6 @@ local function SetupBehaviour(parent)
     end
   end)
   table.insert(allFrames, clickableNameplatesDropdown)
-
-  local friendlyInInstancesDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.SHOW_FRIENDLY_IN_INSTANCES, function(value)
-    return addonTable.Config.Get(addonTable.Config.Options.SHOW_FRIENDLY_IN_INSTANCES) == value
-  end, function(value)
-    addonTable.Config.Set(addonTable.Config.Options.SHOW_FRIENDLY_IN_INSTANCES, value)
-    addonTable.CallbackRegistry:TriggerEvent("RefreshStateChange", {
-      [addonTable.Constants.RefreshReason.ShowBehaviour] = true,
-      --[addonTable.Constants.RefreshReason.Design] = true,
-    })
-  end)
-  friendlyInInstancesDropdown:SetPoint("TOP", allFrames[#allFrames], "BOTTOM", 0, -30)
-  do
-    local values = {
-      "never",
-      "always",
-    }
-    local labels = {
-      addonTable.Locales.NEVER,
-      addonTable.Locales.ALWAYS_ALL,
-    }
-    if C_CVar.GetCVarInfo("nameplateShowOnlyNameForFriendlyPlayerUnits") then
-      table.insert(values, 2, "name_only")
-      table.insert(labels, 2, addonTable.Locales.NAME_ONLY_PLAYERS)
-    end
-    friendlyInInstancesDropdown:Init(labels, values)
-  end
-  table.insert(allFrames, friendlyInInstancesDropdown)
 
   local targetScaleSlider = addonTable.CustomiseDialog.Components.GetSlider(container, addonTable.Locales.ON_TARGET_SCALE, 1, 500, function(value) return ("%d%%"):format(value) end, function(value)
     addonTable.Config.Set(addonTable.Config.Options.TARGET_SCALE, value / 100)
@@ -465,11 +394,9 @@ local function SetupPositioning(parent)
   local stackingNameplatesDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.STACKING_NAMEPLATES)
   stackingNameplatesDropdown:SetPoint("TOP")
   local values = {
-    "friend",
     "enemy",
   }
   local labels = {
-    addonTable.Locales.FRIENDLY,
     addonTable.Locales.ENEMY,
   }
   stackingNameplatesDropdown.DropDown:SetDefaultText(NONE)
@@ -543,22 +470,13 @@ local function SetupStyleSelect(parent)
 
   local allFrames = {}
 
-  local friendlyStyleDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.FRIENDLY, function(value)
-    return addonTable.Config.Get(addonTable.Config.Options.DESIGNS_ASSIGNED)["friend"] == value
-  end, function(value)
-    addonTable.Config.Get(addonTable.Config.Options.DESIGNS_ASSIGNED)["friend"] = value
-    addonTable.CallbackRegistry:TriggerEvent("RefreshStateChange", {[addonTable.Constants.RefreshReason.Design] = true})
-  end)
-  friendlyStyleDropdown:SetPoint("TOP")
-  table.insert(allFrames, friendlyStyleDropdown)
-
   local enemyStyleDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.ENEMY, function(value)
     return addonTable.Config.Get(addonTable.Config.Options.DESIGNS_ASSIGNED)["enemy"] == value
   end, function(value)
     addonTable.Config.Get(addonTable.Config.Options.DESIGNS_ASSIGNED)["enemy"] = value
     addonTable.CallbackRegistry:TriggerEvent("RefreshStateChange", {[addonTable.Constants.RefreshReason.Design] = true})
   end)
-  enemyStyleDropdown:SetPoint("TOP", allFrames[#allFrames], "BOTTOM")
+  enemyStyleDropdown:SetPoint("TOP")
   table.insert(allFrames, enemyStyleDropdown)
 
   local simplifiedStyleDropdown
@@ -593,7 +511,6 @@ local function SetupStyleSelect(parent)
       table.insert(values, entry.value)
     end
 
-    friendlyStyleDropdown:Init(labels, values)
     enemyStyleDropdown:Init(labels, values)
     if simplifiedStyleDropdown then
       simplifiedStyleDropdown:Init(labels, values)
@@ -728,9 +645,6 @@ function addonTable.CustomiseDialog.GetStyleDropdown(parent)
           addonTable.Dialogs.ShowConfirm(addonTable.Locales.CONFIRM_DELETE_STYLE_X:format(entry.label), YES, NO, function()
             addonTable.Config.Get(addonTable.Config.Options.DESIGNS)[entry.value] = nil
             local assigned = addonTable.Config.Get(addonTable.Config.Options.DESIGNS_ASSIGNED)
-            if assigned["friend"] == entry.value then
-              assigned["friend"] = addonTable.Constants.CustomName
-            end
             if assigned["enemy"] == entry.value then
               assigned["enemy"] = addonTable.Constants.CustomName
             end

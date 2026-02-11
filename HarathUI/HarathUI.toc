@@ -1,8 +1,8 @@
-## Interface: 120000, 120001
+## Interface: 120001
 ## Title: HaraUI
 ## Notes: Modular quality-of-life UI suite (XP/Rep bar, cast bar, menu scale, loot toasts).
 ## Author: Harath
-## Version: 1.2.4
+## Version: 1.2.6
 ## SavedVariables: HarathUI_DB
 ## OptionalDeps: LibSharedMedia-3.0, LibDataBroker-1.1, LibDBIcon-1.0
 
@@ -20,9 +20,12 @@ Options.lua
 Modules/Fonts.lua
 Modules/XPBar.lua
 Modules/CastBar.lua
+Modules/CharacterSheet.lua
+Modules/TrackedBars.lua
 Modules/FriendlyNameplates.lua
 Modules/RotationHelper.lua
 Modules/MoveOptions.lua
 Modules/SmallerGameMenu.lua
 Modules/LootToasts.lua
 Modules/MinimapBar.lua
+Modules/Summons.lua

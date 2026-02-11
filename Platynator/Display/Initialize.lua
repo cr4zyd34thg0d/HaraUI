@@ -11,11 +11,6 @@ end
 addonTable.Display.ManagerMixin = {}
 function addonTable.Display.ManagerMixin:OnLoad()
   self.styleIndex = 0
-  self.friendDisplayPool = CreateFramePool("Frame", UIParent, nil, nil, false, function(frame)
-    Mixin(frame, addonTable.Display.NameplateMixin)
-    frame.kind = "friend"
-    frame:OnLoad()
-  end)
   self.enemyDisplayPool = CreateFramePool("Frame", UIParent, nil, nil, false, function(frame)
     Mixin(frame, addonTable.Display.NameplateMixin)
     frame.kind = "enemy"
@@ -58,9 +53,8 @@ function addonTable.Display.ManagerMixin:OnLoad()
   C_Timer.NewTicker(0.1, function() -- Used for transitioning mobs to attackable
     for unit, display in pairs(self.nameplateDisplays) do
       local display = self.nameplateDisplays[unit]
-      if display and ((display.kind == "friend" and UnitCanAttack("player", unit)) or (display.kind == "enemy" and not UnitCanAttack("player", unit))) then
+      if display and not UnitCanAttack("player", unit) then
         self:Uninstall(unit)
-        self:Install(unit, nameplate)
       end
       display:UpdateAurasForPandemic()
     end
@@ -177,7 +171,7 @@ function addonTable.Display.ManagerMixin:OnLoad()
     if unit == "preview" then
       return
     end
-    if not addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES) and not UnitCanAttack("player", unit) then
+    if not UnitCanAttack("player", unit) then
       return
     end
     local nameplate = C_NamePlate.GetNamePlateForUnit(unit, issecure())
@@ -262,7 +256,6 @@ function addonTable.Display.ManagerMixin:OnLoad()
         if self.lastInteract and self.lastInteract.interactUnit then
           self.lastInteract:UpdateSoftInteract()
         end
-        self:UpdateFriendlyFont()
         self:UpdateNamePlateSize()
         self:UpdateStacking()
         self:UpdateTargetScale()
@@ -279,7 +272,6 @@ function addonTable.Display.ManagerMixin:OnLoad()
           self:UpdateStackingRegion(unit)
         end
       end
-      self:UpdateFriendlyFont()
       self:UpdateNamePlateSize()
       self:UpdateTargetScale()
     end
@@ -293,7 +285,6 @@ function addonTable.Display.ManagerMixin:OnLoad()
       end
     end
     if state[addonTable.Constants.RefreshReason.ShowBehaviour] then
-      self:UpdateFriendlyFont()
       self:UpdateNamePlateSize()
       self:UpdateShowState()
     end
@@ -322,10 +313,6 @@ function addonTable.Display.ManagerMixin:OnLoad()
       end
       self:UpdateNamePlateSize()
       self:UpdateStacking()
-    elseif settingName == addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES then
-      self:UpdateFriendlyModule()
-      self:UpdateStacking()
-      self:UpdateClickable()
     elseif settingName == addonTable.Config.Options.APPLY_CVARS then
       addonTable.Display.SetCVars()
     elseif settingName == addonTable.Config.Options.OBSCURED_ALPHA then
@@ -339,13 +326,9 @@ function addonTable.Display.ManagerMixin:UpdateStacking()
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
     return
   end
-  local friendlyEnabled = addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES)
   if addonTable.Constants.IsMidnight then
     local state = addonTable.Config.Get(addonTable.Config.Options.STACKING_NAMEPLATES)
     C_CVar.SetCVarBitfield("nameplateStackingTypes", Enum.NamePlateStackType.Enemy, state.enemy)
-    if friendlyEnabled then
-      C_CVar.SetCVarBitfield("nameplateStackingTypes", Enum.NamePlateStackType.Friendly, state.friend)
-    end
   else
     C_CVar.SetCVar("nameplateOverlapH", addonTable.StackRect.width / addonTable.Rect.width * addonTable.Config.Get(addonTable.Config.Options.STACK_REGION_SCALE_X) / addonTable.Config.Get(addonTable.Config.Options.CLICK_REGION_SCALE_X))
     C_CVar.SetCVar("nameplateOverlapV", addonTable.StackRect.height / addonTable.Rect.height * addonTable.Config.Get(addonTable.Config.Options.STACK_REGION_SCALE_Y) / addonTable.Config.Get(addonTable.Config.Options.CLICK_REGION_SCALE_Y))
@@ -358,7 +341,7 @@ function addonTable.Display.ManagerMixin:UpdateStacking()
     end
 
     local state = addonTable.Config.Get(addonTable.Config.Options.STACKING_NAMEPLATES)
-    C_CVar.SetCVar("nameplateMotion", (state.enemy or (friendlyEnabled and state.friend)) and "1" or "0")
+    C_CVar.SetCVar("nameplateMotion", state.enemy and "1" or "0")
   end
 end
 
@@ -372,25 +355,11 @@ function addonTable.Display.ManagerMixin:UpdateTargetScale()
 end
 
 local function GetCVarsForNameplates()
-  if C_CVar.GetCVarInfo("nameplateShowFriendlyPlayers") ~= nil then
-    return {
-      friendlyPlayer = "nameplateShowFriendlyPlayers",
-      friendlyNPC = "nameplateShowFriendlyNpcs",
-      friendlyMinion = "nameplateShowFriendlyPlayerMinions",
-      enemy = "nameplateShowEnemies",
-      enemyMinion = "nameplateShowEnemyMinions",
-      enemyMinor = "nameplateShowEnemyMinus",
-    }
-  else
-    return {
-      friendlyPlayer = "nameplateShowFriends",
-      friendlyNPC = "nameplateShowFriendlyNPCs",
-      friendlyMinion = "nameplateShowFriendlyMinions",
-      enemy = "nameplateShowEnemies",
-      enemyMinion = "nameplateShowEnemyMinions",
-      enemyMinor = "nameplateShowEnemyMinus",
-    }
-  end
+  return {
+    enemy = "nameplateShowEnemies",
+    enemyMinion = "nameplateShowEnemyMinions",
+    enemyMinor = "nameplateShowEnemyMinus",
+  }
 end
 
 function addonTable.Display.ManagerMixin:UpdateShowState()
@@ -399,112 +368,21 @@ function addonTable.Display.ManagerMixin:UpdateShowState()
     return
   end
 
-  C_CVar.SetCVar("nameplateShowAll", addonTable.Config.Get(addonTable.Config.Options.SHOW_NAMEPLATES_ONLY_NEEDED) and "0" or "1")
-
   local currentShow = addonTable.Config.Get(addonTable.Config.Options.SHOW_NAMEPLATES)
-  local friendlyEnabled = addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES)
-
   local values = GetCVarsForNameplates()
-  if friendlyEnabled then
-    if C_CVar.GetCVarInfo("nameplateShowOnlyNameForFriendlyPlayerUnits") then
-      C_CVar.SetCVar("nameplateShowOnlyNameForFriendlyPlayerUnits", "0")
-    end
-    if C_CVar.GetCVarInfo("nameplateUseClassColorForFriendlyPlayerUnitNames") then
-      C_CVar.SetCVar("nameplateUseClassColorForFriendlyPlayerUnitNames", "0")
-    end
+  for _, key in ipairs({"enemy", "enemyMinion", "enemyMinor"}) do
+    local state = currentShow[key]
+    local newValue = state and "1" or "0"
+    C_CVar.SetCVar(values[key], newValue)
   end
-
-  for key, state in pairs(currentShow) do
-    if not friendlyEnabled and (key == "friendlyPlayer" or key == "friendlyNPC" or key == "friendlyMinion") then
-      -- Do not touch friendly nameplate CVars when the friendly module is disabled.
-    else
-      local newValue = state and "1" or "0"
-      C_CVar.SetCVar(values[key], newValue)
-    end
-  end
-  self.toggledFriendly = false
-
-  self:UpdateInstanceShowState()
 end
 
 function addonTable.Display.ManagerMixin:UpdateFriendlyModule()
-  if InCombatLockdown() then
-    self:RegisterEvent("PLAYER_REGEN_ENABLED")
-    return
-  end
-
-  local friendlyEnabled = addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES)
-  if friendlyEnabled then
-    for i = 1, 40 do
-      local unit = "nameplate" .. i
-      if UnitExists(unit) and not UnitCanAttack("player", unit) then
-        self:Install(unit)
-      end
-    end
-  else
-    local units = GetKeysArray(self.nameplateDisplays)
-    for _, unit in ipairs(units) do
-      local display = self.nameplateDisplays[unit]
-      if display and display.kind == "friend" then
-        self:Uninstall(unit)
-      end
-    end
-    local modifiedUnits = GetKeysArray(self.ModifiedUFs)
-    for _, unit in ipairs(modifiedUnits) do
-      if UnitExists(unit) and not UnitCanAttack("player", unit) then
-        self:RestoreModifiedUF(unit)
-      end
-    end
-  end
+  return
 end
 
 function addonTable.Display.ManagerMixin:UpdateInstanceShowState()
-  if not addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES) then
-    self.toggledFriendly = false
-    return
-  end
-  local state = addonTable.Config.Get(addonTable.Config.Options.SHOW_FRIENDLY_IN_INSTANCES)
-
-  if InCombatLockdown() then
-    self:RegisterEvent("PLAYER_REGEN_ENABLED")
-    return
-  end
-
-  if state == "name_only" and C_CVar.GetCVarInfo("nameplateShowOnlyNameForFriendlyPlayerUnits") then
-    C_CVar.SetCVar("nameplateShowOnlyNameForFriendlyPlayerUnits", "1")
-  end
-  if state == "name_only" and C_CVar.GetCVarInfo("nameplateUseClassColorForFriendlyPlayerUnitNames") then
-    C_CVar.SetCVar("nameplateUseClassColorForFriendlyPlayerUnitNames", "1")
-  end
-
-  local values = GetCVarsForNameplates()
-  local currentShow = addonTable.Config.Get(addonTable.Config.Options.SHOW_NAMEPLATES)
-
-  if addonTable.Display.Utilities.IsInRelevantInstance() then
-    if not self.toggledFriendly and
-      (state == "name_only" and not currentShow.friendlyPlayer
-      or state == "never" and (currentShow.friendlyPlayer or currentShow.friendlyNPC)
-      or state == "name_only" and currentShow.friendlyNPC)
-      or state == "always" and (not currentShow.friendlyPlayer or not currentShow.friendlyNPC) then
-      C_CVar.SetCVar(values.friendlyPlayer, state == "never" and "0" or "1")
-      if currentShow.friendlyNPC then
-        C_CVar.SetCVar(values.friendlyNPC, state ~= "always" and "0" or "1")
-      end
-      self.toggledFriendly = true
-    end
-  elseif self.toggledFriendly then
-    if currentShow.friendlyPlayer then
-      C_CVar.SetCVar(values.friendlyPlayer, "1")
-    elseif state ~= "never" then
-      C_CVar.SetCVar(values.friendlyPlayer, "0")
-    end
-    if currentShow.friendlyNPC then
-      C_CVar.SetCVar(values.friendlyNPC, "1")
-    elseif state == "always" then
-      C_CVar.SetCVar(values.friendlyNPC, "0")
-    end
-    self.toggledFriendly = false
-  end
+  return
 end
 
 function addonTable.Display.ManagerMixin:ListenToBuffs(display, unit)
@@ -551,7 +429,7 @@ function addonTable.Display.ManagerMixin:Install(unit, nameplate)
   if unit == "preview" then
     return
   end
-  if not addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES) and not UnitCanAttack("player", unit) then
+  if not UnitCanAttack("player", unit) then
     return
   end
   local nameplate = C_NamePlate.GetNamePlateForUnit(unit, issecure())
@@ -559,21 +437,17 @@ function addonTable.Display.ManagerMixin:Install(unit, nameplate)
   if nameplate and unit and (addonTable.Constants.IsMidnight or not UnitIsUnit("player", unit)) then
     local shouldSimplify = false
     local newDisplay
-    if not UnitCanAttack("player", unit) then
-      newDisplay = self.friendDisplayPool:Acquire()
+    local simplifiedSettings = addonTable.Config.Get(addonTable.Config.Options.SIMPLIFIED_NAMEPLATES)
+    local classification = UnitClassification(unit)
+    shouldSimplify = C_NamePlateManager and C_NamePlateManager.SetNamePlateSimplified and (
+      simplifiedSettings.instancesNormal and classification == "normal" and addonTable.Display.Utilities.IsInRelevantInstance() or
+      simplifiedSettings.minor and classification == "minus" or
+      simplifiedSettings.minion and UnitIsMinion and UnitIsMinion(unit)
+    )
+    if shouldSimplify then
+      newDisplay = self.enemySimplifiedDisplayPool:Acquire()
     else
-      local simplifiedSettings = addonTable.Config.Get(addonTable.Config.Options.SIMPLIFIED_NAMEPLATES)
-      local classification = UnitClassification(unit)
-      shouldSimplify = C_NamePlateManager and C_NamePlateManager.SetNamePlateSimplified and (
-        simplifiedSettings.instancesNormal and classification == "normal" and addonTable.Display.Utilities.IsInRelevantInstance() or
-        simplifiedSettings.minor and classification == "minus" or
-        simplifiedSettings.minion and UnitIsMinion and UnitIsMinion(unit)
-      )
-      if shouldSimplify then
-        newDisplay = self.enemySimplifiedDisplayPool:Acquire()
-      else
-        newDisplay = self.enemyDisplayPool:Acquire()
-      end
+      newDisplay = self.enemyDisplayPool:Acquire()
     end
     if C_NamePlateManager and C_NamePlateManager.SetNamePlateSimplified then
       C_NamePlateManager.SetNamePlateSimplified(unit, shouldSimplify)
@@ -622,9 +496,7 @@ function addonTable.Display.ManagerMixin:Uninstall(unit)
     if display.stackRegion then
       display.stackRegion:SetParent(display)
     end
-    if display.kind == "friend" then
-      self.friendDisplayPool:Release(display)
-    elseif display.kind == "enemySimplified" then
+    if display.kind == "enemySimplified" then
       self.enemySimplifiedDisplayPool:Release(display)
     else
       self.enemyDisplayPool:Release(display)
@@ -678,33 +550,15 @@ function addonTable.Display.ManagerMixin:UpdateNamePlateSize()
   local globalScale = addonTable.Config.Get(addonTable.Config.Options.GLOBAL_SCALE)
   local width = addonTable.Rect.width * globalScale
   local height = addonTable.Rect.height * globalScale
-  local friendlyEnabled = addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES)
 
   if C_NamePlate.SetNamePlateEnemySize and not addonTable.Constants.IsMidnight then
     width = width * addonTable.Config.Get(addonTable.Config.Options.CLICK_REGION_SCALE_X) * UIParent:GetScale()
     height = height * addonTable.Config.Get(addonTable.Config.Options.CLICK_REGION_SCALE_Y) * UIParent:GetScale()
     local stackState = addonTable.Config.Get(addonTable.Config.Options.STACKING_NAMEPLATES)
-    local anyStack = stackState.enemy or (friendlyEnabled and stackState.friend)
-    if stackState.enemy or not anyStack then
+    if stackState.enemy then
       C_NamePlate.SetNamePlateEnemySize(width, height)
     else
       C_NamePlate.SetNamePlateEnemySize(1, 1)
-    end
-    if friendlyEnabled then
-      if stackState.friend or not anyStack then
-        C_NamePlate.SetNamePlateFriendlySize(width, height)
-      else
-        C_NamePlate.SetNamePlateFriendlySize(1, 1)
-      end
-      if IsInInstance() then
-        if addonTable.Display.Utilities.IsInRelevantInstance() then
-          if addonTable.Constants.IsClassic then
-            C_NamePlate.SetNamePlateFriendlySize(128, 16)
-          else
-            C_NamePlate.SetNamePlateFriendlySize(width, height)
-          end
-        end
-      end
     end
   elseif C_NamePlate.SetNamePlateSize then
     width = width * addonTable.Config.Get(addonTable.Config.Options.CLICK_REGION_SCALE_X)
@@ -720,7 +574,6 @@ function addonTable.Display.ManagerMixin:UpdateClickable()
   end
 
   local state = addonTable.Config.Get(addonTable.Config.Options.CLICKABLE_NAMEPLATES)
-  local friendlyEnabled = addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES)
   if C_NamePlateManager and C_NamePlateManager.SetNamePlateHitTestInsets then
     local value = 10000
 
@@ -730,17 +583,7 @@ function addonTable.Display.ManagerMixin:UpdateClickable()
       C_NamePlateManager.SetNamePlateHitTestInsets(Enum.NamePlateType.Enemy, value, value, value, value)
     end
 
-    if friendlyEnabled then
-      if state.friend then
-        C_NamePlateManager.SetNamePlateHitTestInsets(Enum.NamePlateType.Friendly, -value, -value, -value, -value)
-      else
-        C_NamePlateManager.SetNamePlateHitTestInsets(Enum.NamePlateType.Friendly, value, value, value, value)
-      end
-    end
   else
-    if friendlyEnabled then
-      C_NamePlate.SetNamePlateFriendlyClickThrough(not state.friend)
-    end
     C_NamePlate.SetNamePlateEnemyClickThrough(not state.enemy)
   end
 end
@@ -830,45 +673,7 @@ local function ChangeFont(base, new, overrideHeight)
 end
 
 function addonTable.Display.ManagerMixin:UpdateFriendlyFont()
-  if not addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES) then
-    return
-  end
-  if not addonTable.CurrentFont or not C_CVar.GetCVarInfo("nameplateShowOnlyNameForFriendlyPlayerUnits") then
-    return
-  end
-
-  if InCombatLockdown() then
-    self:RegisterEvent("PLAYER_REGEN_ENABLED")
-    return
-  end
-
-  local state = addonTable.Config.Get(addonTable.Config.Options.SHOW_FRIENDLY_IN_INSTANCES)
-  if state == "name_only" then
-    local design = addonTable.Core.GetDesign("friend")
-    local scale
-    for _, t in ipairs(design.texts) do
-      if t.kind == "creatureName" then
-        scale = t.scale
-        break
-      end
-    end
-    if scale then
-      ChangeFont(SystemFont_NamePlate_Outlined, _G[addonTable.CurrentFont])
-      ChangeFont(SystemFont_NamePlate, _G[addonTable.CurrentFont])
-
-      scale = scale * addonTable.Config.Get(addonTable.Config.Options.GLOBAL_SCALE) * design.scale
-      local friendlyFontSize = _G[addonTable.CurrentFont]:GetFontHeight() * scale
-      for index, size in ipairs(systemFontSizes) do
-        if size >= friendlyFontSize or index == 5 then
-          C_CVar.SetCVar("nameplateSize", tostring(index))
-          break
-        end
-      end
-    end
-  else
-    ChangeFont(SystemFont_NamePlate_Outlined, PlatynatorOriginalSystemFontOutlined)
-    ChangeFont(SystemFont_NamePlate, PlatynatorOriginalSystemFont)
-  end
+  return
 end
 
 function addonTable.Display.ManagerMixin:OnEvent(eventName, ...)
@@ -910,16 +715,16 @@ function addonTable.Display.ManagerMixin:OnEvent(eventName, ...)
   elseif eventName == "UNIT_FACTION" then
     local unit = ...
     local display = self.nameplateDisplays[unit]
-    if display and ((display.kind == "friend" and UnitCanAttack("player", unit)) or (display.kind == "enemy" and not UnitCanAttack("player", unit))) then
+    if display and not UnitCanAttack("player", unit) then
       self:Uninstall(unit)
-      self:Install(unit, nameplate)
+    elseif not display and UnitCanAttack("player", unit) then
+      self:Install(unit)
     end
   elseif eventName == "GLOBAL_MOUSE_UP" then
     self:UpdateForMouseover()
     self:UnregisterEvent("GLOBAL_MOUSE_UP")
   elseif eventName == "PLAYER_REGEN_ENABLED" then
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-    self:UpdateFriendlyModule()
     self:UpdateStacking()
     self:UpdateShowState()
     self:UpdateNamePlateSize()
@@ -945,11 +750,9 @@ function addonTable.Display.ManagerMixin:OnEvent(eventName, ...)
     end
     self:UpdateNamePlateSize()
   elseif eventName == "PLAYER_ENTERING_WORLD" then
-    self:UpdateInstanceShowState()
     self:UpdateNamePlateSize()
     self:UpdateClickable()
   elseif eventName == "GARRISON_UPDATE" then
-    self:UpdateInstanceShowState()
   elseif eventName == "PLAYER_LOGIN" then
     local design = addonTable.Core.GetDesign("enemy")
 
@@ -957,7 +760,6 @@ function addonTable.Display.ManagerMixin:OnEvent(eventName, ...)
     CreateFont("PlatynatorNameplateCooldownFont")
     local file, size, flags = _G[addonTable.CurrentFont]:GetFont()
     PlatynatorNameplateCooldownFont:SetFont(file, 14, flags)
-    self:UpdateFriendlyFont()
   elseif eventName == "VARIABLES_LOADED" then
     if addonTable.Constants.IsMidnight then
       C_CVar.SetCVarBitfield(NamePlateConstants.ENEMY_NPC_AURA_DISPLAY_CVAR, Enum.NamePlateEnemyNpcAuraDisplay.Buffs, true)
@@ -976,9 +778,6 @@ function addonTable.Display.ManagerMixin:OnEvent(eventName, ...)
     end
     addonTable.Display.SetCVars()
 
-    self:UpdateFriendlyModule()
-    self:UpdateInstanceShowState()
-    self:UpdateFriendlyFont()
     self:UpdateStacking()
     self:UpdateShowState()
     self:UpdateTargetScale()

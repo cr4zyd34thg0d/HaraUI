@@ -461,8 +461,11 @@ end
 
 local function UpdateRect(design)
   local function GetRect(asset, scale, anchor)
-    local width = asset.width * scale
-    local height = asset.height * scale
+    local baseWidth = asset.width or asset.height or 0
+    local baseHeight = asset.height or asset.width or 0
+    local width = baseWidth * scale
+    local height = baseHeight * scale
+    anchor = anchor or {}
     local left, bottom
     if anchor[1] == "BOTTOMLEFT" then
       left = anchor[2] or 0

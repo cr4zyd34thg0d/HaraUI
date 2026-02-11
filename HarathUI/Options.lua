@@ -17,6 +17,18 @@
 local ADDON, NS = ...
 local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 
+local function GetAddonVersion()
+  if C_AddOns and C_AddOns.GetAddOnMetadata then
+    return C_AddOns.GetAddOnMetadata(ADDON, "Version")
+  end
+  if GetAddOnMetadata then
+    return GetAddOnMetadata(ADDON, "Version")
+  end
+  return nil
+end
+
+local ADDON_VERSION = GetAddonVersion() or "dev"
+
 local ORANGE = { 0.949, 0.431, 0.031 } -- #F26E08
 local ORANGE_SIZE = 11
 local CHECKBOX_GAP = -2
@@ -488,6 +500,11 @@ function NS:InitOptions()
       end
     end)
 
+    local navVersion = nav:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    navVersion:SetPoint("BOTTOMRIGHT", -12, 10)
+    navVersion:SetText("v" .. tostring(ADDON_VERSION))
+    ApplyUIFont(navVersion, 10, "OUTLINE", ORANGE)
+
     local content = CreateFrame("Frame", nil, panel, "BackdropTemplate")
     -- Small gap so the two panel borders read as separate.
     content:SetPoint("TOPLEFT", nav, "TOPRIGHT", 3, 0)
@@ -510,7 +527,7 @@ function NS:InitOptions()
     end
 
     local function BuildTopRow(parent)
-      local enable = MakeCheckbox(parent, "Enable HaraUI", "Toggle the whole UI suite on/off.")
+      local enable = MakeCheckbox(parent, "Enable HarathUI", "Toggle the whole UI suite on/off.")
       enable:SetPoint("TOPLEFT", 18, -96)
       enable:SetChecked(db.general.enabled)
       enable:SetScript("OnClick", function()
@@ -536,7 +553,7 @@ function NS:InitOptions()
         NS:ApplyAll()
       end)
 
-      local minimapBtn = MakeCheckbox(parent, "Minimap Button", "Show or hide the HaraUI minimap button.")
+      local minimapBtn = MakeCheckbox(parent, "Minimap Button", "Show or hide the HarathUI minimap button.")
       minimapBtn:SetPoint("TOPLEFT", moveOptions, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
       minimapBtn:SetChecked(not (db.general.minimapButton and db.general.minimapButton.hide))
       minimapBtn:SetScript("OnClick", function()
@@ -545,8 +562,18 @@ function NS:InitOptions()
         if NS.UpdateMinimapButton then NS:UpdateMinimapButton() end
       end)
 
+      if db.general.showSpellIDs == nil then
+        db.general.showSpellIDs = false
+      end
+      local spellIdsCB = MakeCheckbox(parent, "Show Spell IDs", "Append spell IDs to spell tooltips.")
+      spellIdsCB:SetPoint("TOPLEFT", minimapBtn, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
+      spellIdsCB:SetChecked(db.general.showSpellIDs == true)
+      spellIdsCB:SetScript("OnClick", function()
+        db.general.showSpellIDs = spellIdsCB:GetChecked()
+      end)
+
       local smallMenu = MakeCheckbox(parent, "Smaller Game Menu", "Use the compact game menu.")
-      smallMenu:SetPoint("TOPLEFT", minimapBtn, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
+      smallMenu:SetPoint("TOPLEFT", spellIdsCB, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
       smallMenu:SetChecked(db.gamemenu and db.gamemenu.enabled)
       smallMenu:SetScript("OnClick", function()
         db.gamemenu = db.gamemenu or {}
@@ -554,8 +581,29 @@ function NS:InitOptions()
         NS:ApplyAll()
       end)
 
+      db.summons = db.summons or {}
+      if db.summons.enabled == nil then
+        db.summons.enabled = true
+      end
+
+      local summonCB = MakeCheckbox(parent, "Auto Accept Summons", "Automatically accept incoming party/raid summons.")
+      summonCB:SetPoint("TOPLEFT", smallMenu, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
+      summonCB:SetChecked(db.summons.enabled == true)
+      summonCB:SetScript("OnClick", function()
+        db.summons.enabled = summonCB:GetChecked()
+        NS:ApplyAll()
+      end)
+
+      local trackedBars = MakeCheckbox(parent, "Skin Tracked Bars", "Apply cast-bar style to Blizzard Cooldown Viewer tracked bars.")
+      trackedBars:SetPoint("TOPLEFT", summonCB, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
+      trackedBars:SetChecked(db.general.trackedBarsSkin == true)
+      trackedBars:SetScript("OnClick", function()
+        db.general.trackedBarsSkin = trackedBars:GetChecked()
+        NS:ApplyAll()
+      end)
+
       local resetAll = MakeButton(parent, "Reset All Positions", 160, 24)
-      resetAll:SetPoint("TOPLEFT", smallMenu, "BOTTOMLEFT", 0, GROUP_GAP)
+      resetAll:SetPoint("TOPLEFT", trackedBars, "BOTTOMLEFT", 0, GROUP_GAP)
       resetAll:SetScript("OnClick", function()
         NS:ResetFramePosition("xpbar", NS.DEFAULTS.profile.xpbar)
         NS:ResetFramePosition("castbar", NS.DEFAULTS.profile.castbar)
@@ -622,6 +670,7 @@ function NS:InitOptions()
       local headerMap = {
         xpbar = "XP",
         castbar = "CastBar",
+        charsheet = "General",
         friendlyplates = "Nameplate",
         rotation = "Helper",
         rotationhelper = "Helper",
@@ -690,7 +739,7 @@ function NS:InitOptions()
     card:SetBackdropColor(0.12, 0.12, 0.14, 0.6)
     card:SetBackdropBorderColor(0, 0, 0, 0)
 
-    local txt = Small(card, "- /hui (options)\n- /hui lock (toggle Unlock Frames)\n- /hui xp | cast | loot\n")
+    local txt = Small(card, "- /hui (options)\n- /hui lock (toggle Unlock Frames)\n- /hui xp | cast | loot | summon\n")
     txt:SetPoint("TOPLEFT", 14, -32)
   end
 
@@ -1131,6 +1180,207 @@ function NS:InitOptions()
   end
 
   -- =========================================================
+  -- CHARACTER SHEET PAGE
+  -- =========================================================
+    pages.charsheet = CreateFrame("Frame", nil, content); pages.charsheet:SetAllPoints(true)
+    do
+    MakeModuleHeader(pages.charsheet, "charsheet")
+
+    if not db.charsheet then
+      db.charsheet = {}
+    end
+    if db.charsheet.hideArt == nil then
+      db.charsheet.hideArt = true
+    end
+    if db.charsheet.styleStats == nil then
+      db.charsheet.styleStats = true
+    end
+    if db.charsheet.showRightPanel == nil then
+      db.charsheet.showRightPanel = true
+    end
+    if db.charsheet.rightPanelDetached == nil then
+      db.charsheet.rightPanelDetached = false
+    end
+    if not db.charsheet.rightPanelAnchor then
+      db.charsheet.rightPanelAnchor = "TOPLEFT"
+    end
+    if db.charsheet.rightPanelX == nil then
+      db.charsheet.rightPanelX = 0
+    end
+    if db.charsheet.rightPanelY == nil then
+      db.charsheet.rightPanelY = 0
+    end
+    if db.charsheet.rightPanelOffsetX == nil then
+      db.charsheet.rightPanelOffsetX = 8
+    end
+    if db.charsheet.rightPanelOffsetY == nil then
+      db.charsheet.rightPanelOffsetY = 0
+    end
+    if db.charsheet.stripeAlpha == nil then
+      db.charsheet.stripeAlpha = 0.22
+    end
+    if not db.charsheet.font then
+      db.charsheet.font = "BigNoodleTilting"
+    end
+    if not db.charsheet.fontSize then
+      db.charsheet.fontSize = 12
+    end
+    if not db.charsheet.fontOutline then
+      db.charsheet.fontOutline = "NONE"
+    end
+
+    local openChar = MakeButton(pages.charsheet, "Open Character", 160, 24)
+    openChar:SetPoint("TOPLEFT", 18, FIRST_CONTROL_Y)
+    openChar:SetScript("OnClick", function()
+      if ToggleCharacter then
+        ToggleCharacter("PaperDollFrame")
+      elseif _G.ToggleCharacterFrame then
+        _G.ToggleCharacterFrame()
+      elseif CharacterFrame then
+        if CharacterFrame:IsShown() then
+          HideUIPanel(CharacterFrame)
+        else
+          ShowUIPanel(CharacterFrame)
+        end
+      end
+    end)
+
+    local hideArt = MakeCheckbox(pages.charsheet, "Hide Blizzard Artwork", "Hide default character panel art behind the HarathUI skin.")
+    hideArt:SetPoint("TOPLEFT", openChar, "BOTTOMLEFT", 0, GROUP_GAP)
+    hideArt:SetChecked(db.charsheet.hideArt == true)
+    hideArt:SetScript("OnClick", function()
+      db.charsheet.hideArt = hideArt:GetChecked()
+      NS:ApplyAll()
+    end)
+
+    local styleStats = MakeCheckbox(pages.charsheet, "Style Stat Rows", "Apply pixel row striping and stat font styling.")
+    styleStats:SetPoint("LEFT", hideArt, "RIGHT", 180, 0)
+    styleStats:SetChecked(db.charsheet.styleStats == true)
+    styleStats:SetScript("OnClick", function()
+      db.charsheet.styleStats = styleStats:GetChecked()
+      NS:ApplyAll()
+    end)
+
+    local rightPanel = MakeCheckbox(pages.charsheet, "Show Right Data Panel", "Show Chonky-style Mythic+ and Vault side panel.")
+    rightPanel:SetPoint("TOPLEFT", hideArt, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
+    rightPanel:SetChecked(db.charsheet.showRightPanel == true)
+    rightPanel:SetScript("OnClick", function()
+      db.charsheet.showRightPanel = rightPanel:GetChecked()
+      NS:ApplyAll()
+    end)
+
+    local stripe = MakeSlider(pages.charsheet, "Row Stripe Opacity", 0.05, 0.5, 0.01)
+    stripe:SetPoint("TOPLEFT", rightPanel, "BOTTOMLEFT", 0, GROUP_GAP)
+    stripe:SetValue(db.charsheet.stripeAlpha or 0.22)
+    stripe:SetLabelValue(db.charsheet.stripeAlpha or 0.22, "%.2f")
+    stripe:SetScript("OnValueChanged", function(_, v)
+      v = Round2(v)
+      db.charsheet.stripeAlpha = v
+      stripe:SetLabelValue(v, "%.2f")
+      NS:ApplyAll()
+    end)
+
+    local size = MakeSlider(pages.charsheet, "Stat Font Size", 10, 18, 1)
+    size:SetPoint("TOPLEFT", stripe, "BOTTOMLEFT", 0, SLIDER_GAP)
+    size:SetValue(db.charsheet.fontSize or 12)
+    size:SetLabelValue(db.charsheet.fontSize or 12, "%.0f")
+    size:SetScript("OnValueChanged", function(_, v)
+      v = math.floor(v + 0.5)
+      db.charsheet.fontSize = v
+      size:SetLabelValue(v, "%.0f")
+      NS:ApplyAll()
+    end)
+
+    local fontLabel = pages.charsheet:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    fontLabel:SetPoint("TOPLEFT", size, "BOTTOMLEFT", 0, GROUP_GAP)
+    fontLabel:SetText("Stat Font")
+    ApplyUIFont(fontLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
+
+    local fontDD = CreateFrame("Frame", "HarathUI_CharacterSheetFontDropdown", pages.charsheet, "UIDropDownMenuTemplate")
+    fontDD:SetPoint("TOPLEFT", fontLabel, "BOTTOMLEFT", -16, -6)
+    UIDropDownMenu_SetWidth(fontDD, 220)
+
+    local fonts = {}
+    if LSM then
+      for _, name in ipairs(LSM:List("font")) do
+        fonts[#fonts + 1] = name
+      end
+      table.sort(fonts)
+    end
+
+    local function RefreshCharFont()
+      UIDropDownMenu_SetSelectedValue(fontDD, db.charsheet.font)
+      UIDropDownMenu_SetText(fontDD, db.charsheet.font or "Default")
+    end
+
+    UIDropDownMenu_Initialize(fontDD, function(self, level)
+      if not LSM then
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = "LibSharedMedia-3.0 not found"
+        info.notCheckable = true
+        UIDropDownMenu_AddButton(info, level)
+        return
+      end
+
+      for _, name in ipairs(fonts) do
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = name
+        info.checked = (db.charsheet.font == name)
+        info.func = function()
+          db.charsheet.font = name
+          RefreshCharFont()
+          NS:ApplyAll()
+        end
+        UIDropDownMenu_AddButton(info, level)
+      end
+    end)
+
+    ApplyDropdownFont(fontDD, 12, { 0.9, 0.9, 0.9 })
+    RightAlignDropdownText(fontDD)
+    RefreshCharFont()
+
+    local outlineLabel = pages.charsheet:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    outlineLabel:SetPoint("TOPLEFT", fontDD, "BOTTOMLEFT", 16, DROPDOWN_GAP)
+    outlineLabel:SetText("Stat Outline")
+    ApplyUIFont(outlineLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
+
+    local outlineDD = CreateFrame("Frame", "HarathUI_CharacterSheetOutlineDropdown", pages.charsheet, "UIDropDownMenuTemplate")
+    outlineDD:SetPoint("TOPLEFT", outlineLabel, "BOTTOMLEFT", -16, -6)
+    UIDropDownMenu_SetWidth(outlineDD, 180)
+
+    local outlines = {
+      { name = "None", value = "NONE" },
+      { name = "Outline", value = "OUTLINE" },
+      { name = "Thick Outline", value = "THICKOUTLINE" },
+      { name = "Mono + Outline", value = "MONOCHROME,OUTLINE" },
+      { name = "Mono + Thick", value = "MONOCHROME,THICKOUTLINE" },
+    }
+
+    local function RefreshCharOutline()
+      UIDropDownMenu_SetSelectedValue(outlineDD, db.charsheet.fontOutline)
+      UIDropDownMenu_SetText(outlineDD, db.charsheet.fontOutline or "NONE")
+    end
+
+    UIDropDownMenu_Initialize(outlineDD, function(self, level)
+      for _, o in ipairs(outlines) do
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = o.name
+        info.checked = (db.charsheet.fontOutline == o.value)
+        info.func = function()
+          db.charsheet.fontOutline = o.value
+          RefreshCharOutline()
+          NS:ApplyAll()
+        end
+        UIDropDownMenu_AddButton(info, level)
+      end
+    end)
+
+    ApplyDropdownFont(outlineDD, 12, { 0.9, 0.9, 0.9 })
+    RightAlignDropdownText(outlineDD)
+    RefreshCharOutline()
+  end
+
+  -- =========================================================
   -- LOOT TOASTS PAGE
   -- =========================================================
     pages.loot = CreateFrame("Frame", nil, content); pages.loot:SetAllPoints(true)
@@ -1563,6 +1813,7 @@ function NS:InitOptions()
     { key="general", label="General" },
     { key="xp",      label="XP / Rep Bar" },
     { key="cast",    label="Cast Bar" },
+    { key="charsheet", label="Character Sheet" },
     { key="friendly", label="Friendly Nameplates" },
     { key="rotation", label="Rotation Helper" },
     { key="minimap", label="Minimap Bar" },
@@ -1573,6 +1824,7 @@ function NS:InitOptions()
       general = "general",
       xp = "xpbar",
       cast = "castbar",
+      charsheet = "charsheet",
       friendly = "friendlyplates",
       rotation = "rotationhelper",
       minimap = "minimapbar",
