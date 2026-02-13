@@ -113,10 +113,13 @@ if (-not $BuildCommit -or $BuildCommit.Trim() -eq "") {
   }
 }
 if (-not $LatestCommit -or $LatestCommit.Trim() -eq "") {
-  if ($gitHead -and $gitHead -ne "") {
-    $LatestCommit = $gitHead
-  } else {
+  if ($BuildCommit -and $BuildCommit.Trim() -ne "") {
+    # Keep latest commit aligned with stamped build commit unless explicitly overridden.
+    $LatestCommit = $BuildCommit
+  } elseif ($currentLatestCommit -and $currentLatestCommit.Trim() -ne "") {
     $LatestCommit = $currentLatestCommit
+  } elseif ($gitHead -and $gitHead -ne "") {
+    $LatestCommit = $gitHead
   }
 }
 if (-not $BuildDate -or $BuildDate.Trim() -eq "") {

@@ -144,13 +144,8 @@ end
 -- =========================================================
 
 local function GetUIFontPath()
+  -- Settings UI font is fixed to Tahoma Bold; module-specific font selectors remain independent.
   local fontName = "Tahoma Bold"
-  if NS and NS.GetDB then
-    local db = NS:GetDB()
-    if db and db.general and db.general.uiFont then
-      fontName = db.general.uiFont
-    end
-  end
   if LSM then
     local path = LSM:Fetch("font", fontName, true)
     if path then return path end
@@ -590,13 +585,18 @@ function NS:InitOptions()
         if not GameTooltip then return end
         local info = GetVersionInfo()
         local status = (info and (info.status or GetVersionStatus(info))) or "unknown"
+        local source = tostring(info and info.sourceLabel or info and info.source or "unknown")
+        local peerName = tostring(info and info.peerName or "n/a")
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine("Version Status", ORANGE[1], ORANGE[2], ORANGE[3])
         GameTooltip:AddLine(("Installed: v%s"):format(tostring(info and info.installed or "unknown")), 0.95, 0.95, 0.95)
-        GameTooltip:AddLine(("Latest: v%s"):format(tostring(info and info.latest or "unknown")), 0.95, 0.95, 0.95)
+        GameTooltip:AddLine(("Latest: v%s"):format(tostring(info and info.latest or "n/a")), 0.95, 0.95, 0.95)
         GameTooltip:AddLine(("Build commit: %s"):format(tostring(info and (info.buildCommit or info.commit) or "unknown")), 0.85, 0.85, 0.85)
-        GameTooltip:AddLine(("Latest commit: %s"):format(tostring(info and info.latestCommit or "unknown")), 0.85, 0.85, 0.85)
+        GameTooltip:AddLine(("Latest commit: %s"):format(tostring(info and info.latestCommit or "n/a")), 0.85, 0.85, 0.85)
         GameTooltip:AddLine(("Build date: %s"):format(tostring(info and info.buildDate or "unknown")), 0.85, 0.85, 0.85)
+        if info and info.peerName then
+          GameTooltip:AddLine(("Peer: %s"):format(peerName), 0.85, 0.85, 0.85)
+        end
         if status == "out-of-date" then
           GameTooltip:AddLine("Status: Update available", 1.0, 0.35, 0.35)
         elseif status == "ahead" then
@@ -606,7 +606,10 @@ function NS:InitOptions()
         else
           GameTooltip:AddLine("Status: Unknown", 0.8, 0.8, 0.8)
         end
-        GameTooltip:AddLine("Source: add-on metadata (X-GitVersion, X-Git-Commit, X-Build-Commit)", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine(("Source: %s"):format(source), 0.7, 0.7, 0.7)
+        if not (info and info.authoritative) then
+          GameTooltip:AddLine("Waiting for peer/hosted version data.", 0.7, 0.7, 0.7)
+        end
         GameTooltip:Show()
       end)
       navGitIndicator:SetScript("OnLeave", function()
@@ -617,18 +620,9 @@ function NS:InitOptions()
     local function UpdateVersionIndicator()
       local info = GetVersionInfo()
       local installed = info and info.installed or nil
-      local latest = info and info.latest or nil
-      local latestCommit = info and info.latestCommit or nil
       local status = (info and (info.status or GetVersionStatus(info))) or "unknown"
 
       navVersion:SetText("v" .. tostring(installed or "dev"))
-
-      local hasLatestVersion = type(latest) == "string" and latest ~= ""
-      local hasLatestCommit = type(latestCommit) == "string" and latestCommit ~= ""
-      if not hasLatestVersion and not hasLatestCommit then
-        navGitIndicator:Hide()
-        return
-      end
 
       navGitIndicator:Show()
       if status == "out-of-date" then
@@ -643,6 +637,9 @@ function NS:InitOptions()
     end
 
     UpdateVersionIndicator()
+    if NS and NS.RegisterVersionInfoListener then
+      NS:RegisterVersionInfoListener(UpdateVersionIndicator)
+    end
 
     local content = CreateFrame("Frame", nil, panel, "BackdropTemplate")
     -- Small gap so the two panel borders read as separate.

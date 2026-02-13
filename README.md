@@ -9,11 +9,11 @@ A collection of World of Warcraft addons for patch 12.0.1 (Midnight).
 
 | Addon | Version | Interface | Author |
 |-------|---------|-----------|--------|
-| HarathUI | 1.4.7 | 120001 | Harath |
+| HarathUI | 1.5.0 | 120001 | Harath |
 | OPie | 7.11.3 | 120001 | foxlit |
 | Platynator | 314 | 120001 | plusmouse |
 
-### HarathUI (v1.4.7)
+### HarathUI (v1.5.0)
 Modular quality-of-life UI suite.
 
 **Features:**
@@ -99,14 +99,26 @@ For a full Platynator update flow (mirror upstream folder, reapply patch, verify
 
 ## HarathUI version metadata workflow
 
-When releasing HarathUI or after commit updates, stamp TOC metadata so in-game version status and hash diagnostics stay accurate:
+When releasing HarathUI, stamp TOC metadata from a specific git ref so build diagnostics match what you package:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\release-harathui.ps1 -Version 1.5.0 -GitVersion 1.5.0 -CommitRef HEAD
 ```
 
-Optional release bump example:
+By default this also refreshes `HarathUI/Generated/HostedVersion.lua` from GitHub (`cr4zyd34thg0d/HaraUI`) so the in-game version light can compare against hosted release/tag data.
+
+Optional flags:
+- `-SkipGitHubHostedSync` to skip GitHub feed refresh.
+- `-RequireGitHubHostedSync` to fail the command if GitHub sync fails.
+- `-GitHubOwner/-GitHubRepo` to target a different repository.
+- `-GitHubToken` (or `GITHUB_TOKEN` env var) to avoid GitHub API rate limits.
+
+Direct low-level stamp example (advanced):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata.ps1 -Version 1.4.7 -GitVersion 1.4.7
+powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata.ps1 -Version 1.5.0 -GitVersion 1.5.0 -BuildCommit 56a5bb9 -LatestCommit 56a5bb9
 ```
+
+Notes:
+- `X-Build-Commit` reflects the packaged build commit.
+- Runtime "update available" status is sourced from addon comms (and optional hosted feeds), not only local TOC metadata.
