@@ -9,11 +9,11 @@ A collection of World of Warcraft addons for patch 12.0.1 (Midnight).
 
 | Addon | Version | Interface | Author |
 |-------|---------|-----------|--------|
-| HarathUI | 1.4.0 | 120001 | Harath |
+| HarathUI | 1.4.1 | 120001 | Harath |
 | OPie | 7.11.3 | 120001 | foxlit |
 | Platynator | 287 | 120001 | plusmouse |
 
-### HarathUI (v1.4.0)
+### HarathUI (v1.4.1)
 Modular quality-of-life UI suite.
 
 **Features:**
@@ -66,7 +66,7 @@ World of Warcraft/_retail_/Interface/AddOns/
 ## Changelog
 
 ### v1.2.0 (2026-02-11)
-- Updated HarathUI to v1.4.0 for significant module additions
+- Updated HarathUI to v1.4.1 for significant module additions
 - Added HaraChonk character/player frame replacement (Character Sheet module)
 - Added Tracked Bars skinning module
 - Added Auto Accept Summons module

@@ -5080,6 +5080,26 @@ local function RefreshRightPanelData()
     end
   end
 
+  -- Guard against stale cross-character API data after fast character swaps.
+  -- If this character reports no M+ rating yet, ignore any non-empty run list
+  -- returned during this transient state.
+  if #runs > 0 and (rating or 0) <= 0 then
+    local hasPositiveRun = false
+    for _, run in ipairs(runs) do
+      if type(run) == "table" then
+        local lvl = run.level or run.bestLevel or run.keystoneLevel or 0
+        local scr = run.score or run.rating or 0
+        if (type(lvl) == "number" and lvl > 0) or (type(scr) == "number" and scr > 0) then
+          hasPositiveRun = true
+          break
+        end
+      end
+    end
+    if hasPositiveRun then
+      runs = {}
+    end
+  end
+
   if #runs > 0 then
     local extracted = {}
     for _, r in ipairs(runs) do
