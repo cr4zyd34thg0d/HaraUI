@@ -250,8 +250,24 @@ local PORTAL_ALIASES = {
     alliance = { "siege of boralus" },
     horde = { "siege of boralus" },
   },
-  ["mechagon junkyard"] = { common = { "junkyard", "mechagon junkyard" } },
-  ["mechagon workshop"] = { common = { "workshop", "mechagon workshop" } },
+  ["mechagon junkyard"] = { common = { "junkyard", "mechagon junkyard", "operation mechagon", "mechagon" } },
+  ["mechagon workshop"] = { common = { "workshop", "mechagon workshop", "operation mechagon", "mechagon" } },
+  ["operation mechagon junkyard"] = { common = { "junkyard", "mechagon junkyard", "operation mechagon", "mechagon" } },
+  ["operation mechagon workshop"] = { common = { "workshop", "mechagon workshop", "operation mechagon", "mechagon" } },
+  ["tazavesh streets of wonder"] = {
+    common = { "tazavesh", "veiled market", "streetwise merchant", "path of the streetwise merchant" },
+  },
+  ["tazavesh so leah s gambit"] = {
+    common = { "tazavesh", "veiled market", "streetwise merchant", "path of the streetwise merchant" },
+  },
+  ["galakrond s fall"] = { common = { "dawn of the infinite" } },
+  ["murozond s rise"] = { common = { "dawn of the infinite" } },
+  ["dawn of the infinite galakrond s fall"] = { common = { "dawn of the infinite", "galakrond s fall" } },
+  ["dawn of the infinite murozond s rise"] = { common = { "dawn of the infinite", "murozond s rise" } },
+  ["lower karazhan"] = { common = { "return to karazhan", "karazhan" } },
+  ["upper karazhan"] = { common = { "return to karazhan", "karazhan" } },
+  ["return to karazhan lower"] = { common = { "return to karazhan", "karazhan" } },
+  ["return to karazhan upper"] = { common = { "return to karazhan", "karazhan" } },
 }
 
 local function SafeFrameLevel(frame, preferred)
@@ -4491,21 +4507,31 @@ local function GetPortalAliases(mapName, mapID)
     end
   end
 
-  local key = aliases[1]
-  local entry = key and PORTAL_ALIASES[key]
-  if not entry then return aliases end
-
   local faction = UnitFactionGroup and UnitFactionGroup("player") or nil
   faction = faction and string.lower(faction) or ""
-  if entry.common then
-    for _, v in ipairs(entry.common) do
-      AddAlias(v)
+
+  -- Expand aliases from all matching keys so variant map names can chain to the same portal hints.
+  local expanded = {}
+  local i = 1
+  while i <= #aliases do
+    local key = aliases[i]
+    if key and key ~= "" and not expanded[key] then
+      expanded[key] = true
+      local entry = PORTAL_ALIASES[key]
+      if entry then
+        if entry.common then
+          for _, v in ipairs(entry.common) do
+            AddAlias(v)
+          end
+        end
+        if faction ~= "" and entry[faction] then
+          for _, v in ipairs(entry[faction]) do
+            AddAlias(v)
+          end
+        end
+      end
     end
-  end
-  if faction ~= "" and entry[faction] then
-    for _, v in ipairs(entry[faction]) do
-      AddAlias(v)
-    end
+    i = i + 1
   end
   return aliases
 end
