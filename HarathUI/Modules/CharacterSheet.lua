@@ -35,9 +35,14 @@ local slotEnforceUntil = 0
 local moduleEventFrame
 local hookedShow = false
 local hookedHide = false
+local hookedSubFrame = false
+local suppressSubFrameRefresh = false
 local liveUpdateQueued = false
 local liveUpdateIncludeRightPanel = false
 local inventoryTooltipCache = {}
+local pendingLootSpecID = nil
+local refreshInProgress = false
+local refreshQueuedAfterCurrent = false
 
 local DATA_REFRESH_INTERVAL = 2.0
 local EVENT_DEBOUNCE_INTERVAL = 0.06
@@ -462,6 +467,27 @@ RestorePaperDollSidebarButtons = function()
   end
 end
 
+local function SetPaperDollSidebarButtonsMouseEnabled(enabled)
+  local shouldEnable = enabled == true
+  for i = 1, 8 do
+    local names = {
+      ("PaperDollSidebarTab%d"):format(i),
+      ("PaperDollSidebarButton%d"):format(i),
+      ("CharacterFrameSidebarTab%d"):format(i),
+      ("CharacterSidebarTab%d"):format(i),
+    }
+    for _, name in ipairs(names) do
+      local btn = _G[name]
+      if btn then
+        if btn.EnableMouse then
+          btn:EnableMouse(shouldEnable)
+        end
+        break
+      end
+    end
+  end
+end
+
 local function EnsureSlotSkin(slotButton)
   if not slotButton then return nil end
   if slotSkins[slotButton] then
@@ -797,6 +823,277 @@ local function BuildCustomStatsData()
   }
 
   return sections
+end
+
+local STAT_TOOLTIP_SETTERS = {
+  ["criticalstrike"] = "PaperDollFrame_SetCritChance",
+  ["criticalstrikechance"] = "PaperDollFrame_SetCritChance",
+  ["health"] = "PaperDollFrame_SetHealth",
+  ["power"] = "PaperDollFrame_SetPower",
+  ["itemlevel"] = "PaperDollFrame_SetItemLevel",
+  ["averageitemlevel"] = "PaperDollFrame_SetItemLevel",
+  ["haste"] = "PaperDollFrame_SetHaste",
+  ["mastery"] = "PaperDollFrame_SetMastery",
+  ["versatility"] = "PaperDollFrame_SetVersatility",
+  ["attackpower"] = "PaperDollFrame_SetAttackPower",
+  ["attackspeed"] = "PaperDollFrame_SetAttackSpeed",
+  ["mainhandspeed"] = "PaperDollFrame_SetAttackSpeed",
+  ["weaponspeed"] = "PaperDollFrame_SetAttackSpeed",
+  ["spellpower"] = "PaperDollFrame_SetSpellPower",
+  ["armor"] = "PaperDollFrame_SetArmor",
+  ["dodge"] = "PaperDollFrame_SetDodge",
+  ["parry"] = "PaperDollFrame_SetParry",
+  ["block"] = "PaperDollFrame_SetBlock",
+  ["stagger"] = "PaperDollFrame_SetStagger",
+  ["leech"] = "PaperDollFrame_SetLifesteal",
+  ["lifesteal"] = "PaperDollFrame_SetLifesteal",
+  ["avoidance"] = "PaperDollFrame_SetAvoidance",
+  ["speed"] = "PaperDollFrame_SetSpeed",
+  ["movementspeed"] = "PaperDollFrame_SetMovementSpeed",
+}
+
+local STAT_TOOLTIP_PRIMARY_INDICES = {
+  ["strength"] = LE_UNIT_STAT_STRENGTH or 1,
+  ["agility"] = LE_UNIT_STAT_AGILITY or 2,
+  ["stamina"] = LE_UNIT_STAT_STAMINA or 3,
+  ["intellect"] = LE_UNIT_STAT_INTELLECT or 4,
+}
+
+local StatTooltipBridge = {
+  scratch = nil,
+}
+
+function StatTooltipBridge.NormalizeText(text)
+  if type(text) ~= "string" then
+    return ""
+  end
+  text = text:gsub("|c%x%x%x%x%x%x%x%x", "")
+  text = text:gsub("|r", "")
+  text = text:gsub("|A.-|a", "")
+  text = text:gsub("|T.-|t", "")
+  text = text:gsub("^%s+", ""):gsub("%s+$", "")
+  text = text:gsub("%s+", " ")
+  return text
+end
+
+function StatTooltipBridge.CanonicalLabel(text)
+  local clean = StatTooltipBridge.NormalizeText(text)
+  clean = clean:lower()
+  clean = clean:gsub("[^%w]+", "")
+  return clean
+end
+
+function StatTooltipBridge.ResolveSetter(label)
+  local key = StatTooltipBridge.CanonicalLabel(label)
+  if key == "" then
+    return nil, nil
+  end
+
+  if key == "gcd" or key == "globalcooldown" or key == "globalcooldownreduction" then
+    return "__CUSTOM_GCD", nil
+  end
+
+  local statIndex = STAT_TOOLTIP_PRIMARY_INDICES[key]
+  if statIndex then
+    return "PaperDollFrame_SetStat", statIndex
+  end
+
+  local setterName = STAT_TOOLTIP_SETTERS[key]
+  if key == "movementspeed" and type(_G.PaperDollFrame_SetMovementSpeed) ~= "function" then
+    setterName = "PaperDollFrame_SetSpeed"
+  end
+  if type(setterName) == "string" and type(_G[setterName]) == "function" then
+    return setterName, nil
+  end
+  return nil, nil
+end
+
+function StatTooltipBridge.EnsureScratchFrame()
+  if StatTooltipBridge.scratch then
+    return StatTooltipBridge.scratch
+  end
+
+  local parent = UIParent or CharacterFrame
+  if not parent then
+    return nil
+  end
+
+  local frame = CreateFrame("Frame", nil, parent)
+  frame:SetSize(1, 1)
+  frame:EnableMouse(false)
+  frame:SetAlpha(0)
+  frame:ClearAllPoints()
+  frame:SetPoint("TOPLEFT", parent, "TOPLEFT", -10000, 10000)
+  frame:Hide()
+  frame.Label = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  frame.Value = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  if frame.Label and frame.Label.SetPoint then
+    frame.Label:SetPoint("LEFT", frame, "LEFT", 0, 0)
+  end
+  if frame.Value and frame.Value.SetPoint then
+    frame.Value:SetPoint("RIGHT", frame, "RIGHT", 0, 0)
+  end
+  StatTooltipBridge.scratch = frame
+  return frame
+end
+
+function StatTooltipBridge.BuildScratchStatFrame(label)
+  local setterName, statIndex = StatTooltipBridge.ResolveSetter(label)
+  if not setterName then
+    return nil
+  end
+
+  local frame = StatTooltipBridge.EnsureScratchFrame()
+  if not frame then
+    return nil
+  end
+
+  frame.tooltip = nil
+  frame.tooltip2 = nil
+  frame.tooltip3 = nil
+  frame.onEnterFunc = nil
+  frame.UpdateTooltip = nil
+  frame.numericValue = nil
+
+  if setterName == "__CUSTOM_GCD" then
+    local gcdValue = 1.0
+    if C_Spell and C_Spell.GetSpellCooldown then
+      local cd = C_Spell.GetSpellCooldown(61304)
+      if type(cd) == "table" and type(cd.duration) == "number" and cd.duration > 0 then
+        gcdValue = cd.duration
+      end
+    end
+    local haste = GetHaste and GetHaste() or 0
+    local gcdLabel = GLOBAL_COOLDOWN_ABBR or GLOBAL_COOLDOWN or "Global Cooldown"
+    frame.tooltip = HIGHLIGHT_FONT_COLOR_CODE .. format(PAPERDOLLFRAME_TOOLTIP_FORMAT, gcdLabel) .. " " .. ("%.2fs"):format(gcdValue) .. FONT_COLOR_CODE_CLOSE
+    frame.tooltip2 = ("Time between ability uses. Current haste: %.2f%%."):format(haste or 0)
+    frame.tooltip3 = "Haste reduces global cooldown to your class minimum."
+    return frame
+  end
+
+  local setter = _G[setterName]
+  if type(setter) ~= "function" then
+    return nil
+  end
+
+  local ok
+  if statIndex then
+    ok = pcall(setter, frame, "player", statIndex)
+  else
+    ok = pcall(setter, frame, "player")
+  end
+  if not ok then
+    return nil
+  end
+
+  return frame
+end
+
+function StatTooltipBridge.Reanchor(row)
+  if not (row and GameTooltip and GameTooltip:IsShown()) then
+    return
+  end
+  if GameTooltip.ClearAllPoints then
+    GameTooltip:ClearAllPoints()
+    local ui = UIParent or row:GetParent()
+    local uiScale = ui and ui.GetEffectiveScale and ui:GetEffectiveScale() or nil
+    if ui and uiScale and type(GetCursorPosition) == "function" then
+      local x, y = GetCursorPosition()
+      x = x / uiScale
+      y = y / uiScale
+      GameTooltip:SetPoint("BOTTOMLEFT", ui, "BOTTOMLEFT", x + 16, y - 16)
+    else
+      GameTooltip:SetPoint("LEFT", row, "RIGHT", 8, 0)
+    end
+  end
+end
+
+function StatTooltipBridge.TryShowGeneratedTooltip(row)
+  if not row then
+    return false
+  end
+
+  local source = StatTooltipBridge.BuildScratchStatFrame(row._tooltipKey or row._tooltipLabel)
+  if not source then
+    return false
+  end
+
+  local handled = false
+  if GameTooltip and GameTooltip:IsShown() then
+    GameTooltip:Hide()
+  end
+
+  if type(source.onEnterFunc) == "function" then
+    local ok = pcall(source.onEnterFunc, source)
+    handled = ok and GameTooltip and GameTooltip:IsShown()
+  end
+
+  if not handled and type(PaperDollStatTooltip) == "function" and (source.tooltip or source.tooltip2 or source.tooltip3) then
+    local ok = pcall(PaperDollStatTooltip, source)
+    handled = ok and GameTooltip and GameTooltip:IsShown()
+  end
+
+  if not handled and GameTooltip and (source.tooltip or source.tooltip2 or source.tooltip3) then
+    local nfc = NORMAL_FONT_COLOR or { r = 0.9, g = 0.9, b = 0.9 }
+    local title = source.tooltip or StatTooltipBridge.NormalizeText(row._tooltipLabel)
+    GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+    GameTooltip:ClearLines()
+    if title and title ~= "" then
+      GameTooltip:SetText(title)
+    end
+    if source.tooltip2 and source.tooltip2 ~= "" then
+      GameTooltip:AddLine(source.tooltip2, nfc.r, nfc.g, nfc.b, true)
+    end
+    if source.tooltip3 and source.tooltip3 ~= "" then
+      GameTooltip:AddLine(source.tooltip3, nfc.r, nfc.g, nfc.b, true)
+    end
+    GameTooltip:Show()
+    handled = GameTooltip:IsShown()
+  end
+
+  if handled then
+    source.UpdateTooltip = nil
+    StatTooltipBridge.Reanchor(row)
+  end
+  return handled and true or false
+end
+
+function StatTooltipBridge.ShowFallback(row)
+  if not (row and GameTooltip) then return end
+  local label = StatTooltipBridge.NormalizeText(row._tooltipLabel or (row.left and row.left.GetText and row.left:GetText()) or "")
+  local value = StatTooltipBridge.NormalizeText(row._tooltipValue or (row.right and row.right.GetText and row.right:GetText()) or "")
+  if label == "" and value == "" then
+    return
+  end
+
+  GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+  GameTooltip:ClearLines()
+  if label ~= "" then
+    GameTooltip:AddLine(label, 1, 1, 1)
+  end
+  if value ~= "" then
+    GameTooltip:AddLine(value, 0.9, 0.9, 0.9)
+  end
+  GameTooltip:Show()
+end
+
+function StatTooltipBridge.HandleEnter(row)
+  if not row then return end
+
+  if GameTooltip and GameTooltip:IsShown() then
+    GameTooltip:Hide()
+  end
+
+  if not StatTooltipBridge.TryShowGeneratedTooltip(row) then
+    StatTooltipBridge.ShowFallback(row)
+  end
+end
+
+function StatTooltipBridge.HandleLeave(row)
+  if not row then return end
+  if GameTooltip and GameTooltip:IsShown() then
+    GameTooltip:Hide()
+  end
 end
 
 local function BuildKnownTitlesData()
@@ -1279,6 +1576,12 @@ local function EnsureCustomStatsFrame()
       btn.icon:SetTexture(tex)
       btn.icon:SetTexCoord(l, r, t, b)
     end
+    btn.tooltipText = ({
+      [1] = "Character Stats",
+      [2] = "Titles",
+      [3] = "Equipment Manager",
+      [4] = "Hide Mythic Window",
+    })[i]
 
     btn:SetScript("OnClick", function(self)
       local idx = self.sidebarIndex or 1
@@ -1301,15 +1604,35 @@ local function EnsureCustomStatsFrame()
       elseif UpdateCustomStatsFrame and NS and NS.GetDB then
         UpdateCustomStatsFrame(NS:GetDB())
       end
+      if GameTooltip and GameTooltip:IsOwned(self) then
+        GameTooltip:Hide()
+      end
     end)
 
     btn:SetScript("OnEnter", function(self)
       if self and self.SetBackdropBorderColor then
-        if self.sidebarIndex == 4 then return end
-        self:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.98)
+        if self.sidebarIndex ~= 4 then
+          self:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.98)
+        end
+      end
+      local text = self and self.tooltipText or nil
+      if text and text ~= "" and GameTooltip then
+        GameTooltip:SetOwner(self, "ANCHOR_NONE")
+        GameTooltip:ClearAllPoints()
+        GameTooltip:SetPoint("BOTTOM", self, "TOP", 0, 6)
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine(text, 1, 1, 1, true)
+        GameTooltip:Show()
       end
     end)
     btn:SetScript("OnLeave", function(self)
+      if GameTooltip and GameTooltip:IsOwned(self) then
+        GameTooltip:Hide()
+      end
+      if customStatsFrame and customStatsFrame.sidebarButtons then
+        UpdateSidebarButtonVisuals(customStatsFrame)
+        return
+      end
       if self and self.SetBackdropBorderColor then
         self:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
       end
@@ -1329,16 +1652,35 @@ local function EnsureCustomStatsFrame()
   customStatsFrame.topInfo:SetBackdropColor(0.02, 0.02, 0.03, 0.75)
   customStatsFrame.topInfo:SetBackdropBorderColor(0, 0, 0, 0)
   customStatsFrame.topInfo:SetHeight(66)
+  customStatsFrame.topInfo:EnableMouse(true)
 
   customStatsFrame.topInfo.ilvl = customStatsFrame.topInfo:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
   customStatsFrame.topInfo.ilvl:SetPoint("TOP", customStatsFrame.topInfo, "TOP", 0, -4)
   customStatsFrame.topInfo.ilvl:SetTextColor(0.73, 0.27, 1.0, 1.0)
   customStatsFrame.topInfo.ilvl:SetText("0.00 / 0.00")
+  customStatsFrame.topInfo.ilvlHit = CreateFrame("Frame", nil, customStatsFrame.topInfo)
+  customStatsFrame.topInfo.ilvlHit:SetPoint("TOPLEFT", customStatsFrame.topInfo, "TOPLEFT", 0, 0)
+  customStatsFrame.topInfo.ilvlHit:SetPoint("TOPRIGHT", customStatsFrame.topInfo, "TOPRIGHT", 0, 0)
+  customStatsFrame.topInfo.ilvlHit:SetHeight(24)
+  customStatsFrame.topInfo.ilvlHit:EnableMouse(true)
+  customStatsFrame.topInfo.ilvlHit:SetScript("OnEnter", function(self)
+    StatTooltipBridge.HandleEnter(self)
+  end)
+  customStatsFrame.topInfo.ilvlHit:SetScript("OnLeave", function(self)
+    StatTooltipBridge.HandleLeave(self)
+  end)
 
   customStatsFrame.topInfo.healthRow = CreateFrame("Frame", nil, customStatsFrame.topInfo)
   customStatsFrame.topInfo.healthRow:SetPoint("TOPLEFT", customStatsFrame.topInfo, "TOPLEFT", 0, -30)
   customStatsFrame.topInfo.healthRow:SetPoint("TOPRIGHT", customStatsFrame.topInfo, "TOPRIGHT", 0, -30)
   customStatsFrame.topInfo.healthRow:SetHeight(16)
+  customStatsFrame.topInfo.healthRow:EnableMouse(true)
+  customStatsFrame.topInfo.healthRow:SetScript("OnEnter", function(self)
+    StatTooltipBridge.HandleEnter(self)
+  end)
+  customStatsFrame.topInfo.healthRow:SetScript("OnLeave", function(self)
+    StatTooltipBridge.HandleLeave(self)
+  end)
   customStatsFrame.topInfo.healthRow.bg = customStatsFrame.topInfo.healthRow:CreateTexture(nil, "BACKGROUND")
   customStatsFrame.topInfo.healthRow.bg:SetAllPoints()
   customStatsFrame.topInfo.healthRow.bg:SetTexture("Interface/Buttons/WHITE8x8")
@@ -1353,6 +1695,13 @@ local function EnsureCustomStatsFrame()
   customStatsFrame.topInfo.powerRow:SetPoint("TOPLEFT", customStatsFrame.topInfo.healthRow, "BOTTOMLEFT", 0, -2)
   customStatsFrame.topInfo.powerRow:SetPoint("TOPRIGHT", customStatsFrame.topInfo.healthRow, "TOPRIGHT", 0, -2)
   customStatsFrame.topInfo.powerRow:SetHeight(16)
+  customStatsFrame.topInfo.powerRow:EnableMouse(true)
+  customStatsFrame.topInfo.powerRow:SetScript("OnEnter", function(self)
+    StatTooltipBridge.HandleEnter(self)
+  end)
+  customStatsFrame.topInfo.powerRow:SetScript("OnLeave", function(self)
+    StatTooltipBridge.HandleLeave(self)
+  end)
   customStatsFrame.topInfo.powerRow.bg = customStatsFrame.topInfo.powerRow:CreateTexture(nil, "BACKGROUND")
   customStatsFrame.topInfo.powerRow.bg:SetAllPoints()
   customStatsFrame.topInfo.powerRow.bg:SetTexture("Interface/Buttons/WHITE8x8")
@@ -1389,6 +1738,8 @@ local function EnsureCustomStatsFrame()
     for r = 1, 5 do
       local row = CreateFrame("Frame", nil, sec)
       row:SetHeight(STAT_ROW_HEIGHT)
+      row:EnableMouse(true)
+      if row.SetMouseMotionEnabled then row:SetMouseMotionEnabled(true) end
       row.bg = row:CreateTexture(nil, "BACKGROUND")
       row.bg:SetDrawLayer("ARTWORK", 1)
       row.bg:SetTexture("Interface/Buttons/WHITE8x8")
@@ -1400,6 +1751,12 @@ local function EnsureCustomStatsFrame()
       row.right:SetPoint("RIGHT", row, "RIGHT", -8, 0)
       row.right:SetJustifyH("RIGHT")
       row.right:SetTextColor(VALUE_WHITE[1], VALUE_WHITE[2], VALUE_WHITE[3], VALUE_WHITE[4])
+      row:SetScript("OnEnter", function(self)
+        StatTooltipBridge.HandleEnter(self)
+      end)
+      row:SetScript("OnLeave", function(self)
+        StatTooltipBridge.HandleLeave(self)
+      end)
       sec.rows[r] = row
     end
     customStatsFrame.sections[i] = sec
@@ -2083,22 +2440,28 @@ ShowNativeCharacterMode = function(mode)
   if not CharacterFrame_ShowSubFrame then
     return false
   end
+  local function SafeShowSubFrame(name)
+    suppressSubFrameRefresh = true
+    local ok = pcall(CharacterFrame_ShowSubFrame, name)
+    suppressSubFrameRefresh = false
+    return ok
+  end
   if mode == 1 then
-    CharacterFrame_ShowSubFrame("PaperDollFrame")
+    SafeShowSubFrame("PaperDollFrame")
     return true
   elseif mode == 2 then
-    CharacterFrame_ShowSubFrame("ReputationFrame")
+    SafeShowSubFrame("ReputationFrame")
     return true
   elseif mode == 3 then
     local token = GetCurrencyPaneFrame and GetCurrencyPaneFrame() or _G.TokenFrame or _G.CurrencyFrame
     if token and token.GetName then
       local n = token:GetName()
       if n and n ~= "" then
-        CharacterFrame_ShowSubFrame(n)
+        SafeShowSubFrame(n)
         return true
       end
     end
-    CharacterFrame_ShowSubFrame("TokenFrame")
+    SafeShowSubFrame("TokenFrame")
     return true
   end
   return false
@@ -2427,11 +2790,19 @@ UpdateCustomStatsFrame = function(db)
     else
       frame.topInfo.ilvl:SetText("0.00 / 0.00")
     end
+    if frame.topInfo.ilvlHit then
+      frame.topInfo.ilvlHit._tooltipLabel = STAT_AVERAGE_ITEM_LEVEL or ITEM_LEVEL_ABBR or "Item Level"
+      frame.topInfo.ilvlHit._tooltipValue = frame.topInfo.ilvl:GetText() or ""
+      frame.topInfo.ilvlHit._tooltipKey = "itemlevel"
+    end
 
     local hp = UnitHealthMax and UnitHealthMax("player") or 0
     local hpText = BreakUpLargeNumbers and BreakUpLargeNumbers(hp) or tostring(hp or 0)
     frame.topInfo.healthRow.left:SetText(HEALTH or "Health")
     frame.topInfo.healthRow.right:SetText(hpText)
+    frame.topInfo.healthRow._tooltipLabel = HEALTH or "Health"
+    frame.topInfo.healthRow._tooltipValue = hpText
+    frame.topInfo.healthRow._tooltipKey = "health"
     frame.topInfo.healthRow.left:SetTextColor(1, 1, 1, 1)
     frame.topInfo.healthRow.right:SetTextColor(1, 1, 1, 1)
     frame.topInfo.healthRow.bg:ClearAllPoints()
@@ -2452,6 +2823,9 @@ UpdateCustomStatsFrame = function(db)
     local pr, pg, pb = info and info.r or 0.2, info and info.g or 0.35, info and info.b or 0.95
     frame.topInfo.powerRow.left:SetText(powerLabel)
     frame.topInfo.powerRow.right:SetText(powerText)
+    frame.topInfo.powerRow._tooltipLabel = powerLabel or (_G.MANA or "Power")
+    frame.topInfo.powerRow._tooltipValue = powerText
+    frame.topInfo.powerRow._tooltipKey = "power"
     frame.topInfo.powerRow.left:SetTextColor(1, 1, 1, 1)
     frame.topInfo.powerRow.right:SetTextColor(1, 1, 1, 1)
     frame.topInfo.powerRow.bg:ClearAllPoints()
@@ -2462,6 +2836,21 @@ UpdateCustomStatsFrame = function(db)
     if frame.topInfo.powerRow.bg.SetAlpha then frame.topInfo.powerRow.bg:SetAlpha(1) end
     frame.topInfo:Show()
   elseif frame.topInfo then
+    if frame.topInfo.ilvlHit then
+      frame.topInfo.ilvlHit._tooltipLabel = nil
+      frame.topInfo.ilvlHit._tooltipValue = nil
+      frame.topInfo.ilvlHit._tooltipKey = nil
+    end
+    if frame.topInfo.healthRow then
+      frame.topInfo.healthRow._tooltipLabel = nil
+      frame.topInfo.healthRow._tooltipValue = nil
+      frame.topInfo.healthRow._tooltipKey = nil
+    end
+    if frame.topInfo.powerRow then
+      frame.topInfo.powerRow._tooltipLabel = nil
+      frame.topInfo.powerRow._tooltipValue = nil
+      frame.topInfo.powerRow._tooltipKey = nil
+    end
     frame.topInfo:Hide()
   end
 
@@ -2543,9 +2932,13 @@ UpdateCustomStatsFrame = function(db)
         end
         rowFrame.left:SetText(rowData[1] or "")
         rowFrame.right:SetText(rowData[2] or "")
+        rowFrame._tooltipLabel = rowData[1] or ""
+        rowFrame._tooltipValue = rowData[2] or ""
         rowFrame:Show()
       else
         if rowFrame.bg then rowFrame.bg:Hide() end
+        rowFrame._tooltipLabel = nil
+        rowFrame._tooltipValue = nil
         rowFrame:Hide()
       end
       rowY = rowY - STAT_ROW_HEIGHT - STAT_ROW_GAP
@@ -2559,7 +2952,11 @@ UpdateCustomStatsFrame = function(db)
   ApplyCustomStatsFont(db)
   RestorePaperDollSidebarButtons()
   if frame.sidebarBar then
-    frame.sidebarBar:SetShown(mode ~= 2 and mode ~= 3)
+    local showCustomSidebar = (mode ~= 2 and mode ~= 3)
+    frame.sidebarBar:SetShown(showCustomSidebar)
+    SetPaperDollSidebarButtonsMouseEnabled(not showCustomSidebar)
+  else
+    SetPaperDollSidebarButtonsMouseEnabled(true)
   end
   frame:Show()
 end
@@ -2629,6 +3026,42 @@ local function GetTooltipInfoLinesForInventorySlot(invID)
 
   inventoryTooltipCache[invID] = { link = link, lines = info.lines }
   return info.lines
+end
+
+local function GetEnchantTextFromTooltip(invID)
+  local lines = GetTooltipInfoLinesForInventorySlot(invID)
+  if type(lines) ~= "table" or #lines == 0 then
+    return ""
+  end
+
+  local localizedPattern = nil
+  local template = _G and _G.ENCHANTED_TOOLTIP_LINE or nil
+  if type(template) == "string" and template ~= "" then
+    localizedPattern = "^" .. template
+      :gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+      :gsub("%%%%s", "(.+)")
+      .. "$"
+  end
+
+  for _, line in ipairs(lines) do
+    if type(line) == "table" then
+      local clean = StripColorAndTextureCodes(line.leftText)
+      if clean ~= "" then
+        local enchantName = nil
+        if localizedPattern then
+          enchantName = clean:match(localizedPattern)
+        end
+        if not enchantName then
+          enchantName = clean:match("^Enchanted:%s*(.+)$")
+        end
+        if enchantName and enchantName ~= "" then
+          return Trim(enchantName)
+        end
+      end
+    end
+  end
+
+  return ""
 end
 
 local function GetUpgradeTrackText(invID)
@@ -3057,12 +3490,18 @@ local function EnsureCustomGearFrame()
       if InCombatLockdown and InCombatLockdown() then return end
       if not SetLootSpecialization then return end
       local index = self.lootIndex or 1
+      local targetLootSpecID
       if index == 1 then
-        pcall(SetLootSpecialization, 0)
+        targetLootSpecID = 0
       else
         local specID = self.specID
         if type(specID) ~= "number" then return end
-        pcall(SetLootSpecialization, specID)
+        targetLootSpecID = specID
+      end
+
+      local ok = pcall(SetLootSpecialization, targetLootSpecID)
+      if ok then
+        pendingLootSpecID = targetLootSpecID
       end
       if M and M.Refresh then
         M:Refresh()
@@ -3090,7 +3529,14 @@ local function UpdateSpecializationButtons(db)
   if row.Show then row:Show() end
   if lootRow and lootRow.Show then lootRow:Show() end
   local current = GetSpecialization and GetSpecialization() or nil
-  local lootSpecID = GetLootSpecialization and GetLootSpecialization() or 0
+  local actualLootSpecID = GetLootSpecialization and GetLootSpecialization() or 0
+  local lootSpecID = actualLootSpecID
+  if type(pendingLootSpecID) == "number" then
+    lootSpecID = pendingLootSpecID
+    if actualLootSpecID == pendingLootSpecID then
+      pendingLootSpecID = nil
+    end
+  end
   local count = GetNumSpecializations and GetNumSpecializations(false, false) or 0
   if not count or count < 1 then
     count = GetNumSpecializations and GetNumSpecializations() or 0
@@ -3209,6 +3655,9 @@ local function UpdateGearRows(rows, slots, rightAlign)
         local name, _, quality = GetItemInfo(link)
         local ilvl = C_Item and C_Item.GetDetailedItemLevelInfo and C_Item.GetDetailedItemLevelInfo(link) or nil
         local enchant = ParseEnchantName(link)
+        if enchant == "" then
+          enchant = GetEnchantTextFromTooltip(invID)
+        end
         local upgradeTrack = GetUpgradeTrackText(invID)
         local enchantQualityTier = GetEnchantQualityTier(invID)
         local r, g, b = 0.92, 0.46, 1.0
@@ -3278,8 +3727,38 @@ local function UpdateGearRows(rows, slots, rightAlign)
         row.track:SetTextColor(1, 1, 1, 1)
 
         local enchantText = enchant or ""
-        local enchantMarkup = GetEnchantQualityAtlasMarkup(invID, enchantText, enchantQualityTier)
-        row.enchant:SetText(enchantText ~= "" and (enchantText .. enchantMarkup) or "")
+        local hasEnchant = Trim(enchantText) ~= ""
+        local canHaveEnchant = false
+        if slotName == "NeckSlot"
+          or slotName == "BackSlot"
+          or slotName == "ChestSlot"
+          or slotName == "WristSlot"
+          or slotName == "FeetSlot"
+          or slotName == "Finger0Slot"
+          or slotName == "Finger1Slot"
+        then
+          canHaveEnchant = true
+        elseif slotName == "MainHandSlot" or slotName == "SecondaryHandSlot" then
+          local _, _, _, equipLoc = GetItemInfoInstant(link)
+          if slotName == "MainHandSlot" then
+            canHaveEnchant = (equipLoc == "INVTYPE_WEAPON")
+              or (equipLoc == "INVTYPE_2HWEAPON")
+              or (equipLoc == "INVTYPE_WEAPONMAINHAND")
+          else
+            canHaveEnchant = (equipLoc == "INVTYPE_WEAPON")
+              or (equipLoc == "INVTYPE_WEAPONOFFHAND")
+              or (equipLoc == "INVTYPE_SHIELD")
+          end
+        end
+
+        local enchantMarkup = hasEnchant and GetEnchantQualityAtlasMarkup(invID, enchantText, enchantQualityTier) or ""
+        if hasEnchant then
+          row.enchant:SetText(enchantText .. enchantMarkup)
+        elseif canHaveEnchant then
+          row.enchant:SetText("|cffff3a3a<enchant missing>|r")
+        else
+          row.enchant:SetText("")
+        end
         if row.enchantQualityIcon then
           row.enchantQualityIcon:Hide()
         end
@@ -4863,7 +5342,9 @@ ShowDungeonPortalTooltip = function(owner, mapName, mapID)
   GameTooltip:Show()
 end
 
-local function FormatMS(ms)
+local RP = {}
+
+function RP.FormatMS(ms)
   if not ms or ms <= 0 then return "-" end
   local total = math.floor((ms / 1000) + 0.5)
   local h = math.floor(total / 3600)
@@ -4875,7 +5356,7 @@ local function FormatMS(ms)
   return ("%02d:%02d"):format(m, s)
 end
 
-local function NormalizeDurationMS(value, keyName)
+function RP.NormalizeDurationMS(value, keyName)
   if type(value) ~= "number" then return nil end
   local key = type(keyName) == "string" and string.lower(keyName) or ""
   if key:find("sec") and value < 100000 then
@@ -4888,7 +5369,7 @@ local function NormalizeDurationMS(value, keyName)
   return math.floor(value + 0.5)
 end
 
-local function CoerceRunFromTable(tbl, mapID)
+function RP.CoerceRunFromTable(tbl, mapID)
   if type(tbl) ~= "table" then return nil end
 
   local level = tbl.level or tbl.bestLevel or tbl.keystoneLevel or tbl.challengeLevel or tbl.bestRunLevel
@@ -4928,18 +5409,18 @@ local function CoerceRunFromTable(tbl, mapID)
     mapChallengeModeID = mapID or tbl.mapChallengeModeID or tbl.mapID,
     level = (type(level) == "number") and math.floor(level + 0.5) or 0,
     score = (type(score) == "number") and score or 0,
-    bestRunDurationMS = NormalizeDurationMS(duration, "duration"),
+    bestRunDurationMS = RP.NormalizeDurationMS(duration, "duration"),
     overTimeMS = (type(over) == "number") and over or nil,
     stars = (type(stars) == "number") and math.max(0, math.min(3, math.floor(stars + 0.5))) or 0,
   }
   return run
 end
 
-local function ExtractRunsDeep(value, mapID, out, depth)
+function RP.ExtractRunsDeep(value, mapID, out, depth)
   if depth <= 0 then return end
   if type(value) ~= "table" then return end
 
-  local run = CoerceRunFromTable(value, mapID)
+  local run = RP.CoerceRunFromTable(value, mapID)
   if run then
     out[#out + 1] = run
   end
@@ -4956,7 +5437,7 @@ local function ExtractRunsDeep(value, mapID, out, depth)
       elseif type(value.mapID) == "number" then
         childMapID = value.mapID
       end
-      ExtractRunsDeep(v, childMapID, out, depth - 1)
+      RP.ExtractRunsDeep(v, childMapID, out, depth - 1)
     elseif type(v) == "number" then
       -- Secondary heuristic pass for tables that split values across keyed fields.
       local key = type(k) == "string" and string.lower(k) or ""
@@ -4967,7 +5448,7 @@ local function ExtractRunsDeep(value, mapID, out, depth)
         elseif (key:find("score") or key:find("rating")) and synthetic.score == 0 then
           synthetic.score = v
         elseif key:find("duration") and not synthetic.bestRunDurationMS then
-          synthetic.bestRunDurationMS = NormalizeDurationMS(v, key)
+          synthetic.bestRunDurationMS = RP.NormalizeDurationMS(v, key)
         end
         out[#out] = synthetic
       end
@@ -4975,7 +5456,7 @@ local function ExtractRunsDeep(value, mapID, out, depth)
   end
 end
 
-local function MergeBestRunsByMap(runs)
+function RP.MergeBestRunsByMap(runs)
   local byMap = {}
   for _, run in ipairs(runs or {}) do
     if type(run) == "table" then
@@ -5002,7 +5483,7 @@ local function MergeBestRunsByMap(runs)
   return merged
 end
 
-local function ShallowCopyArray(src)
+function RP.ShallowCopyArray(src)
   if type(src) ~= "table" then return nil end
   local out = {}
   for i = 1, #src do
@@ -5011,7 +5492,7 @@ local function ShallowCopyArray(src)
   return out
 end
 
-local function CopyRuns(runs)
+function RP.CopyRuns(runs)
   if type(runs) ~= "table" then return nil end
   local out = {}
   for i = 1, #runs do
@@ -5026,8 +5507,6 @@ local function CopyRuns(runs)
   end
   return out
 end
-
-local RP = {}
 
 function RP.GetPlayerSnapshotKey()
   local guid = UnitGUID and UnitGUID("player") or nil
@@ -5181,10 +5660,10 @@ function RP.RefreshRightPanelHeaderAndAffixes(snapshotKey, sameSnapshotOwner)
 
   if rightPanel and rightPanel.affixSlots then
     if #affixIDs == 0 and sameSnapshotOwner and type(lastMPlusSnapshot.affixIDs) == "table" and #lastMPlusSnapshot.affixIDs > 0 then
-      affixIDs = ShallowCopyArray(lastMPlusSnapshot.affixIDs) or affixIDs
+      affixIDs = RP.ShallowCopyArray(lastMPlusSnapshot.affixIDs) or affixIDs
     elseif #affixIDs > 0 then
       lastMPlusSnapshot.ownerKey = snapshotKey
-      lastMPlusSnapshot.affixIDs = ShallowCopyArray(affixIDs)
+      lastMPlusSnapshot.affixIDs = RP.ShallowCopyArray(affixIDs)
     end
 
     for i, slot in ipairs(rightPanel.affixSlots) do
@@ -5250,8 +5729,8 @@ function RP.GatherMythicRuns()
           local ok, info = pcall(C_MythicPlus.GetSeasonBestAffixScoreInfoForMap, mapID)
           if ok and type(info) == "table" then
             local extracted = {}
-            ExtractRunsDeep(info, mapID, extracted, 6)
-            extracted = MergeBestRunsByMap(extracted)
+            RP.ExtractRunsDeep(info, mapID, extracted, 6)
+            extracted = RP.MergeBestRunsByMap(extracted)
             if #extracted > 0 then
               local best = extracted[1]
               row.score = best.score or 0
@@ -5271,8 +5750,8 @@ function RP.GatherMythicRuns()
           if ok then
             if type(a) == "table" then
               local extracted = {}
-              ExtractRunsDeep(a, mapID, extracted, 6)
-              extracted = MergeBestRunsByMap(extracted)
+              RP.ExtractRunsDeep(a, mapID, extracted, 6)
+              extracted = RP.MergeBestRunsByMap(extracted)
               if #extracted > 0 then
                 local best = extracted[1]
                 row.score = row.score or best.score
@@ -5282,7 +5761,7 @@ function RP.GatherMythicRuns()
               end
             else
               local tuple = { score = a, level = b, bestRunDurationMS = c, overTimeMS = d, mapChallengeModeID = mapID }
-              local parsed = CoerceRunFromTable(tuple, mapID)
+              local parsed = RP.CoerceRunFromTable(tuple, mapID)
               if parsed then
                 row.score = row.score or parsed.score
                 row.level = row.level or parsed.level
@@ -5323,13 +5802,13 @@ function RP.FilterAndNormalizeRuns(runs, rating)
     local extracted = {}
     for _, r in ipairs(runs) do
       if type(r) == "table" then
-        ExtractRunsDeep(r, r.mapChallengeModeID or r.mapID, extracted, 4)
+        RP.ExtractRunsDeep(r, r.mapChallengeModeID or r.mapID, extracted, 4)
       end
     end
     if #extracted > 0 then
-      runs = MergeBestRunsByMap(extracted)
+      runs = RP.MergeBestRunsByMap(extracted)
     else
-      runs = MergeBestRunsByMap(runs)
+      runs = RP.MergeBestRunsByMap(runs)
     end
   end
   return runs
@@ -5337,11 +5816,11 @@ end
 
 function RP.ApplyRunSnapshotCache(runs, snapshotKey, sameSnapshotOwner)
   if #runs == 0 and sameSnapshotOwner and type(lastMPlusSnapshot.runs) == "table" and #lastMPlusSnapshot.runs > 0 then
-    return CopyRuns(lastMPlusSnapshot.runs) or runs
+    return RP.CopyRuns(lastMPlusSnapshot.runs) or runs
   end
   if #runs > 0 then
     lastMPlusSnapshot.ownerKey = snapshotKey
-    lastMPlusSnapshot.runs = CopyRuns(runs)
+    lastMPlusSnapshot.runs = RP.CopyRuns(runs)
   end
   return runs
 end
@@ -5371,7 +5850,7 @@ function RP.RenderRunRows(runs)
       local stars = run.stars or run.numKeystoneUpgrades or 0
       local bestMS = run.bestRunDurationMS or run.durationMS
       local parMS = run.parTimeMS or GetDungeonMapTimeLimitMS(mapID)
-      local best = FormatMS(bestMS)
+      local best = RP.FormatMS(bestMS)
       local deltaMS = RP.GetRunDeltaMS(run)
       if not deltaMS and type(bestMS) == "number" and type(parMS) == "number" and parMS > 0 then
         deltaMS = bestMS - parMS
@@ -5393,7 +5872,7 @@ function RP.RenderRunRows(runs)
       end
 
       if deltaMS and best ~= "-" then
-        local absText = FormatMS(math.abs(deltaMS))
+        local absText = RP.FormatMS(math.abs(deltaMS))
         if deltaMS <= 0 then
           row.best:SetText(best .. " |cff33ff99(-" .. absText .. ")|r")
           row.best:SetTextColor(0.95, 0.95, 0.95, 1)
@@ -5593,6 +6072,11 @@ function M:Refresh()
   local db = NS:GetDB()
   if not db then return end
   if not CharacterFrame then return end
+  if refreshInProgress then
+    refreshQueuedAfterCurrent = true
+    return
+  end
+  refreshInProgress = true
   SyncCustomModeToNativePanel()
 
   if db.charsheet.styleStats then
@@ -5708,6 +6192,12 @@ function M:Refresh()
   end
 
   SyncBottomModeButtonsVisibility(db)
+
+  refreshInProgress = false
+  if refreshQueuedAfterCurrent then
+    refreshQueuedAfterCurrent = false
+    self:Refresh()
+  end
 end
 
 function M:Apply()
@@ -5723,6 +6213,13 @@ function M:Apply()
 
   if not IsAddonLoadedCompat("Blizzard_CharacterUI") then
     LoadAddonCompat("Blizzard_CharacterUI")
+  end
+
+  -- Build custom panes ahead of first open to avoid first-show hitching.
+  if db.charsheet and db.charsheet.styleStats and CharacterFrame then
+    EnsureCustomCharacterFrame()
+    EnsureCustomStatsFrame()
+    EnsureCustomGearFrame()
   end
 
   -- Unconditional slot-position enforcer: re-applies ApplyChonkySlotLayout
@@ -5751,28 +6248,18 @@ function M:Apply()
       if M.active then
         local liveDB = NS and NS.GetDB and NS:GetDB() or nil
         if liveDB and liveDB.charsheet and liveDB.charsheet.styleStats then
-          -- Always re-open on full-size Character mode baseline.
           M._pendingNativeMode = nil
-          if customStatsFrame and (customStatsFrame.activeMode == 2 or customStatsFrame.activeMode == 3) then
-            customStatsFrame.activeMode = 1
-            ShowNativeCharacterMode(1)
-          end
-          ApplyCustomCharacterLayout()
-          if C_Timer and C_Timer.After then
-            C_Timer.After(0, function()
-              if not (M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
-              ApplyCustomCharacterLayout()
-              if UpdateCustomStatsFrame then
-                UpdateCustomStatsFrame(liveDB)
-              end
-              if UpdateCustomGearFrame then
-                UpdateCustomGearFrame(liveDB)
-              end
-            end)
-          end
         end
         SyncCustomModeToNativePanel()
         M:Refresh()
+        if C_Timer and C_Timer.After then
+          C_Timer.After(0, function()
+            if not (M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
+            local liveDB = NS and NS.GetDB and NS:GetDB() or nil
+            if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then return end
+            ApplyCustomCharacterLayout()
+          end)
+        end
         -- Start the slot enforcer for 0.5 s to overwrite any late Blizzard re-anchors.
         if slotEnforcer then
           slotEnforceUntil = GetTime() + 0.5
@@ -5798,6 +6285,36 @@ function M:Apply()
       end
     end)
     hookedHide = true
+  end
+  local function RefreshForNativeSubframeSwitch()
+    if not M.active then return end
+    if suppressSubFrameRefresh then return end
+    if not (CharacterFrame and CharacterFrame:IsShown()) then return end
+    local liveDB = NS and NS.GetDB and NS:GetDB() or nil
+    if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then return end
+    M._pendingNativeMode = nil
+    SyncCustomModeToNativePanel()
+    M:Refresh()
+  end
+  if not hookedSubFrame and hooksecurefunc and CharacterFrame_ShowSubFrame then
+    hooksecurefunc("CharacterFrame_ShowSubFrame", function()
+      RefreshForNativeSubframeSwitch()
+    end)
+    hookedSubFrame = true
+  end
+  local repFrame = _G.ReputationFrame
+  if repFrame and repFrame.HookScript and not repFrame._haraModeHooked then
+    repFrame:HookScript("OnShow", function()
+      RefreshForNativeSubframeSwitch()
+    end)
+    repFrame._haraModeHooked = true
+  end
+  local tokenFrame = GetCurrencyPaneFrame and GetCurrencyPaneFrame() or _G.TokenFrame or _G.CurrencyFrame
+  if tokenFrame and tokenFrame.HookScript and not tokenFrame._haraModeHooked then
+    tokenFrame:HookScript("OnShow", function()
+      RefreshForNativeSubframeSwitch()
+    end)
+    tokenFrame._haraModeHooked = true
   end
 
   local function QueueLiveUpdate(includeRightPanel)
@@ -5874,6 +6391,7 @@ function M:Apply()
   moduleEventFrame:UnregisterAllEvents()
   SafeRegisterEvent(moduleEventFrame, "PLAYER_EQUIPMENT_CHANGED")
   SafeRegisterEvent(moduleEventFrame, "PLAYER_SPECIALIZATION_CHANGED")
+  SafeRegisterEvent(moduleEventFrame, "PLAYER_LOOT_SPEC_UPDATED")
   SafeRegisterEvent(moduleEventFrame, "ACTIVE_TALENT_GROUP_CHANGED")
   SafeRegisterEvent(moduleEventFrame, "PLAYER_LEVEL_UP")
   SafeRegisterEvent(moduleEventFrame, "KNOWN_TITLES_UPDATE")
@@ -5888,6 +6406,9 @@ function M:Apply()
     if not M.active then return end
     if event == "UNIT_MAXHEALTH" or event == "UNIT_MAXPOWER" or event == "UNIT_STATS" or event == "UNIT_NAME_UPDATE" then
       if unitOrSlot and unitOrSlot ~= "player" then return end
+    end
+    if event == "PLAYER_LOOT_SPEC_UPDATED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "ACTIVE_TALENT_GROUP_CHANGED" then
+      pendingLootSpecID = nil
     end
     if event == "PLAYER_EQUIPMENT_CHANGED" then
       local slotID = tonumber(unitOrSlot)
@@ -5910,6 +6431,7 @@ function M:Disable()
   M.active = false
   liveUpdateQueued = false
   liveUpdateIncludeRightPanel = false
+  pendingLootSpecID = nil
   wipe(inventoryTooltipCache)
   if ticker then
     ticker:SetScript("OnUpdate", nil)
