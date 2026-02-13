@@ -11,8 +11,8 @@ local onlyNameEnemyCVar
 local friendlyBuffsCVar = "nameplateShowFriendlyBuffs"
 local pendingCVarApply = false
 local plates = {}
-local lastCVarCheck = 0
 local cvarCheckTicker
+local deferredUpdateTicket = 0
 M.active = false
 
 local function EnsureFriendlyDB(db)
@@ -134,8 +134,6 @@ local function ApplyFriendlyCVars()
     end
   end
 
-  lastCVarCheck = GetTime()
-
   -- Force nameplate refresh after CVar changes
   if C_NamePlate and C_NamePlate.SetNamePlateFriendlySize then
     local size = C_NamePlate.GetNamePlateFriendlySize()
@@ -145,6 +143,31 @@ local function ApplyFriendlyCVars()
     local esize = C_NamePlate.GetNamePlateEnemySize()
     C_NamePlate.SetNamePlateEnemySize(esize, esize)
   end
+end
+
+local function IsCVarValue(name, expected)
+  local cur = GetCVarSafe(name)
+  if cur == nil then return false end
+  return tostring(cur) == tostring(expected)
+end
+
+local function NeedsFriendlyCVarReapply()
+  if pendingCVarApply then
+    return true
+  end
+  if CVarExists("nameplateShowEnemies") and not IsCVarValue("nameplateShowEnemies", "1") then
+    return true
+  end
+  if onlyNameCVar and CVarExists(onlyNameCVar) and not IsCVarValue(onlyNameCVar, "1") then
+    return true
+  end
+  if onlyNameEnemyCVar and CVarExists(onlyNameEnemyCVar) and not IsCVarValue(onlyNameEnemyCVar, "1") then
+    return true
+  end
+  if CVarExists(friendlyBuffsCVar) and not IsCVarValue(friendlyBuffsCVar, "0") then
+    return true
+  end
+  return false
 end
 
 local function RestoreFriendlyCVars()
@@ -158,8 +181,8 @@ end
 
 local function StartCVarMonitor()
   if cvarCheckTicker then return end
-  -- Check CVars every 3 seconds to ensure they persist (especially in instances)
-  cvarCheckTicker = C_Timer.NewTicker(3, function()
+  -- Periodic drift-check for external CVar changes.
+  cvarCheckTicker = C_Timer.NewTicker(5, function()
     if not M.active then
       if cvarCheckTicker then
         cvarCheckTicker:Cancel()
@@ -167,9 +190,7 @@ local function StartCVarMonitor()
       end
       return
     end
-    -- Only reapply if enough time has passed since last check
-    local now = GetTime()
-    if now - lastCVarCheck >= 2.5 then
+    if NeedsFriendlyCVarReapply() then
       ApplyFriendlyCVars()
     end
   end)
@@ -404,12 +425,31 @@ end
 
 local function UpdateAllDeferred(db)
   if not db then return end
+  deferredUpdateTicket = deferredUpdateTicket + 1
+  local ticket = deferredUpdateTicket
   UpdateAll(db)
   if C_Timer and C_Timer.After then
-    C_Timer.After(0, function() UpdateAll(db) end)
-    C_Timer.After(0.1, function() UpdateAll(db) end)
-    C_Timer.After(0.3, function() UpdateAll(db) end)
+    C_Timer.After(0.12, function()
+      if not M.active then return end
+      if ticket ~= deferredUpdateTicket then return end
+      local liveDB = NS:GetDB()
+      local fp = EnsureFriendlyDB(liveDB)
+      if not (liveDB and fp and fp.enabled) then return end
+      UpdateAll(liveDB)
+    end)
   end
+end
+
+local function IsWatchedCVar(name)
+  if not name then return false end
+  return name == "nameplateShowOnlyNames"
+    or name == "nameplateShowEnemies"
+    or name == "nameplateShowAll"
+    or name == "nameplateShowOnlyNameForFriendlyPlayerUnits"
+    or name == "nameplateShowOnlyNameForEnemyPlayerUnits"
+    or name == friendlyBuffsCVar
+    or (onlyNameCVar and name == onlyNameCVar)
+    or (onlyNameEnemyCVar and name == onlyNameEnemyCVar)
 end
 
 function M:Refresh()
@@ -492,22 +532,7 @@ function M:Apply()
       end
       return
     end
-    if event == "CVAR_UPDATE" and arg1 == "nameplateShowOnlyNames" then
-      ApplyFriendlyCVars()
-      UpdateAllDeferred(db)
-      return
-    end
-    if event == "CVAR_UPDATE" and arg1 == "nameplateShowOnlyNameForFriendlyPlayerUnits" then
-      ApplyFriendlyCVars()
-      UpdateAllDeferred(db)
-      return
-    end
-    if event == "CVAR_UPDATE" and arg1 == "nameplateShowOnlyNameForEnemyPlayerUnits" then
-      ApplyFriendlyCVars()
-      UpdateAllDeferred(db)
-      return
-    end
-    if event == "CVAR_UPDATE" and arg1 == friendlyBuffsCVar then
+    if event == "CVAR_UPDATE" and IsWatchedCVar(arg1) then
       ApplyFriendlyCVars()
       UpdateAllDeferred(db)
       return

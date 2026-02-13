@@ -3,6 +3,7 @@ local M = {}
 NS:RegisterModule("charsheet", M)
 
 M.active = false
+M._pendingNativeMode = nil
 
 local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 
@@ -29,28 +30,45 @@ local originalCharacterSize
 local originalLayoutByKey = {}
 local layoutApplied = false
 local ticker
-local elapsedSinceTick = 0
+local slotEnforcer
+local slotEnforceUntil = 0
+local moduleEventFrame
 local hookedShow = false
 local hookedHide = false
+local liveUpdateQueued = false
+local liveUpdateIncludeRightPanel = false
+local inventoryTooltipCache = {}
 
-local TICK_INTERVAL = 0.5
 local DATA_REFRESH_INTERVAL = 2.0
+local EVENT_DEBOUNCE_INTERVAL = 0.06
 local elapsedSinceData = 0
 local portalSpellCache = {}
 local lastMPlusSnapshot = {
+  ownerKey = nil,
   affixIDs = nil,
   runs = nil,
 }
 local ShowAffixTooltip
 local ShowDungeonPortalTooltip
 local pendingSecureUpdate = false
+local UpdateCustomStatsFrame
+local UpdateCustomGearFrame
+local ApplyCoreCharacterFontAndName
+local RestorePaperDollSidebarButtons
+local ApplyCustomCharacterLayout
+local ShowNativeCharacterMode
+local SyncCustomModeToNativePanel
 
-local CUSTOM_CHAR_WIDTH = 640
 local CUSTOM_CHAR_HEIGHT = 675
-local CUSTOM_STATS_WIDTH = 230
+local BASE_PRIMARY_SHEET_WIDTH = 820
+local FRAME_RIGHT_EXPAND_FACTOR = 1.15
+local PRIMARY_SHEET_WIDTH = math.floor((BASE_PRIMARY_SHEET_WIDTH * FRAME_RIGHT_EXPAND_FACTOR) + 0.5)
+local PRIMARY_EXTRA_WIDTH = PRIMARY_SHEET_WIDTH - BASE_PRIMARY_SHEET_WIDTH
+local BASE_STATS_WIDTH = 230
+local CUSTOM_STATS_WIDTH = BASE_STATS_WIDTH + PRIMARY_EXTRA_WIDTH
 local CUSTOM_PANE_GAP = 6
-local PRIMARY_SHEET_WIDTH = 820
 local INTEGRATED_RIGHT_GAP = 8
+local RIGHT_PANEL_CENTER_Y_BIAS = -12
 local STAT_ROW_HEIGHT = 16
 local STAT_ROW_GAP = 2
 local STAT_SECTION_GAP = 7
@@ -68,6 +86,18 @@ local STAT_ROW_GRADIENT_SPLIT = 0.92
 local STAT_HEADER_GRADIENT_ALPHA = 1.00
 local STAT_BODY_GRADIENT_ALPHA = 0.72
 local STAT_ROW_GRADIENT_ALPHA = 0.74
+local HEADER_TEXT_X_OFFSET = -144 -- shift header block ~20% left total
+local ENCHANT_QUALITY_MARKUP_SIZE = 18
+local STATS_MODE_BUTTON_WIDTH = 86
+local STATS_MODE_BUTTON_HEIGHT = 30
+local STATS_MODE_BUTTON_GAP = 6
+local STATS_SIDEBAR_BUTTON_COUNT = 4
+local STATS_SIDEBAR_BUTTON_SIZE = 28
+local STATS_SIDEBAR_BUTTON_GAP = 4
+local STATS_MODE_BUTTON_PAD_Y = 8
+local STATS_MODE_LIST_ROW_HEIGHT = 26
+local STATS_MODE_LIST_ROW_GAP = 4
+local STATS_TITLES_FONT_DELTA = -3
 
 local ATTR_YELLOW = { 0.96, 0.96, 0.96, 1.0 }
 local VALUE_WHITE = { 0.96, 0.96, 0.96, 1.0 }
@@ -134,6 +164,43 @@ local SECTION_COLORS = {
 
 -- All equippable slot indices (excluding ranged 18)
 local ALL_SLOT_INDICES = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19 }
+local CHARACTER_SLOT_BUTTON_NAMES = {
+  "CharacterHeadSlot",
+  "CharacterNeckSlot",
+  "CharacterShoulderSlot",
+  "CharacterShirtSlot",
+  "CharacterChestSlot",
+  "CharacterWaistSlot",
+  "CharacterLegsSlot",
+  "CharacterFeetSlot",
+  "CharacterWristSlot",
+  "CharacterHandsSlot",
+  "CharacterFinger0Slot",
+  "CharacterFinger1Slot",
+  "CharacterTrinket0Slot",
+  "CharacterTrinket1Slot",
+  "CharacterBackSlot",
+  "CharacterMainHandSlot",
+  "CharacterSecondaryHandSlot",
+  "CharacterTabardSlot",
+}
+
+local function SetCharacterSlotButtonsVisible(visible)
+  for _, name in ipairs(CHARACTER_SLOT_BUTTON_NAMES) do
+    local btn = _G[name]
+    if btn then
+      if visible then
+        if btn.SetAlpha then btn:SetAlpha(1) end
+        if btn.Show then btn:Show() end
+        if btn.EnableMouse then btn:EnableMouse(true) end
+      else
+        if btn.EnableMouse then btn:EnableMouse(false) end
+        if btn.SetAlpha then btn:SetAlpha(0) end
+        if btn.Hide then btn:Hide() end
+      end
+    end
+  end
+end
 
 local function CaptureLayout(key, frame)
   if not key or not frame or originalLayoutByKey[key] then return end
@@ -153,12 +220,18 @@ local function CaptureLayout(key, frame)
 end
 
 local function RestoreCapturedLayouts()
+  local function NormalizePoint(p)
+    if p == "CENTERLEFT" then return "LEFT" end
+    if p == "CENTERRIGHT" then return "RIGHT" end
+    return p
+  end
+
   for _, data in pairs(originalLayoutByKey) do
     local frame = data and data.frame
     if frame and frame.ClearAllPoints and data.points then
       frame:ClearAllPoints()
       for _, pt in ipairs(data.points) do
-        frame:SetPoint(pt.p, pt.rel, pt.rp, pt.x, pt.y)
+        frame:SetPoint(NormalizePoint(pt.p), pt.rel, NormalizePoint(pt.rp), pt.x, pt.y)
       end
     end
     if frame and frame.SetSize and data and data.width and data.height then
@@ -311,6 +384,68 @@ local function RestoreFonts()
   wipe(styledFonts)
 end
 
+RestorePaperDollSidebarButtons = function()
+  if not CharacterFrame then return end
+
+  local function GetSidebarButton(index)
+    local names = {
+      ("PaperDollSidebarTab%d"):format(index),
+      ("PaperDollSidebarButton%d"):format(index),
+      ("CharacterFrameSidebarTab%d"):format(index),
+      ("CharacterSidebarTab%d"):format(index),
+    }
+    for _, name in ipairs(names) do
+      local btn = _G[name]
+      if btn then
+        return btn
+      end
+    end
+    return nil
+  end
+
+  for i = 1, 8 do
+    local btn = GetSidebarButton(i)
+    if btn then
+      if btn.SetAlpha then btn:SetAlpha(1) end
+      if btn.Show then btn:Show() end
+      if btn.Enable then btn:Enable() end
+      if btn.EnableMouse then btn:EnableMouse(true) end
+
+      if btn._haraSidebarSkin and btn._haraSidebarSkin.Hide then
+        btn._haraSidebarSkin:Hide()
+      end
+
+      local icon = btn.Icon or btn.icon or (btn.GetName and _G[btn:GetName() .. "Icon"]) or nil
+      if icon then
+        if icon.SetAlpha then icon:SetAlpha(1) end
+        if icon.Show then icon:Show() end
+      end
+
+      if btn.GetNormalTexture then
+        local nt = btn:GetNormalTexture()
+        if nt then
+          if nt.SetAlpha then nt:SetAlpha(1) end
+          if nt.Show then nt:Show() end
+        end
+      end
+      if btn.GetPushedTexture then
+        local pt = btn:GetPushedTexture()
+        if pt then
+          if pt.SetAlpha then pt:SetAlpha(1) end
+          if pt.Show then pt:Show() end
+        end
+      end
+      if btn.GetHighlightTexture then
+        local ht = btn:GetHighlightTexture()
+        if ht then
+          if ht.SetAlpha then ht:SetAlpha(1) end
+          if ht.Show then ht:Show() end
+        end
+      end
+    end
+  end
+end
+
 local function EnsureSlotSkin(slotButton)
   if not slotButton then return nil end
   if slotSkins[slotButton] then
@@ -409,7 +544,7 @@ local function EnsureCustomCharacterFrame()
     insets = { left = 0, right = 0, top = 0, bottom = 0 },
   })
   customCharacterFrame:SetBackdropColor(0, 0, 0, 0)
-  customCharacterFrame:SetBackdropBorderColor(0.34, 0.17, 0.52, 0.95)
+  customCharacterFrame:SetBackdropBorderColor(0, 0, 0, 0)
   customCharacterFrame:EnableMouse(true)
   customCharacterFrame:SetMovable(true)
   customCharacterFrame:RegisterForDrag("LeftButton")
@@ -448,7 +583,7 @@ local function EnsureCustomCharacterFrame()
   headerFrame:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 40)
 
   customNameText = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  customNameText:SetPoint("TOP", CharacterFrame, "TOP", 0, -8)
+  customNameText:SetPoint("TOP", CharacterFrame, "TOP", HEADER_TEXT_X_OFFSET, -8)
   customNameText:SetJustifyH("CENTER")
   customNameText:SetDrawLayer("OVERLAY", 7)
   customNameText:SetShadowOffset(1, -1)
@@ -648,6 +783,142 @@ local function BuildCustomStatsData()
   return sections
 end
 
+local function BuildKnownTitlesData()
+  local rows = {}
+  if not (GetNumTitles and GetTitleName and IsTitleKnown) then
+    return rows
+  end
+  local current = GetCurrentTitle and GetCurrentTitle() or 0
+  local total = GetNumTitles() or 0
+  for i = 1, total do
+    if IsTitleKnown(i) then
+      local raw = GetTitleName(i)
+      if type(raw) == "string" and raw ~= "" then
+        local clean = raw:gsub("%%s%s*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+        rows[#rows + 1] = {
+          id = i,
+          label = clean ~= "" and clean or ("Title " .. i),
+          detail = (current == i) and "Active" or "",
+          selected = (current == i),
+          icon = 133742,
+        }
+      end
+    end
+  end
+  table.sort(rows, function(a, b)
+    return (a.label or ""):lower() < (b.label or ""):lower()
+  end)
+  return rows
+end
+
+local function BuildEquipmentSetsData(selectedSetID)
+  local rows = {}
+  if not (C_EquipmentSet and C_EquipmentSet.GetEquipmentSetIDs and C_EquipmentSet.GetEquipmentSetInfo) then
+    return rows
+  end
+  local active = C_EquipmentSet.GetEquipmentSetForSpec and C_EquipmentSet.GetEquipmentSetForSpec(GetSpecialization and GetSpecialization() or 0) or nil
+  local ids = C_EquipmentSet.GetEquipmentSetIDs() or {}
+  for _, setID in ipairs(ids) do
+    local name, icon, _, _, _, _, _, _, _, isEquipped = C_EquipmentSet.GetEquipmentSetInfo(setID)
+    if type(name) == "string" and name ~= "" then
+      local selected = (selectedSetID and selectedSetID == setID) or (isEquipped == true) or (active and active == setID) or false
+      rows[#rows + 1] = {
+        id = setID,
+        label = name,
+        detail = (isEquipped == true or (active and active == setID)) and "Active" or (selectedSetID and selectedSetID == setID and "Selected" or ""),
+        selected = selected,
+        icon = icon or 132627,
+      }
+    end
+  end
+  table.sort(rows, function(a, b)
+    return (a.label or ""):lower() < (b.label or ""):lower()
+  end)
+  return rows
+end
+
+local function BuildReputationData()
+  local rows = {}
+  if not (GetNumFactions and GetFactionInfo) then
+    return rows
+  end
+  local count = GetNumFactions() or 0
+  for i = 1, count do
+    local name, _, standingID, bottomValue, topValue, earnedValue, _, _, isHeader, _, hasRep, isWatched, _, _, _, _, _, isCollapsed = GetFactionInfo(i)
+    if name and name ~= "" and not isHeader and hasRep ~= false and not isCollapsed then
+      local span = (tonumber(topValue) or 0) - (tonumber(bottomValue) or 0)
+      local earned = (tonumber(earnedValue) or 0) - (tonumber(bottomValue) or 0)
+      local pct = (span > 0) and math.floor(((earned / span) * 100) + 0.5) or 0
+      if pct < 0 then pct = 0 end
+      if pct > 100 then pct = 100 end
+      local standingText = (standingID and _G["FACTION_STANDING_LABEL" .. standingID]) or "Standing"
+      rows[#rows + 1] = {
+        factionIndex = i,
+        label = name,
+        detail = ("%s %d%%"):format(standingText, pct),
+        selected = (isWatched == true),
+        icon = 236681,
+      }
+    end
+  end
+  table.sort(rows, function(a, b)
+    if a.selected ~= b.selected then
+      return a.selected == true
+    end
+    return (a.label or ""):lower() < (b.label or ""):lower()
+  end)
+  return rows
+end
+
+local function BuildCurrencyData()
+  local rows = {}
+  if not (C_CurrencyInfo and C_CurrencyInfo.GetCurrencyListSize and C_CurrencyInfo.GetCurrencyListInfo) then
+    return rows
+  end
+  local count = C_CurrencyInfo.GetCurrencyListSize() or 0
+  for i = 1, count do
+    local info = C_CurrencyInfo.GetCurrencyListInfo(i)
+    if type(info) == "table" and not info.isHeader and not info.isTypeUnused then
+      local name = info.name or ""
+      if name ~= "" then
+        local quantity = tonumber(info.quantity) or 0
+        local maxQuantity = tonumber(info.maxQuantity) or 0
+        rows[#rows + 1] = {
+          label = name,
+          detail = (maxQuantity > 0) and ("%d/%d"):format(quantity, maxQuantity) or tostring(quantity),
+          selected = (info.isShowInBackpack == true),
+          icon = info.iconFileID or 463446,
+        }
+      end
+    end
+  end
+  table.sort(rows, function(a, b)
+    local an = tonumber((a.detail or ""):match("^(%d+)")) or 0
+    local bn = tonumber((b.detail or ""):match("^(%d+)")) or 0
+    if an ~= bn then return an > bn end
+    return (a.label or ""):lower() < (b.label or ""):lower()
+  end)
+  return rows
+end
+
+local function GetTopSidebarIconData(index)
+  if index == 1 then
+    local _, classTag = UnitClass("player")
+    local coords = (classTag and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classTag]) or nil
+    if coords then
+      return "Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES", coords[1], coords[2], coords[3], coords[4]
+    end
+    return "Interface\\Icons\\INV_Misc_QuestionMark", 0.08, 0.92, 0.08, 0.92
+  elseif index == 2 then
+    return "Interface\\Icons\\INV_Scroll_03", 0.08, 0.92, 0.08, 0.92
+  elseif index == 3 then
+    return "Interface\\Icons\\INV_Chest_Plate12", 0.08, 0.92, 0.08, 0.92
+  elseif index == 4 then
+    return "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up", 0.0, 1.0, 0.0, 1.0
+  end
+  return "Interface\\Icons\\INV_Misc_QuestionMark", 0.08, 0.92, 0.08, 0.92
+end
+
 local function EnsureCustomStatsFrame()
   if customStatsFrame then return customStatsFrame end
   if not CharacterFrame then return nil end
@@ -656,7 +927,368 @@ local function EnsureCustomStatsFrame()
   customStatsFrame:SetFrameStrata("HIGH")
   customStatsFrame:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 20)
   customStatsFrame.sections = {}
+  customStatsFrame.modeButtons = {}
+  customStatsFrame.activeMode = 1
+  customStatsFrame.modeSelectedSetID = nil
   customStatsFrame:Hide()
+
+  customStatsFrame.modeBar = CreateFrame("Frame", nil, CharacterFrame)
+  customStatsFrame.modeBar:SetFrameLevel((customStatsFrame:GetFrameLevel() or 1) + 3)
+  customStatsFrame.modeBar:SetSize((STATS_MODE_BUTTON_WIDTH * 3) + (STATS_MODE_BUTTON_GAP * 2), STATS_MODE_BUTTON_HEIGHT)
+  customStatsFrame.sidebarBar = CreateFrame("Frame", nil, CharacterFrame)
+  customStatsFrame.sidebarBar:SetFrameLevel((customStatsFrame:GetFrameLevel() or 1) + 6)
+  customStatsFrame.sidebarBar:SetSize(
+    (STATS_SIDEBAR_BUTTON_SIZE * STATS_SIDEBAR_BUTTON_COUNT) + (STATS_SIDEBAR_BUTTON_GAP * (STATS_SIDEBAR_BUTTON_COUNT - 1)),
+    STATS_SIDEBAR_BUTTON_SIZE
+  )
+  customStatsFrame.sidebarButtons = {}
+
+  local function GetSidebarTabButton(index)
+    local candidates = {
+      ("PaperDollSidebarTab%d"):format(index),
+      ("PaperDollSidebarButton%d"):format(index),
+      ("CharacterFrameSidebarTab%d"):format(index),
+      ("CharacterSidebarTab%d"):format(index),
+    }
+    for _, name in ipairs(candidates) do
+      local btn = _G[name]
+      if btn then
+        return btn
+      end
+    end
+    return nil
+  end
+
+  local function ResolveModeIcon(index)
+    if index == 2 then
+      return "Interface\\Icons\\Achievement_Reputation_01"
+    end
+    if index == 3 then
+      return "Interface\\Icons\\inv_misc_coin_02"
+    end
+    local tab = GetSidebarTabButton(index)
+    if tab then
+      local icon = tab.Icon or tab.icon or (tab.GetName and _G[tab:GetName() .. "Icon"]) or (tab.GetNormalTexture and tab:GetNormalTexture())
+      if type(icon) == "string" or type(icon) == "number" then
+        return icon
+      elseif icon and icon.GetTexture then
+        local tex = icon:GetTexture()
+        if tex then
+          return tex
+        end
+      end
+    end
+    local fallback = {
+      [1] = 132089, -- stats
+      [2] = 236681, -- reputation
+      [3] = 463446, -- currency
+    }
+    return fallback[index] or 134400
+  end
+
+
+  customStatsFrame.modeList = CreateFrame("Frame", nil, customStatsFrame, "BackdropTemplate")
+  customStatsFrame.modeList:SetBackdrop({
+    bgFile = "Interface/Buttons/WHITE8x8",
+    edgeFile = "Interface/Buttons/WHITE8x8",
+    edgeSize = 1,
+    insets = { left = 0, right = 0, top = 0, bottom = 0 },
+  })
+  customStatsFrame.modeList:SetBackdropColor(0.02, 0.02, 0.03, 0.75)
+  customStatsFrame.modeList:SetBackdropBorderColor(0.30, 0.18, 0.48, 0.9)
+  customStatsFrame.modeList:Hide()
+
+  customStatsFrame.modeList.header = customStatsFrame.modeList:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  customStatsFrame.modeList.header:SetPoint("TOP", customStatsFrame.modeList, "TOP", 0, -5)
+  customStatsFrame.modeList.header:SetTextColor(1, 1, 1, 1)
+  customStatsFrame.modeList.header:SetText("")
+
+  customStatsFrame.modeList.actions = CreateFrame("Frame", nil, customStatsFrame.modeList)
+  customStatsFrame.modeList.actions:SetPoint("TOPLEFT", customStatsFrame.modeList, "TOPLEFT", 6, -26)
+  customStatsFrame.modeList.actions:SetPoint("TOPRIGHT", customStatsFrame.modeList, "TOPRIGHT", -6, -26)
+  customStatsFrame.modeList.actions:SetHeight(22)
+  customStatsFrame.modeList.actions:Hide()
+
+  local function DoEquipmentSetAction(action)
+    if customStatsFrame.activeMode ~= 5 then return end
+    if not C_EquipmentSet then return end
+    if InCombatLockdown and InCombatLockdown() then
+      if NS and NS.Print then
+        NS.Print("Cannot manage equipment sets in combat.")
+      end
+      return
+    end
+    local selected = customStatsFrame.modeSelectedSetID
+    if action == "equip" then
+      if selected and C_EquipmentSet.UseEquipmentSet then
+        pcall(C_EquipmentSet.UseEquipmentSet, selected)
+      end
+    elseif action == "save" then
+      if selected and C_EquipmentSet.ModifyEquipmentSet then
+        pcall(C_EquipmentSet.ModifyEquipmentSet, selected)
+      end
+    elseif action == "new" then
+      if C_EquipmentSet.CreateEquipmentSet and C_EquipmentSet.GetEquipmentSetIDs then
+        local n = #(C_EquipmentSet.GetEquipmentSetIDs() or {}) + 1
+        local name = ("Set %d"):format(n)
+        local icon = 132627
+        if GetInventoryItemTexture then
+          icon = GetInventoryItemTexture("player", 16) or icon
+        end
+        pcall(C_EquipmentSet.CreateEquipmentSet, name, icon)
+      end
+    elseif action == "delete" then
+      if selected and C_EquipmentSet.DeleteEquipmentSet then
+        pcall(C_EquipmentSet.DeleteEquipmentSet, selected)
+        customStatsFrame.modeSelectedSetID = nil
+      end
+    end
+    if UpdateCustomStatsFrame and NS and NS.GetDB then
+      UpdateCustomStatsFrame(NS:GetDB())
+    end
+  end
+
+  local function CreateActionButton(parent, key, label, xOfs)
+    local b = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    b:SetSize(48, 20)
+    b:SetPoint("LEFT", parent, "LEFT", xOfs, 0)
+    b:SetBackdrop({
+      bgFile = "Interface/Buttons/WHITE8x8",
+      edgeFile = "Interface/Buttons/WHITE8x8",
+      edgeSize = 1,
+      insets = { left = 0, right = 0, top = 0, bottom = 0 },
+    })
+    b:SetBackdropColor(0.05, 0.02, 0.08, 0.9)
+    b:SetBackdropBorderColor(0.26, 0.18, 0.36, 0.95)
+    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    b.text:SetPoint("CENTER")
+    b.text:SetText(label)
+    b.text:SetTextColor(0.95, 0.95, 0.95, 1)
+    b._actionKey = key
+    b:SetScript("OnClick", function(self)
+      DoEquipmentSetAction(self._actionKey)
+    end)
+    return b
+  end
+
+  customStatsFrame.modeList.actionButtons = {
+    CreateActionButton(customStatsFrame.modeList.actions, "equip", "Equip", 0),
+    CreateActionButton(customStatsFrame.modeList.actions, "save", "Save", 54),
+    CreateActionButton(customStatsFrame.modeList.actions, "new", "New", 108),
+    CreateActionButton(customStatsFrame.modeList.actions, "delete", "Delete", 162),
+  }
+
+  customStatsFrame.modeList.rows = {}
+  for i = 1, 14 do
+    local row = CreateFrame("Button", nil, customStatsFrame.modeList, "BackdropTemplate")
+    row:SetHeight(STATS_MODE_LIST_ROW_HEIGHT)
+    row:SetBackdrop({
+      bgFile = "Interface/Buttons/WHITE8x8",
+      edgeFile = "Interface/Buttons/WHITE8x8",
+      edgeSize = 1,
+      insets = { left = 0, right = 0, top = 0, bottom = 0 },
+    })
+    row:SetBackdropColor(0.04, 0.02, 0.07, 0.65)
+    row:SetBackdropBorderColor(0.18, 0.12, 0.26, 0.7)
+
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(18, 18)
+    row.icon:SetPoint("LEFT", row, "LEFT", 6, 0)
+    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    row.icon:SetTexture(134400)
+
+    row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.label:SetPoint("LEFT", row.icon, "RIGHT", 7, 0)
+    row.label:SetJustifyH("LEFT")
+    row.label:SetTextColor(0.95, 0.95, 0.95, 1)
+
+    row.detail = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.detail:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    row.detail:SetJustifyH("RIGHT")
+    row.detail:SetTextColor(0.95, 0.75, 0.30, 1)
+
+    row:SetScript("OnClick", function(self)
+      local data = self._data
+      if type(data) ~= "table" then return end
+      if customStatsFrame.activeMode == 2 then
+        if SetWatchedFactionIndex and type(data.factionIndex) == "number" then
+          pcall(SetWatchedFactionIndex, data.factionIndex)
+          if UpdateCustomStatsFrame and NS and NS.GetDB then
+            UpdateCustomStatsFrame(NS:GetDB())
+          end
+        end
+      elseif customStatsFrame.activeMode == 4 then
+        if SetCurrentTitle and type(data.id) == "number" then
+          pcall(SetCurrentTitle, data.id)
+          if UpdateCustomStatsFrame and NS and NS.GetDB then
+            UpdateCustomStatsFrame(NS:GetDB())
+          end
+        end
+      elseif customStatsFrame.activeMode == 5 then
+        if type(data.id) == "number" then
+          customStatsFrame.modeSelectedSetID = data.id
+          if UpdateCustomStatsFrame and NS and NS.GetDB then
+            UpdateCustomStatsFrame(NS:GetDB())
+          end
+        end
+      end
+    end)
+
+    customStatsFrame.modeList.rows[i] = row
+  end
+
+  local function UpdateModeButtonVisuals(frame)
+    if not frame or not frame.modeButtons then return end
+    for _, btn in ipairs(frame.modeButtons) do
+      if btn.SetBackdropBorderColor then
+        btn:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
+        btn:SetBackdropColor(0.03, 0.02, 0.05, 0.92)
+      end
+      if btn.label then
+        btn.label:SetTextColor(0.92, 0.92, 0.92, 1)
+      end
+    end
+  end
+
+  local function UpdateSidebarButtonVisuals(frame)
+    if not frame or not frame.sidebarButtons then return end
+    local liveDB = NS and NS.GetDB and NS:GetDB() or nil
+    local selectedByMode = {
+      [1] = 1, -- stats
+      [4] = 2, -- titles
+      [5] = 3, -- equipment
+    }
+    local selected = selectedByMode[frame.activeMode or 1]
+    for i, btn in ipairs(frame.sidebarButtons) do
+      if btn and btn.SetBackdropBorderColor then
+        if i == selected then
+          btn:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.98)
+        else
+          btn:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
+        end
+      end
+    end
+  end
+
+  for i = 1, 3 do
+    local btn = CreateFrame("Button", nil, customStatsFrame.modeBar, "BackdropTemplate")
+    btn:SetSize(STATS_MODE_BUTTON_WIDTH, STATS_MODE_BUTTON_HEIGHT)
+    btn:SetPoint("LEFT", customStatsFrame.modeBar, "LEFT", (i - 1) * (STATS_MODE_BUTTON_WIDTH + STATS_MODE_BUTTON_GAP), 0)
+    btn:SetBackdrop({
+      bgFile = "Interface/Buttons/WHITE8x8",
+      edgeFile = "Interface/Buttons/WHITE8x8",
+      edgeSize = 1,
+      insets = { left = 0, right = 0, top = 0, bottom = 0 },
+    })
+    btn:SetBackdropColor(0.03, 0.02, 0.05, 0.92)
+    btn:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
+    btn.modeIndex = i
+
+    btn.icon = btn:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetSize(14, 14)
+    btn.icon:SetPoint("LEFT", btn, "LEFT", 8, 0)
+    btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    btn.icon:SetTexture(ResolveModeIcon(i))
+
+    btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    btn.label:SetPoint("LEFT", btn.icon, "RIGHT", 5, 0)
+    btn.label:SetPoint("RIGHT", btn, "RIGHT", -6, 0)
+    btn.label:SetJustifyH("LEFT")
+    if i == 1 then
+      btn.label:SetText("Character")
+    elseif i == 2 then
+      btn.label:SetText("Rep")
+      btn.label:ClearAllPoints()
+      btn.label:SetPoint("CENTER", btn, "CENTER", 0, 0)
+      btn.label:SetJustifyH("CENTER")
+    else
+      btn.label:SetText("Currency")
+    end
+
+    btn:SetScript("OnClick", function(self)
+      local idx = self.modeIndex or 1
+      M._pendingNativeMode = idx
+      customStatsFrame.activeMode = idx
+      ShowNativeCharacterMode(idx)
+      if idx == 1 then
+        local liveDB = NS and NS.GetDB and NS:GetDB() or nil
+        if liveDB and liveDB.charsheet then
+          liveDB.charsheet.rightPanelCollapsed = false
+        end
+      end
+      UpdateModeButtonVisuals(customStatsFrame)
+      if M and M.Refresh then
+        M:Refresh()
+      elseif UpdateCustomStatsFrame and NS and NS.GetDB then
+        UpdateCustomStatsFrame(NS:GetDB())
+      end
+    end)
+
+    customStatsFrame.modeButtons[i] = btn
+  end
+  UpdateModeButtonVisuals(customStatsFrame)
+
+  for i = 1, STATS_SIDEBAR_BUTTON_COUNT do
+    local btn = CreateFrame("Button", nil, customStatsFrame.sidebarBar, "BackdropTemplate")
+    btn:SetSize(STATS_SIDEBAR_BUTTON_SIZE, STATS_SIDEBAR_BUTTON_SIZE)
+    btn:SetPoint("LEFT", customStatsFrame.sidebarBar, "LEFT", (i - 1) * (STATS_SIDEBAR_BUTTON_SIZE + STATS_SIDEBAR_BUTTON_GAP), 0)
+    btn:SetBackdrop({
+      bgFile = "Interface/Buttons/WHITE8x8",
+      edgeFile = "Interface/Buttons/WHITE8x8",
+      edgeSize = 1,
+      insets = { left = 0, right = 0, top = 0, bottom = 0 },
+    })
+    btn:SetBackdropColor(0.03, 0.02, 0.05, 0.92)
+    btn:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
+    btn.sidebarIndex = i
+
+    btn.icon = btn:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 3, -3)
+    btn.icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -3, 3)
+    do
+      local tex, l, r, t, b = GetTopSidebarIconData(i)
+      btn.icon:SetTexture(tex)
+      btn.icon:SetTexCoord(l, r, t, b)
+    end
+
+    btn:SetScript("OnClick", function(self)
+      local idx = self.sidebarIndex or 1
+      M._pendingNativeMode = nil
+      if idx == 1 then
+        customStatsFrame.activeMode = 1
+      elseif idx == 2 then
+        customStatsFrame.activeMode = 4
+      elseif idx == 3 then
+        customStatsFrame.activeMode = 5
+      elseif idx == 4 then
+        local liveDB = NS and NS.GetDB and NS:GetDB() or nil
+        if liveDB and liveDB.charsheet then
+          liveDB.charsheet.rightPanelCollapsed = not (liveDB.charsheet.rightPanelCollapsed == true)
+        end
+      end
+      UpdateSidebarButtonVisuals(customStatsFrame)
+      if M and M.Refresh then
+        M:Refresh()
+      elseif UpdateCustomStatsFrame and NS and NS.GetDB then
+        UpdateCustomStatsFrame(NS:GetDB())
+      end
+    end)
+
+    btn:SetScript("OnEnter", function(self)
+      if self and self.SetBackdropBorderColor then
+        if self.sidebarIndex == 4 then return end
+        self:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.98)
+      end
+    end)
+    btn:SetScript("OnLeave", function(self)
+      if self and self.SetBackdropBorderColor then
+        self:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
+      end
+    end)
+
+    customStatsFrame.sidebarButtons[i] = btn
+  end
+  UpdateSidebarButtonVisuals(customStatsFrame)
 
   customStatsFrame.topInfo = CreateFrame("Frame", nil, customStatsFrame, "BackdropTemplate")
   customStatsFrame.topInfo:SetBackdrop({
@@ -666,7 +1298,7 @@ local function EnsureCustomStatsFrame()
     insets = { left = 0, right = 0, top = 0, bottom = 0 },
   })
   customStatsFrame.topInfo:SetBackdropColor(0.02, 0.02, 0.03, 0.75)
-  customStatsFrame.topInfo:SetBackdropBorderColor(0.32, 0.18, 0.48, 0.9)
+  customStatsFrame.topInfo:SetBackdropBorderColor(0, 0, 0, 0)
   customStatsFrame.topInfo:SetHeight(66)
 
   customStatsFrame.topInfo.ilvl = customStatsFrame.topInfo:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
@@ -711,7 +1343,7 @@ local function EnsureCustomStatsFrame()
       insets = { left = 0, right = 0, top = 0, bottom = 0 },
     })
     sec:SetBackdropColor(0.02, 0.02, 0.03, 0.55)
-    sec:SetBackdropBorderColor(0.22, 0.18, 0.08, 0.9)
+    sec:SetBackdropBorderColor(0, 0, 0, 0)
     sec.tint = sec:CreateTexture(nil, "BACKGROUND")
     sec.tint:SetDrawLayer("BACKGROUND", 1)
     sec.tint:SetTexture("Interface/Buttons/WHITE8x8")
@@ -786,6 +1418,26 @@ local function ApplyCustomStatsFont(db)
       end
     end
   end
+  if customStatsFrame.modeList then
+    if customStatsFrame.modeList.header and customStatsFrame.modeList.header.SetFont then
+      customStatsFrame.modeList.header:SetFont(fontPath, size + 2, outline)
+    end
+    for _, row in ipairs(customStatsFrame.modeList.rows or {}) do
+      local rowFontSize = size
+      local detailFontSize = math.max(9, size - 1)
+      if row.label and row.label.SetFont then
+        row.label:SetFont(fontPath, rowFontSize, outline)
+      end
+      if row.detail and row.detail.SetFont then
+        row.detail:SetFont(fontPath, detailFontSize, outline)
+      end
+    end
+  end
+  for _, btn in ipairs(customStatsFrame.modeButtons or {}) do
+    if btn and btn.label and btn.label.SetFont then
+      btn.label:SetFont(fontPath, 9, outline)
+    end
+  end
   for _, sec in ipairs(customStatsFrame.sections or {}) do
     if sec.title and sec.title.SetFont then
       sec.title:SetFont(fontPath, size + 2, outline)
@@ -801,8 +1453,9 @@ local function ApplyCustomStatsFont(db)
   end
 end
 
-local function ApplyCoreCharacterFontAndName(db)
+ApplyCoreCharacterFontAndName = function(db)
   local fontPath, size, outline = GetConfiguredFont(db)
+  local headerAnchor = CharacterFrame
   local name = UnitName("player") or ""
   local _, classTag = UnitClass("player")
   local c = (classTag and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classTag]) or NORMAL_FONT_COLOR
@@ -828,7 +1481,7 @@ local function ApplyCoreCharacterFontAndName(db)
     if customNameText.SetFont then customNameText:SetFont(fontPath, size + 6, outline) end
     customNameText:SetText(nameHex .. name .. "|r" .. titlePart)
     customNameText:ClearAllPoints()
-    customNameText:SetPoint("TOP", CharacterFrame, "TOP", 0, -8)
+    customNameText:SetPoint("TOP", headerAnchor, "TOP", HEADER_TEXT_X_OFFSET, -8)
     customNameText:Show()
   end
 
@@ -878,7 +1531,7 @@ local function ApplyCoreCharacterFontAndName(db)
     if customNameText then
       levelText:SetPoint("TOP", customNameText, "BOTTOM", 0, -2)
     else
-      levelText:SetPoint("TOP", CharacterFrame, "TOP", 0, -28)
+      levelText:SetPoint("TOP", headerAnchor, "TOP", HEADER_TEXT_X_OFFSET, -28)
     end
     levelText:SetTextColor(1, 1, 1, 1)
     levelText:SetAlpha(0)
@@ -991,17 +1644,439 @@ local function ShowDefaultCharacterStats()
   end
 end
 
-local function UpdateCustomStatsFrame(db)
+local function ApplyReputationPaneMode(db)
+  local rep = _G.ReputationFrame
+  if not rep or not CharacterFrame then return false end
+
+  if _G.PaperDollFrame and _G.PaperDollFrame.Hide then _G.PaperDollFrame:Hide() end
+  if _G.TokenFrame and _G.TokenFrame.Hide then _G.TokenFrame:Hide() end
+  rep:Show()
+
+  rep:ClearAllPoints()
+  rep:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 8, -58)
+  rep:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -8, 44)
+  rep:SetAlpha(1)
+  if rep.EnableMouse then rep:EnableMouse(true) end
+  if rep.ScrollBox and rep.ScrollBox.ClearAllPoints and rep.ScrollBox.SetPoint then
+    rep.ScrollBox:ClearAllPoints()
+    rep.ScrollBox:SetPoint("TOPLEFT", rep, "TOPLEFT", 4, -34)
+    rep.ScrollBox:SetPoint("BOTTOMRIGHT", rep, "BOTTOMRIGHT", -30, 0)
+  end
+
+  -- Keep Blizzard's base background bounds aligned to the active reputation pane.
+  local bg = _G.CharacterFrameBg
+  if bg and bg.ClearAllPoints and bg.SetPoint then
+    bg:ClearAllPoints()
+    bg:SetPoint("TOPLEFT", rep, "TOPLEFT", 0, 0)
+    bg:SetPoint("BOTTOMRIGHT", rep, "BOTTOMRIGHT", 0, 0)
+  end
+
+  local repSkin = EnsurePanelSkin("reputation_full", rep)
+  if repSkin then
+    repSkin:ClearAllPoints()
+    repSkin:SetPoint("TOPLEFT", rep, "TOPLEFT", 0, 0)
+    repSkin:SetPoint("BOTTOMRIGHT", rep, "BOTTOMRIGHT", 0, 0)
+    repSkin:SetBackdropColor(0.06, 0.02, 0.10, 0.92)
+    repSkin:SetBackdropBorderColor(0, 0, 0, 0)
+    repSkin:Show()
+    SafeFrameLevel(repSkin, (rep:GetFrameLevel() or 1) - 1)
+  end
+
+  HideFrameTextureRegions(rep)
+  if rep.NineSlice then HideFrameTextureRegions(rep.NineSlice) end
+  if rep.Bg then SaveAndHideRegion(rep.Bg) end
+
+  local fontPath, size, outline = GetConfiguredFont(db)
+  local title = _G.ReputationFrameTitleText
+  if title and title.SetFont then
+    BackupFont(title)
+    title:SetFont(fontPath, size + 2, outline)
+    title:SetTextColor(1.0, 0.82, 0.20, 1)
+  end
+  if title and title.Hide then
+    title:Hide()
+  end
+
+  if not rep._haraHeader then
+    rep._haraHeader = CreateFrame("Frame", nil, CharacterFrame)
+    rep._haraHeader:SetFrameStrata("DIALOG")
+    rep._haraHeader:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 260)
+    rep._haraHeader:EnableMouse(false)
+  end
+  rep._haraHeader:ClearAllPoints()
+  rep._haraHeader:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 0, 0)
+  rep._haraHeader:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, 0)
+  rep._haraHeader:SetHeight(52)
+  rep._haraHeader:Show()
+
+  if not rep._haraTitle then
+    rep._haraTitle = rep._haraHeader:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  elseif rep._haraTitle.GetParent and rep._haraTitle:GetParent() ~= rep._haraHeader then
+    rep._haraTitle:SetParent(rep._haraHeader)
+  end
+  if rep._haraTitle and rep._haraTitle.SetFont then
+    rep._haraTitle:SetFont(fontPath, size + 5, outline)
+    rep._haraTitle:SetTextColor(1.0, 0.88, 0.25, 1)
+    rep._haraTitle:SetText("Reputation")
+    rep._haraTitle:SetJustifyH("CENTER")
+    rep._haraTitle:ClearAllPoints()
+    rep._haraTitle:SetPoint("TOP", rep._haraHeader, "TOP", 0, -18)
+    rep._haraTitle:SetDrawLayer("OVERLAY", 7)
+    rep._haraTitle:SetShadowOffset(1, -1)
+    rep._haraTitle:SetShadowColor(0, 0, 0, 1)
+    rep._haraTitle:SetAlpha(1)
+    rep._haraTitle:Show()
+  end
+
+  local repFilters = {
+    rep.filterDropdown,
+    rep.FilterDropdown,
+    rep.filterDropDown,
+    rep.FilterDropDown,
+    _G.ReputationFrameFilterDropdown,
+    _G.ReputationFrameFilterDropDown,
+    _G.ReputationFilterDropdown,
+    _G.ReputationFilterDropDown,
+  }
+  for _, repFilter in ipairs(repFilters) do
+    if repFilter then
+      if repFilter.ClearAllPoints and repFilter.SetPoint then
+        repFilter:ClearAllPoints()
+        repFilter:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -38, -30)
+      end
+      if repFilter.SetAlpha then repFilter:SetAlpha(1) end
+      if repFilter.EnableMouse then repFilter:EnableMouse(true) end
+      if repFilter.Show then repFilter:Show() end
+    end
+  end
+
+  return true
+end
+
+local function LeaveReputationPaneMode()
+  if CloseDropDownMenus then
+    CloseDropDownMenus()
+  end
+  if _G.ReputationFrame then
+    if _G.ReputationFrame._haraHeader and _G.ReputationFrame._haraHeader.Hide then
+      _G.ReputationFrame._haraHeader:Hide()
+    end
+    if _G.ReputationFrame._haraTitle and _G.ReputationFrame._haraTitle.Hide then
+      _G.ReputationFrame._haraTitle:Hide()
+    end
+    local repFilter = _G.ReputationFrame.filterDropdown
+      or _G.ReputationFrame.FilterDropdown
+      or _G.ReputationFrame.filterDropDown
+      or _G.ReputationFrame.FilterDropDown
+      or _G.ReputationFrameFilterDropdown
+      or _G.ReputationFrameFilterDropDown
+    if repFilter then
+      if repFilter.SetAlpha then repFilter:SetAlpha(1) end
+      if repFilter.EnableMouse then repFilter:EnableMouse(true) end
+      if repFilter.Hide then repFilter:Hide() end
+    end
+    if _G.ReputationFrame.Hide then _G.ReputationFrame:Hide() end
+  end
+  if _G.PaperDollFrame and _G.PaperDollFrame.Show then _G.PaperDollFrame:Show() end
+end
+
+local function GetCurrencyPaneFrame()
+  local candidates = {
+    _G.TokenFrame,
+    _G.CurrencyFrame,
+    _G.CharacterFrameTokenFrame,
+  }
+  for _, frame in ipairs(candidates) do
+    if frame and frame.SetPoint and frame.ClearAllPoints then
+      return frame
+    end
+  end
+  return nil
+end
+
+local function ApplyCurrencyPaneMode(db)
+  local token = GetCurrencyPaneFrame()
+  if not token or not CharacterFrame then return false end
+
+  if _G.PaperDollFrame and _G.PaperDollFrame.Hide then _G.PaperDollFrame:Hide() end
+  if _G.ReputationFrame and _G.ReputationFrame.Hide then _G.ReputationFrame:Hide() end
+  local repFilter = _G.ReputationFrame and (_G.ReputationFrame.filterDropdown
+    or _G.ReputationFrame.FilterDropdown
+    or _G.ReputationFrame.filterDropDown
+    or _G.ReputationFrame.FilterDropDown
+    or _G.ReputationFrameFilterDropdown
+    or _G.ReputationFrameFilterDropDown)
+  if repFilter and repFilter.Hide then
+    repFilter:Hide()
+  end
+  token:Show()
+
+  local function AlignCurrencyFrame(frame)
+    if not frame then return end
+    if frame.ClearAllPoints and frame.SetPoint then
+      frame:ClearAllPoints()
+      frame:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 8, -58)
+      frame:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -8, 44)
+    end
+    if frame.SetAlpha then
+      frame:SetAlpha(1)
+    end
+    if frame.EnableMouse then
+      frame:EnableMouse(true)
+    end
+    if frame.ScrollBox and frame.ScrollBox.ClearAllPoints and frame.ScrollBox.SetPoint then
+      frame.ScrollBox:ClearAllPoints()
+      frame.ScrollBox:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -34)
+      frame.ScrollBox:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 26)
+    end
+  end
+
+  AlignCurrencyFrame(token)
+  if _G.TokenFrame and _G.TokenFrame ~= token then
+    AlignCurrencyFrame(_G.TokenFrame)
+  end
+  if _G.CurrencyFrame and _G.CurrencyFrame ~= token and _G.CurrencyFrame ~= _G.TokenFrame then
+    AlignCurrencyFrame(_G.CurrencyFrame)
+  end
+
+  local tokenSkin = EnsurePanelSkin("currency_full", token)
+  if tokenSkin then
+    tokenSkin:ClearAllPoints()
+    tokenSkin:SetPoint("TOPLEFT", token, "TOPLEFT", 0, 0)
+    tokenSkin:SetPoint("BOTTOMRIGHT", token, "BOTTOMRIGHT", 0, 0)
+    tokenSkin:SetBackdropColor(0.06, 0.02, 0.10, 0.92)
+    tokenSkin:SetBackdropBorderColor(0, 0, 0, 0)
+    tokenSkin:Show()
+    SafeFrameLevel(tokenSkin, (token:GetFrameLevel() or 1) - 1)
+  end
+
+  HideFrameTextureRegions(token)
+  if token.NineSlice then HideFrameTextureRegions(token.NineSlice) end
+  if token.Bg then SaveAndHideRegion(token.Bg) end
+
+  local fontPath, size, outline = GetConfiguredFont(db)
+  local title = _G.TokenFrameTitleText
+  if title and title.SetFont then
+    BackupFont(title)
+    title:SetFont(fontPath, size + 2, outline)
+    title:SetTextColor(1.0, 0.82, 0.20, 1)
+  end
+  if title and title.Hide then
+    title:Hide()
+  end
+
+  if not token._haraHeader then
+    token._haraHeader = CreateFrame("Frame", nil, CharacterFrame)
+    token._haraHeader:SetFrameStrata("DIALOG")
+    token._haraHeader:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 260)
+    token._haraHeader:EnableMouse(false)
+  end
+  token._haraHeader:ClearAllPoints()
+  token._haraHeader:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 0, 0)
+  token._haraHeader:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, 0)
+  token._haraHeader:SetHeight(52)
+  token._haraHeader:Show()
+
+  if not token._haraTitle then
+    token._haraTitle = token._haraHeader:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  elseif token._haraTitle.GetParent and token._haraTitle:GetParent() ~= token._haraHeader then
+    token._haraTitle:SetParent(token._haraHeader)
+  end
+  if token._haraTitle and token._haraTitle.SetFont then
+    token._haraTitle:SetFont(fontPath, size + 5, outline)
+    token._haraTitle:SetTextColor(1.0, 0.88, 0.25, 1)
+    token._haraTitle:SetText("Currency")
+    token._haraTitle:SetJustifyH("CENTER")
+    token._haraTitle:ClearAllPoints()
+    token._haraTitle:SetPoint("TOP", token._haraHeader, "TOP", 0, -18)
+    token._haraTitle:SetDrawLayer("OVERLAY", 7)
+    token._haraTitle:SetShadowOffset(1, -1)
+    token._haraTitle:SetShadowColor(0, 0, 0, 1)
+    token._haraTitle:SetAlpha(1)
+    token._haraTitle:Show()
+  end
+
+  local tokenFilters = {
+    token.filterDropdown,
+    token.FilterDropdown,
+    token.filterDropDown,
+    token.FilterDropDown,
+    _G.TokenFrameFilterDropdown,
+    _G.TokenFrameFilterDropDown,
+    _G.CurrencyFrameFilterDropdown,
+    _G.CurrencyFrameFilterDropDown,
+    _G.TokenFrameDropdown,
+    _G.TokenFrameDropDown,
+    _G.CurrencyFrameDropdown,
+    _G.CurrencyFrameDropDown,
+  }
+  for _, tokenFilter in ipairs(tokenFilters) do
+    if tokenFilter then
+      if tokenFilter.ClearAllPoints and tokenFilter.SetPoint then
+        tokenFilter:ClearAllPoints()
+        tokenFilter:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -38, -30)
+      end
+      if tokenFilter.SetAlpha then tokenFilter:SetAlpha(1) end
+      if tokenFilter.EnableMouse then tokenFilter:EnableMouse(true) end
+      if tokenFilter.Show then tokenFilter:Show() end
+    end
+  end
+
+  return true
+end
+
+local function LeaveCurrencyPaneMode()
+  if CloseDropDownMenus then
+    CloseDropDownMenus()
+  end
+  local frames = { GetCurrencyPaneFrame(), _G.TokenFrame, _G.CurrencyFrame }
+  local seen = {}
+  for _, token in ipairs(frames) do
+    if token and not seen[token] then
+      seen[token] = true
+      if _G.TokenFramePopup and _G.TokenFramePopup.Hide then
+        _G.TokenFramePopup:Hide()
+      end
+      if token._haraHeader and token._haraHeader.Hide then
+        token._haraHeader:Hide()
+      end
+      if token._haraTitle and token._haraTitle.Hide then
+        token._haraTitle:Hide()
+      end
+      local tokenFilter = token.filterDropdown
+        or token.FilterDropdown
+        or token.filterDropDown
+        or token.FilterDropDown
+        or _G.TokenFrameFilterDropdown
+        or _G.TokenFrameFilterDropDown
+        or _G.CurrencyFrameFilterDropdown
+        or _G.CurrencyFrameFilterDropDown
+      if tokenFilter then
+        if tokenFilter.SetAlpha then tokenFilter:SetAlpha(1) end
+        if tokenFilter.EnableMouse then tokenFilter:EnableMouse(true) end
+        if tokenFilter.Hide then tokenFilter:Hide() end
+      end
+      if token.Hide then token:Hide() end
+    end
+  end
+  if _G.PaperDollFrame and _G.PaperDollFrame.Show then _G.PaperDollFrame:Show() end
+end
+
+local function SyncBottomModeButtonsVisibility(db)
+  if not (customStatsFrame and customStatsFrame.modeBar and CharacterFrame) then return end
+  local bar = customStatsFrame.modeBar
+  bar:ClearAllPoints()
+  bar:SetPoint("TOPLEFT", CharacterFrame, "BOTTOMLEFT", 22, -1)
+  if db and db.charsheet and db.charsheet.styleStats and CharacterFrame:IsShown() then
+    bar:SetFrameStrata("DIALOG")
+    bar:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 200)
+    bar:Show()
+  else
+    bar:Hide()
+  end
+end
+
+local function ResolveNativeCharacterMode()
+  local token = GetCurrencyPaneFrame and GetCurrencyPaneFrame() or _G.TokenFrame
+  if _G.ReputationFrame and _G.ReputationFrame.IsShown and _G.ReputationFrame:IsShown() then
+    return 2
+  end
+  if token and token.IsShown and token:IsShown() then
+    return 3
+  end
+  if _G.PaperDollFrame and _G.PaperDollFrame.IsShown and _G.PaperDollFrame:IsShown() then
+    return 1
+  end
+  return nil
+end
+
+local function ResolveEffectiveCharacterMode()
+  if M._pendingNativeMode == 1 or M._pendingNativeMode == 2 or M._pendingNativeMode == 3 then
+    return M._pendingNativeMode
+  end
+  local mode = customStatsFrame and customStatsFrame.activeMode or 1
+  if mode == 4 or mode == 5 then
+    return mode
+  end
+  local nativeMode = ResolveNativeCharacterMode()
+  if nativeMode == 1 or nativeMode == 2 or nativeMode == 3 then
+    return nativeMode
+  end
+  if mode == 2 or mode == 3 then
+    return mode
+  end
+  return 1
+end
+
+ShowNativeCharacterMode = function(mode)
+  if not CharacterFrame_ShowSubFrame then
+    return false
+  end
+  if mode == 1 then
+    CharacterFrame_ShowSubFrame("PaperDollFrame")
+    return true
+  elseif mode == 2 then
+    CharacterFrame_ShowSubFrame("ReputationFrame")
+    return true
+  elseif mode == 3 then
+    local token = GetCurrencyPaneFrame and GetCurrencyPaneFrame() or _G.TokenFrame or _G.CurrencyFrame
+    if token and token.GetName then
+      local n = token:GetName()
+      if n and n ~= "" then
+        CharacterFrame_ShowSubFrame(n)
+        return true
+      end
+    end
+    CharacterFrame_ShowSubFrame("TokenFrame")
+    return true
+  end
+  return false
+end
+
+SyncCustomModeToNativePanel = function()
+  local requested = ResolveNativeCharacterMode()
+  if not requested then return end
+  if M._pendingNativeMode and (M._pendingNativeMode == 1 or M._pendingNativeMode == 2 or M._pendingNativeMode == 3) then
+    if requested ~= M._pendingNativeMode then
+      return
+    end
+    M._pendingNativeMode = nil
+  end
+  local stats = EnsureCustomStatsFrame and EnsureCustomStatsFrame() or customStatsFrame
+  if not stats then return end
+  if requested == 2 or requested == 3 then
+    if stats.activeMode ~= requested then
+      stats.activeMode = requested
+    end
+  elseif requested == 1 then
+    if stats.activeMode ~= 4 and stats.activeMode ~= 5 then
+      stats.activeMode = 1
+    end
+  end
+end
+
+UpdateCustomStatsFrame = function(db)
   local frame = EnsureCustomStatsFrame()
   if not frame then return end
   if not CharacterFrame then return end
+  -- Re-assert custom frame geometry so mode switches cannot snap to Blizzard default sizes.
+  local needsLayout = not layoutApplied
+  if not needsLayout and CharacterFrame.GetWidth and CharacterFrame.GetHeight then
+    local cw = CharacterFrame:GetWidth() or 0
+    local ch = CharacterFrame:GetHeight() or 0
+    if math.abs(cw - PRIMARY_SHEET_WIDTH) > 0.5 or math.abs(ch - CUSTOM_CHAR_HEIGHT) > 0.5 then
+      needsLayout = true
+    end
+  end
+  if needsLayout then
+    ApplyCustomCharacterLayout()
+  end
 
-  -- Right-anchored compact stats column.
+  -- Right-anchor so it tracks frame width changes automatically after tab transitions.
   local statsWidth = math.max(140, math.floor((CUSTOM_STATS_WIDTH * 0.9) + 0.5))
-  local statsX = PRIMARY_SHEET_WIDTH - statsWidth - 8
   frame:ClearAllPoints()
-  frame:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", statsX, -52)
-  frame:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", statsX, 52)
+  frame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -8, -52)
+  frame:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -8, 52)
   frame:SetWidth(statsWidth)
 
   local sections = BuildCustomStatsData()
@@ -1010,8 +2085,233 @@ local function UpdateCustomStatsFrame(db)
     width = statsWidth
   end
   local gap = STAT_SECTION_GAP
+  local mode = ResolveEffectiveCharacterMode()
+  frame.activeMode = mode
 
-  if frame.topInfo then
+  if frame.modeBar then
+    frame.modeBar:SetFrameStrata("DIALOG")
+    frame.modeBar:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 200)
+    frame.modeBar:ClearAllPoints()
+    frame.modeBar:SetPoint("TOPLEFT", CharacterFrame, "BOTTOMLEFT", 22, -1)
+    frame.modeBar:Show()
+    for i, btn in ipairs(frame.modeButtons or {}) do
+      if btn and btn.icon and btn.icon.SetTexture then
+        local iconTex = btn.icon:GetTexture()
+        if not iconTex or iconTex == 134400 then
+          local tab = _G[("PaperDollSidebarTab%d"):format(i)]
+          if tab then
+            local icon = tab.Icon or tab.icon or (tab.GetName and _G[tab:GetName() .. "Icon"]) or (tab.GetNormalTexture and tab:GetNormalTexture())
+            if type(icon) == "string" or type(icon) == "number" then
+              btn.icon:SetTexture(icon)
+            elseif icon and icon.GetTexture then
+              local tex = icon:GetTexture()
+              if tex then btn.icon:SetTexture(tex) end
+            end
+          end
+        end
+      end
+    end
+  end
+  if frame.sidebarBar then
+    frame.sidebarBar:SetParent(CharacterFrame)
+    frame.sidebarBar:SetFrameStrata("DIALOG")
+    frame.sidebarBar:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 205)
+    frame.sidebarBar:ClearAllPoints()
+    frame.sidebarBar:SetPoint("BOTTOM", frame, "TOP", 0, 8)
+    frame.sidebarBar:Show()
+    for i, btn in ipairs(frame.sidebarButtons or {}) do
+      if btn and btn.icon and btn.icon.SetTexture then
+        local tex, l, r, t, b = GetTopSidebarIconData(i)
+        btn.icon:SetTexture(tex)
+        btn.icon:SetTexCoord(l, r, t, b)
+      end
+    end
+    local selectedByMode = {
+      [1] = 1,
+      [4] = 2,
+      [5] = 3,
+    }
+    local selectedSidebar = selectedByMode[mode]
+    for i, btn in ipairs(frame.sidebarButtons or {}) do
+      if btn and btn.SetBackdropBorderColor then
+        if i == selectedSidebar then
+          btn:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.98)
+        else
+          btn:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
+        end
+      end
+    end
+  end
+
+  if mode == 2 then
+    if rightPanel and rightPanel:IsShown() then
+      rightPanel:Hide()
+    end
+    if customGearFrame then
+      customGearFrame:Hide()
+      if customGearFrame.specPanel and customGearFrame.specPanel.Hide then
+        customGearFrame.specPanel:Hide()
+      end
+    end
+    local basePanel = EnsureCustomCharacterFrame and EnsureCustomCharacterFrame() or customCharacterFrame
+    if basePanel and basePanel.Show then
+      basePanel:Show()
+    end
+    if modelFillFrame and modelFillFrame.Show then
+      modelFillFrame:Show()
+    end
+    SetCharacterSlotButtonsVisible(false)
+    if customNameText then customNameText:Hide() end
+    if customLevelText then customLevelText:Hide() end
+    if frame.topInfo then frame.topInfo:Hide() end
+    if frame.modeList then frame.modeList:Hide() end
+    for _, secFrame in ipairs(frame.sections or {}) do
+      if secFrame then secFrame:Hide() end
+    end
+    LeaveCurrencyPaneMode()
+    ApplyReputationPaneMode(db)
+    if frame.modeBar then frame.modeBar:Show() end
+    if frame.sidebarBar then frame.sidebarBar:Hide() end
+    ApplyCustomCharacterLayout()
+    frame:Hide()
+    return
+  elseif mode == 3 then
+    if rightPanel and rightPanel:IsShown() then
+      rightPanel:Hide()
+    end
+    if customGearFrame then
+      customGearFrame:Hide()
+      if customGearFrame.specPanel and customGearFrame.specPanel.Hide then
+        customGearFrame.specPanel:Hide()
+      end
+    end
+    local basePanel = EnsureCustomCharacterFrame and EnsureCustomCharacterFrame() or customCharacterFrame
+    if basePanel and basePanel.Show then
+      basePanel:Show()
+    end
+    if modelFillFrame and modelFillFrame.Show then
+      modelFillFrame:Show()
+    end
+    SetCharacterSlotButtonsVisible(false)
+    if customNameText then customNameText:Hide() end
+    if customLevelText then customLevelText:Hide() end
+    if frame.topInfo then frame.topInfo:Hide() end
+    if frame.modeList then frame.modeList:Hide() end
+    for _, secFrame in ipairs(frame.sections or {}) do
+      if secFrame then secFrame:Hide() end
+    end
+    LeaveReputationPaneMode()
+    ApplyCurrencyPaneMode(db)
+    if frame.modeBar then frame.modeBar:Show() end
+    if frame.sidebarBar then frame.sidebarBar:Hide() end
+    -- Re-assert final custom size/anchors after all blank-mode toggles.
+    ApplyCustomCharacterLayout()
+    frame:Hide()
+    return
+  else
+    SetCharacterSlotButtonsVisible(true)
+    LeaveReputationPaneMode()
+    LeaveCurrencyPaneMode()
+    -- Re-assert final custom size/anchors when returning from native subpanes.
+    ApplyCustomCharacterLayout()
+  end
+
+  local function UpdateModeListRows(modeIndex)
+    if not frame.modeList then return end
+    local headerText = ""
+    local rows = {}
+    local rowStartY = -30
+    if modeIndex == 2 then
+      headerText = "Reputation"
+      rows = BuildReputationData()
+      frame.modeList.actions:Hide()
+      if #rows == 0 then
+        rows = {
+          { label = "No reputation data", detail = "", icon = 236681, selected = false },
+        }
+      end
+    elseif modeIndex == 3 then
+      headerText = "Currency"
+      rows = BuildCurrencyData()
+      frame.modeList.actions:Hide()
+      if #rows == 0 then
+        rows = {
+          { label = "No currency data", detail = "", icon = 463446, selected = false },
+        }
+      end
+    elseif modeIndex == 4 then
+      headerText = "Titles"
+      rows = BuildKnownTitlesData()
+      frame.modeList.actions:Hide()
+      if #rows == 0 then
+        rows = {
+          { label = "No titles found", detail = "", icon = 133742, selected = false },
+        }
+      end
+    elseif modeIndex == 5 then
+      headerText = "Equipment"
+      rows = BuildEquipmentSetsData(frame.modeSelectedSetID)
+      frame.modeList.actions:Show()
+      rowStartY = -56
+      if #rows == 0 then
+        rows = {
+          { label = "No equipment sets", detail = "", icon = 132627, selected = false },
+        }
+      end
+    else
+      frame.modeList.actions:Hide()
+    end
+
+    frame.modeList.header:SetText(headerText)
+    local listY = rowStartY
+    for i, rowFrame in ipairs(frame.modeList.rows or {}) do
+      local rowData = rows[i]
+      rowFrame:ClearAllPoints()
+      rowFrame:SetPoint("TOPLEFT", frame.modeList, "TOPLEFT", 6, listY)
+      rowFrame:SetPoint("TOPRIGHT", frame.modeList, "TOPRIGHT", -6, listY)
+      if rowData then
+        rowFrame._data = rowData
+        rowFrame.icon:SetTexture(rowData.icon or 134400)
+        rowFrame.label:SetText(rowData.label or "")
+        rowFrame.detail:SetText(rowData.detail or "")
+        if rowData.selected then
+          rowFrame:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.95)
+          rowFrame:SetBackdropColor(0.08, 0.03, 0.10, 0.75)
+          rowFrame.label:SetTextColor(1, 1, 1, 1)
+        else
+          rowFrame:SetBackdropBorderColor(0.18, 0.12, 0.26, 0.7)
+          rowFrame:SetBackdropColor(0.04, 0.02, 0.07, 0.65)
+          rowFrame.label:SetTextColor(0.95, 0.95, 0.95, 1)
+        end
+        rowFrame:Show()
+      else
+        rowFrame._data = nil
+        rowFrame:Hide()
+      end
+      listY = listY - STATS_MODE_LIST_ROW_HEIGHT - STATS_MODE_LIST_ROW_GAP
+    end
+
+    if frame.modeList.actionButtons then
+      local hasSelection = frame.modeSelectedSetID ~= nil
+      for _, b in ipairs(frame.modeList.actionButtons) do
+        if b and b._actionKey ~= "new" then
+          b:SetEnabled(modeIndex == 5 and hasSelection)
+          if b.text and b.text.SetTextColor then
+            if modeIndex == 5 and hasSelection then
+              b.text:SetTextColor(0.95, 0.95, 0.95, 1)
+            else
+              b.text:SetTextColor(0.55, 0.55, 0.55, 1)
+            end
+          end
+        elseif b and b.text and b.text.SetTextColor then
+          b:SetEnabled(modeIndex == 5)
+          b.text:SetTextColor(modeIndex == 5 and 0.95 or 0.55, modeIndex == 5 and 0.95 or 0.55, modeIndex == 5 and 0.95 or 0.55, 1)
+        end
+      end
+    end
+  end
+
+  if mode == 1 and frame.topInfo then
     frame.topInfo:ClearAllPoints()
     frame.topInfo:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
     frame.topInfo:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
@@ -1059,12 +2359,27 @@ local function UpdateCustomStatsFrame(db)
     if frame.topInfo.powerRow.bg.SetBlendMode then frame.topInfo.powerRow.bg:SetBlendMode("BLEND") end
     if frame.topInfo.powerRow.bg.SetAlpha then frame.topInfo.powerRow.bg:SetAlpha(1) end
     frame.topInfo:Show()
+  elseif frame.topInfo then
+    frame.topInfo:Hide()
   end
 
-  local y = frame.topInfo and -(frame.topInfo:GetHeight() + gap + 1) or -2
+  if mode ~= 1 and frame.modeList then
+    frame.modeList:ClearAllPoints()
+    frame.modeList:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    frame.modeList:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+    frame.modeList:Show()
+    UpdateModeListRows(mode)
+  elseif frame.modeList then
+    frame.modeList:Hide()
+  end
+
+  local y = frame.topInfo and mode == 1 and -(frame.topInfo:GetHeight() + gap + 1) or -2
 
   for i = 1, #frame.sections do
     local secFrame = frame.sections[i]
+    if mode ~= 1 then
+      secFrame:Hide()
+    else
     local secData = sections[i] or { title = "", rows = {} }
     local rowCount = #secData.rows
     if rowCount < 1 then rowCount = 1 end
@@ -1076,7 +2391,7 @@ local function UpdateCustomStatsFrame(db)
     secFrame.title:SetText(secData.title or "")
     local color = SECTION_COLORS[i] or SECTION_COLORS[#SECTION_COLORS]
     if color then
-      secFrame:SetBackdropBorderColor(color[1] * 0.75, color[2] * 0.75, color[3] * 0.75, 0.95)
+      secFrame:SetBackdropBorderColor(0, 0, 0, 0)
       if secFrame.headerTint then
         secFrame.headerTint:ClearAllPoints()
         secFrame.headerTint:SetPoint("TOPRIGHT", secFrame, "TOPRIGHT", -1, -1)
@@ -1092,7 +2407,7 @@ local function UpdateCustomStatsFrame(db)
         secFrame.tint:Show()
       end
     else
-      secFrame:SetBackdropBorderColor(0.22, 0.18, 0.08, 0.9)
+      secFrame:SetBackdropBorderColor(0, 0, 0, 0)
       if secFrame.tint then secFrame.tint:SetColorTexture(0, 0, 0, 0) end
       if secFrame.headerTint then secFrame.headerTint:SetColorTexture(0, 0, 0, 0) end
     end
@@ -1136,9 +2451,14 @@ local function UpdateCustomStatsFrame(db)
 
     secFrame:Show()
     y = y - secHeight - gap
+    end
   end
 
   ApplyCustomStatsFont(db)
+  RestorePaperDollSidebarButtons()
+  if frame.sidebarBar then
+    frame.sidebarBar:SetShown(mode ~= 2 and mode ~= 3)
+  end
   frame:Show()
 end
 
@@ -1194,11 +2514,18 @@ local function GetTooltipInfoLinesForInventorySlot(invID)
   if not (C_TooltipInfo and C_TooltipInfo.GetInventoryItem and invID) then
     return {}
   end
+  local link = GetInventoryItemLink and GetInventoryItemLink("player", invID) or nil
+  local cached = inventoryTooltipCache[invID]
+  if cached and cached.link == link and type(cached.lines) == "table" then
+    return cached.lines
+  end
   local ok, info = pcall(C_TooltipInfo.GetInventoryItem, "player", invID)
   if not ok or type(info) ~= "table" or type(info.lines) ~= "table" then
+    inventoryTooltipCache[invID] = { link = link, lines = {} }
     return {}
   end
 
+  inventoryTooltipCache[invID] = { link = link, lines = info.lines }
   return info.lines
 end
 
@@ -1329,7 +2656,7 @@ local function GetEnchantQualityAtlasMarkup(invID, enchantText, tierHint)
   if not atlas or atlas == "" then
     atlas = ("Professions-ChatIcon-Quality-Tier%d"):format(tier)
   end
-  return (" |A:%s:12:12:0:0|a"):format(atlas)
+  return (" |A:%s:%d:%d:0:0|a"):format(atlas, ENCHANT_QUALITY_MARKUP_SIZE, ENCHANT_QUALITY_MARKUP_SIZE)
 end
 
 local function HasSetBonusTooltipMarker(invID)
@@ -1481,7 +2808,7 @@ local function EnsureCustomGearFrame()
     row.enchant:SetTextColor(0.1, 1, 0.75, 1)
     row.enchantQualityIcon = row:CreateTexture(nil, "OVERLAY")
     row.enchantQualityIcon:SetDrawLayer("OVERLAY", 7)
-    row.enchantQualityIcon:SetSize(12, 12)
+    row.enchantQualityIcon:SetSize(24, 24)
     row.enchantQualityIcon:SetPoint("LEFT", row.enchant, "RIGHT", 2, 0)
     row.enchantQualityIcon:Hide()
     customGearFrame.leftRows[i] = row
@@ -1518,13 +2845,246 @@ local function EnsureCustomGearFrame()
     row.enchant:SetTextColor(0.1, 1, 0.75, 1)
     row.enchantQualityIcon = row:CreateTexture(nil, "OVERLAY")
     row.enchantQualityIcon:SetDrawLayer("OVERLAY", 7)
-    row.enchantQualityIcon:SetSize(12, 12)
+    row.enchantQualityIcon:SetSize(24, 24)
     row.enchantQualityIcon:SetPoint("RIGHT", row.enchant, "LEFT", -2, 0)
     row.enchantQualityIcon:Hide()
     customGearFrame.rightRows[i] = row
   end
 
+  customGearFrame.specPanel = CreateFrame("Frame", nil, CharacterFrame)
+  customGearFrame.specPanel:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 36, -1)
+  customGearFrame.specPanel:SetSize(376, 46)
+  customGearFrame.specPanel:EnableMouse(true)
+
+  customGearFrame.specPanel.title = customGearFrame.specPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  customGearFrame.specPanel.title:SetPoint("BOTTOM", customGearFrame.specButtonRow or customGearFrame.specPanel, "TOP", 0, 4)
+  customGearFrame.specPanel.title:SetJustifyH("CENTER")
+  customGearFrame.specPanel.title:SetText("Specialization")
+
+  customGearFrame.specButtons = {}
+  customGearFrame.specButtonRow = CreateFrame("Frame", nil, customGearFrame.specPanel)
+  customGearFrame.specButtonRow:SetPoint("BOTTOMLEFT", customGearFrame.specPanel, "BOTTOMLEFT", 0, 9)
+  customGearFrame.specButtonRow:SetSize(156, 28)
+  customGearFrame.specPanel.title:ClearAllPoints()
+  customGearFrame.specPanel.title:SetPoint("BOTTOM", customGearFrame.specButtonRow, "TOP", 0, 4)
+
+  for i = 1, 4 do
+    local btn = CreateFrame("Button", nil, customGearFrame.specButtonRow, "BackdropTemplate")
+    btn:SetSize(28, 28)
+    btn:SetPoint("LEFT", customGearFrame.specButtonRow, "LEFT", (i - 1) * 34, 0)
+    btn:SetBackdrop({
+      bgFile = "Interface/Buttons/WHITE8x8",
+      edgeFile = "Interface/Buttons/WHITE8x8",
+      edgeSize = 1,
+      insets = { left = 0, right = 0, top = 0, bottom = 0 },
+    })
+    btn:SetBackdropColor(0.02, 0.02, 0.03, 0.95)
+    btn:SetBackdropBorderColor(0.14, 0.14, 0.14, 0.95)
+    btn.specIndex = i
+
+    btn.icon = btn:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetPoint("TOPLEFT", 2, -2)
+    btn.icon:SetPoint("BOTTOMRIGHT", -2, 2)
+    btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    btn.icon:SetTexture(134400)
+
+    btn.glow = btn:CreateTexture(nil, "OVERLAY")
+    btn.glow:SetPoint("TOPLEFT", -2, 2)
+    btn.glow:SetPoint("BOTTOMRIGHT", 2, -2)
+    btn.glow:SetTexture("Interface/Buttons/WHITE8x8")
+    btn.glow:SetBlendMode("ADD")
+    btn.glow:SetVertexColor(1.0, 0.70, 0.12, 0.30)
+    btn.glow:Hide()
+
+    btn:SetScript("OnClick", function(self)
+      if InCombatLockdown and InCombatLockdown() then return end
+      local idx = self.specIndex
+      if not idx then return end
+      if GetSpecialization and GetSpecialization() == idx then return end
+      if SetSpecialization then
+        pcall(SetSpecialization, idx)
+      elseif C_SpecializationInfo and C_SpecializationInfo.SetSpecialization then
+        pcall(C_SpecializationInfo.SetSpecialization, idx)
+      end
+    end)
+    customGearFrame.specButtons[i] = btn
+  end
+
+  customGearFrame.lootTitle = customGearFrame.specPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  customGearFrame.lootTitle:SetPoint("BOTTOM", customGearFrame.specPanel, "BOTTOMLEFT", 210 + (170 * 0.5), 41)
+  customGearFrame.lootTitle:SetJustifyH("CENTER")
+  customGearFrame.lootTitle:SetText("Loot Specialization")
+
+  customGearFrame.lootSpecButtonRow = CreateFrame("Frame", nil, customGearFrame.specPanel)
+  customGearFrame.lootSpecButtonRow:SetPoint("BOTTOMLEFT", customGearFrame.specPanel, "BOTTOMLEFT", 210, 9)
+  customGearFrame.lootSpecButtonRow:SetSize(170, 28)
+  customGearFrame.lootTitle:ClearAllPoints()
+  customGearFrame.lootTitle:SetPoint("BOTTOM", customGearFrame.lootSpecButtonRow, "TOP", -1, 4)
+  customGearFrame.lootSpecButtons = {}
+  lootSpecButtons = customGearFrame.lootSpecButtons
+
+  for i = 1, 5 do
+    local btn = CreateFrame("Button", nil, customGearFrame.lootSpecButtonRow, "BackdropTemplate")
+    btn:SetSize(28, 28)
+    btn:SetPoint("LEFT", customGearFrame.lootSpecButtonRow, "LEFT", (i - 1) * 34, 0)
+    btn:SetBackdrop({
+      bgFile = "Interface/Buttons/WHITE8x8",
+      edgeFile = "Interface/Buttons/WHITE8x8",
+      edgeSize = 1,
+      insets = { left = 0, right = 0, top = 0, bottom = 0 },
+    })
+    btn:SetBackdropColor(0.02, 0.02, 0.03, 0.95)
+    btn:SetBackdropBorderColor(0.14, 0.14, 0.14, 0.95)
+    btn.lootIndex = i
+
+    btn.icon = btn:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetPoint("TOPLEFT", 2, -2)
+    btn.icon:SetPoint("BOTTOMRIGHT", -2, 2)
+    btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    btn.icon:SetTexture(134400)
+
+    btn.glow = btn:CreateTexture(nil, "OVERLAY")
+    btn.glow:SetPoint("TOPLEFT", -2, 2)
+    btn.glow:SetPoint("BOTTOMRIGHT", 2, -2)
+    btn.glow:SetTexture("Interface/Buttons/WHITE8x8")
+    btn.glow:SetBlendMode("ADD")
+    btn.glow:SetVertexColor(1.0, 0.70, 0.12, 0.30)
+    btn.glow:Hide()
+
+    btn:SetScript("OnClick", function(self)
+      if InCombatLockdown and InCombatLockdown() then return end
+      if not SetLootSpecialization then return end
+      local index = self.lootIndex or 1
+      if index == 1 then
+        pcall(SetLootSpecialization, 0)
+      else
+        local specID = self.specID
+        if type(specID) ~= "number" then return end
+        pcall(SetLootSpecialization, specID)
+      end
+      if M and M.Refresh then
+        M:Refresh()
+      elseif UpdateCustomGearFrame and NS and NS.GetDB then
+        UpdateCustomGearFrame(NS:GetDB())
+      end
+    end)
+    customGearFrame.lootSpecButtons[i] = btn
+  end
+
   return customGearFrame
+end
+
+local function UpdateSpecializationButtons(db)
+  if not customGearFrame or not customGearFrame.specPanel or not customGearFrame.specButtons or not customGearFrame.specButtonRow then
+    return
+  end
+
+  local panel = customGearFrame.specPanel
+  local row = customGearFrame.specButtonRow
+  local buttons = customGearFrame.specButtons
+  local lootRow = customGearFrame.lootSpecButtonRow
+  local lootButtons = customGearFrame.lootSpecButtons
+  if panel.Show then panel:Show() end
+  if row.Show then row:Show() end
+  if lootRow and lootRow.Show then lootRow:Show() end
+  local current = GetSpecialization and GetSpecialization() or nil
+  local lootSpecID = GetLootSpecialization and GetLootSpecialization() or 0
+  local count = GetNumSpecializations and GetNumSpecializations(false, false) or 0
+  if not count or count < 1 then
+    count = GetNumSpecializations and GetNumSpecializations() or 0
+  end
+  if count < 1 then count = 1 end
+  if count > #buttons then count = #buttons end
+
+  local usedWidth = (count * 28) + ((count - 1) * 6)
+  local lootUsedWidth = ((count + 1) * 28) + (count * 6)
+  row:SetWidth(usedWidth)
+  row:ClearAllPoints()
+  row:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 9)
+  if lootRow then
+    lootRow:SetWidth(lootUsedWidth)
+    lootRow:ClearAllPoints()
+    lootRow:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 210, 9)
+  end
+
+  for i, btn in ipairs(buttons) do
+    if i <= count then
+      local specID, _, _, icon = GetSpecializationInfo(i)
+      btn.specID = specID
+      if btn.icon then
+        btn.icon:SetTexture(icon or 134400)
+      end
+      btn:ClearAllPoints()
+      btn:SetPoint("LEFT", row, "LEFT", (i - 1) * 34, 0)
+      btn:Show()
+
+      local isActive = (current == i)
+      if isActive then
+        btn:SetBackdropBorderColor(1.00, 0.70, 0.12, 1.00)
+        if btn.glow then btn.glow:Show() end
+      else
+        btn:SetBackdropBorderColor(0.14, 0.14, 0.14, 0.95)
+        if btn.glow then btn.glow:Hide() end
+      end
+    else
+      btn:Hide()
+    end
+  end
+
+  if lootButtons then
+    for i, btn in ipairs(lootButtons) do
+      if i <= (count + 1) then
+        local specIndex = i - 1
+        local specID, _, _, icon
+        if specIndex == 0 then
+          specID = 0
+          if current and GetSpecializationInfo then
+            icon = select(4, GetSpecializationInfo(current))
+          end
+          btn.specID = 0
+        else
+          specID, _, _, icon = GetSpecializationInfo(specIndex)
+          btn.specID = specID
+        end
+        if btn.icon then
+          btn.icon:SetTexture(icon or 134400)
+        end
+        btn:ClearAllPoints()
+        btn:SetPoint("LEFT", lootRow, "LEFT", (i - 1) * 34, 0)
+        btn:Show()
+
+        local isActive
+        if specIndex == 0 then
+          isActive = (lootSpecID == 0)
+        else
+          isActive = (lootSpecID == specID)
+        end
+        if isActive then
+          btn:SetBackdropBorderColor(1.00, 0.70, 0.12, 1.00)
+          if btn.glow then btn.glow:Show() end
+        else
+          btn:SetBackdropBorderColor(0.14, 0.14, 0.14, 0.95)
+          if btn.glow then btn.glow:Hide() end
+        end
+      else
+        btn:Hide()
+      end
+    end
+  end
+
+  local fontPath, size, outline = GetConfiguredFont(db)
+  if panel.title and panel.title.SetFont then
+    panel.title:SetFont(fontPath, math.max(10, size), outline)
+  end
+  if panel.title and panel.title.Show then
+    panel.title:Show()
+  end
+  if customGearFrame.lootTitle and customGearFrame.lootTitle.SetFont then
+    customGearFrame.lootTitle:SetFont(fontPath, math.max(10, size), outline)
+  end
+  if customGearFrame.lootTitle and customGearFrame.lootTitle.Show then
+    customGearFrame.lootTitle:Show()
+  end
 end
 
 local function UpdateGearRows(rows, slots, rightAlign)
@@ -1630,7 +3190,6 @@ local function UpdateGearRows(rows, slots, rightAlign)
           else
             c1r, c1g, c1b, c1a = grad[5], grad[6], grad[7], 0.92
           end
-          local isWeapon = (slotName == "MainHandSlot" or slotName == "SecondaryHandSlot")
           local split = math.floor((row:GetWidth() > 0 and row:GetWidth() or GEAR_ROW_WIDTH) * 0.96)
           local iconSpan = SLOT_ICON_SIZE + GEAR_TEXT_GAP + 2
           row.bg:ClearAllPoints()
@@ -1640,21 +3199,11 @@ local function UpdateGearRows(rows, slots, rightAlign)
           if rightAlign then
             row.bg:SetPoint("TOPLEFT", row, "TOPRIGHT", -split, -iconPad)
             row.bg:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", iconSpan, iconPad)
-            if isWeapon then
-              -- Bottom weapon rows: grow outward from center.
-              SetHorizontalGradient(row.bg, c1r, c1g, c1b, 0.92, c1r, c1g, c1b, 0.00)
-            else
-              SetHorizontalGradient(row.bg, c1r, c1g, c1b, 0.00, c1r, c1g, c1b, 0.92)
-            end
+            SetHorizontalGradient(row.bg, c1r, c1g, c1b, 0.00, c1r, c1g, c1b, 0.92)
           else
             row.bg:SetPoint("TOPLEFT", row, "TOPLEFT", -iconSpan, -iconPad)
             row.bg:SetPoint("BOTTOMRIGHT", row, "BOTTOMLEFT", split, iconPad)
-            if isWeapon then
-              -- Bottom weapon rows: grow outward from center.
-              SetHorizontalGradient(row.bg, c1r, c1g, c1b, 0.00, c1r, c1g, c1b, 0.92)
-            else
-              SetHorizontalGradient(row.bg, c1r, c1g, c1b, 0.92, c1r, c1g, c1b, 0.00)
-            end
+            SetHorizontalGradient(row.bg, c1r, c1g, c1b, 0.92, c1r, c1g, c1b, 0.00)
           end
           if row.bg.SetBlendMode then row.bg:SetBlendMode("BLEND") end
           if row.bg.SetAlpha then row.bg:SetAlpha(1) end
@@ -1674,9 +3223,15 @@ local function UpdateGearRows(rows, slots, rightAlign)
   end
 end
 
-local function UpdateCustomGearFrame(db)
+UpdateCustomGearFrame = function(db)
+  if customStatsFrame and (customStatsFrame.activeMode == 2 or customStatsFrame.activeMode == 3) then
+    if customGearFrame then customGearFrame:Hide() end
+    return
+  end
   local frame = EnsureCustomGearFrame()
   if not frame then return end
+  local w = CharacterFrame and CharacterFrame.GetWidth and CharacterFrame:GetWidth() or PRIMARY_SHEET_WIDTH
+  frame:SetSize((tonumber(w) or PRIMARY_SHEET_WIDTH) - 16, CUSTOM_CHAR_HEIGHT - 102)
   local paper = _G.PaperDollFrame or CharacterFrame
   if frame.topLeft and frame.topLeft.ClearAllPoints then
     frame.topLeft:ClearAllPoints()
@@ -1704,6 +3259,7 @@ local function UpdateCustomGearFrame(db)
 
   UpdateGearRows(frame.leftRows, LEFT_GEAR_SLOTS, false)
   UpdateGearRows(frame.rightRows, RIGHT_GEAR_SLOTS, true)
+  UpdateSpecializationButtons(db)
 
   local fontPath, size, outline = GetConfiguredFont(db)
   if frame.topLeft and frame.topLeft.SetFont then frame.topLeft:SetFont(fontPath, size + 1, outline) end
@@ -1725,7 +3281,7 @@ local function UpdateCustomGearFrame(db)
   frame:Show()
 end
 
-local function ApplyCustomCharacterLayout()
+ApplyCustomCharacterLayout = function()
   if not CharacterFrame then return end
   if InCombatLockdown and InCombatLockdown() then return end
   if not layoutApplied then
@@ -1740,7 +3296,14 @@ local function ApplyCustomCharacterLayout()
     CaptureLayout("closeBtn", _G.CharacterFrameCloseButton)
   end
 
+  -- Preserve left edge so width growth extends to the right.
+  local leftAbs = CharacterFrame.GetLeft and CharacterFrame:GetLeft() or nil
+  local topAbs = CharacterFrame.GetTop and CharacterFrame:GetTop() or nil
   CharacterFrame:SetSize(PRIMARY_SHEET_WIDTH, CUSTOM_CHAR_HEIGHT)
+  if leftAbs and topAbs and UIParent then
+    CharacterFrame:ClearAllPoints()
+    CharacterFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", leftAbs, topAbs)
+  end
 
   local inset = _G.CharacterFrameInset
   if inset then
@@ -1750,7 +3313,8 @@ local function ApplyCustomCharacterLayout()
   end
 
   local insetLeft = _G.CharacterFrameInsetLeft
-  local leftWidth = PRIMARY_SHEET_WIDTH - CUSTOM_STATS_WIDTH - CUSTOM_PANE_GAP - 36
+  -- Keep left/model region at established width; push all new width into right panel.
+  local leftWidth = BASE_PRIMARY_SHEET_WIDTH - BASE_STATS_WIDTH - CUSTOM_PANE_GAP - 36
   if leftWidth < 320 then
     leftWidth = 320
   end
@@ -1793,6 +3357,40 @@ local function ApplyCustomCharacterLayout()
   if closeBtn then
     closeBtn:ClearAllPoints()
     closeBtn:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -6, -3)
+    if closeBtn.SetSize then
+      closeBtn:SetSize(22, 22)
+    end
+    local function ClearButtonTexture(tex)
+      if not tex then return end
+      if tex.SetTexture then tex:SetTexture(nil) end
+      if tex.Hide then tex:Hide() end
+      if tex.SetAlpha then tex:SetAlpha(0) end
+    end
+    if closeBtn.GetNormalTexture then ClearButtonTexture(closeBtn:GetNormalTexture()) end
+    if closeBtn.GetPushedTexture then ClearButtonTexture(closeBtn:GetPushedTexture()) end
+    if closeBtn.GetHighlightTexture then ClearButtonTexture(closeBtn:GetHighlightTexture()) end
+    if closeBtn.GetDisabledTexture then ClearButtonTexture(closeBtn:GetDisabledTexture()) end
+
+    if not closeBtn._haraX then
+      closeBtn._haraX = closeBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+      closeBtn._haraX:SetPoint("CENTER", closeBtn, "CENTER", 0, 0)
+      closeBtn._haraX:SetText("X")
+      closeBtn._haraX:SetShadowOffset(0, 0)
+      closeBtn:HookScript("OnEnter", function(self)
+        if self._haraX then
+          self._haraX:SetTextColor(1.0, 0.60, 0.16, 1)
+        end
+      end)
+      closeBtn:HookScript("OnLeave", function(self)
+        if self._haraX then
+          self._haraX:SetTextColor(0.949, 0.431, 0.031, 1)
+        end
+      end)
+    end
+
+    closeBtn._haraX:SetTextColor(0.949, 0.431, 0.031, 1)
+    closeBtn._haraX:SetAlpha(1)
+    closeBtn._haraX:Show()
   end
 
   local panel = EnsureCustomCharacterFrame()
@@ -1976,7 +3574,7 @@ local function StylePaperDollSlots()
 end
 
 local function ApplyChonkySlotLayout()
-  local anchor = _G.CharacterFrameBg or CharacterFrame
+  local anchor = CharacterFrame
   if not anchor then return end
 
   SaveAndHideRegion(_G.CharacterFrame and _G.CharacterFrame.NineSlice)
@@ -2021,42 +3619,28 @@ local function ApplyChonkySlotLayout()
     return
   end
 
-  head:ClearAllPoints()
-  head:SetPoint("TOPLEFT", anchor, "TOPLEFT", 14, -60)
-  neck:ClearAllPoints()
-  neck:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -vpad)
-  shoulder:ClearAllPoints()
-  shoulder:SetPoint("TOPLEFT", neck, "BOTTOMLEFT", 0, -vpad)
-  back:ClearAllPoints()
-  back:SetPoint("TOPLEFT", shoulder, "BOTTOMLEFT", 0, -vpad)
-  chest:ClearAllPoints()
-  chest:SetPoint("TOPLEFT", back, "BOTTOMLEFT", 0, -vpad)
-  shirt:ClearAllPoints()
-  shirt:SetPoint("TOPLEFT", chest, "BOTTOMLEFT", 0, -vpad)
-  tabard:ClearAllPoints()
-  tabard:SetPoint("TOPLEFT", shirt, "BOTTOMLEFT", 0, -vpad)
-  wrist:ClearAllPoints()
-  wrist:SetPoint("TOPLEFT", tabard, "BOTTOMLEFT", 0, -vpad)
-
-  hands:ClearAllPoints()
-  -- Keep only a slight gap between right slot column and stats panel.
+  -- Pin every slot to a fixed size so Blizzard cannot resize them and
+  -- collapse the chain.  Use absolute Y offsets from the anchor instead of
+  -- chaining through BOTTOMLEFT, making layout immune to height changes.
+  local stride = SLOT_ICON_SIZE + vpad
+  local topY = -60
+  local leftX = 14
   local statsWidth = math.max(140, math.floor((CUSTOM_STATS_WIDTH * 0.9) + 0.5))
   local rightColumnX = PRIMARY_SHEET_WIDTH - statsWidth - 55
-  hands:SetPoint("TOPLEFT", anchor, "TOPLEFT", rightColumnX, -60)
-  waist:ClearAllPoints()
-  waist:SetPoint("TOPLEFT", hands, "BOTTOMLEFT", 0, -vpad)
-  legs:ClearAllPoints()
-  legs:SetPoint("TOPLEFT", waist, "BOTTOMLEFT", 0, -vpad)
-  feet:ClearAllPoints()
-  feet:SetPoint("TOPLEFT", legs, "BOTTOMLEFT", 0, -vpad)
-  finger0:ClearAllPoints()
-  finger0:SetPoint("TOPLEFT", feet, "BOTTOMLEFT", 0, -vpad)
-  finger1:ClearAllPoints()
-  finger1:SetPoint("TOPLEFT", finger0, "BOTTOMLEFT", 0, -vpad)
-  trinket0:ClearAllPoints()
-  trinket0:SetPoint("TOPLEFT", finger1, "BOTTOMLEFT", 0, -vpad)
-  trinket1:ClearAllPoints()
-  trinket1:SetPoint("TOPLEFT", trinket0, "BOTTOMLEFT", 0, -vpad)
+
+  local leftSlots  = { head, neck, shoulder, back, chest, shirt, tabard, wrist }
+  local rightSlots = { hands, waist, legs, feet, finger0, finger1, trinket0, trinket1 }
+
+  for i, slot in ipairs(leftSlots) do
+    slot:SetSize(SLOT_ICON_SIZE, SLOT_ICON_SIZE)
+    slot:ClearAllPoints()
+    slot:SetPoint("TOPLEFT", anchor, "TOPLEFT", leftX, topY - stride * (i - 1))
+  end
+  for i, slot in ipairs(rightSlots) do
+    slot:SetSize(SLOT_ICON_SIZE, SLOT_ICON_SIZE)
+    slot:ClearAllPoints()
+    slot:SetPoint("TOPLEFT", anchor, "TOPLEFT", rightColumnX, topY - stride * (i - 1))
+  end
 
   local leftColumnX = 14
   local slotSize = SLOT_ICON_SIZE
@@ -2066,8 +3650,10 @@ local function ApplyChonkySlotLayout()
   local centerX = math.floor(((leftColumnCenter + rightColumnCenter) * 0.5) + 0.5)
   local mainHandX = math.floor((centerX - (pairGapX * 0.5) - (slotSize * 0.5)) + 0.5)
 
+  mainHand:SetSize(SLOT_ICON_SIZE, SLOT_ICON_SIZE)
   mainHand:ClearAllPoints()
-  mainHand:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", mainHandX, 54)
+  mainHand:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", mainHandX, 66)
+  offHand:SetSize(SLOT_ICON_SIZE, SLOT_ICON_SIZE)
   offHand:ClearAllPoints()
   offHand:SetPoint("TOPLEFT", mainHand, "TOPLEFT", pairGapX, 0)
 end
@@ -2333,7 +3919,7 @@ local function EnsureRightPanel(db)
     insets = { left = 0, right = 0, top = 0, bottom = 0 },
   })
   rightPanel:SetBackdropColor(0, 0, 0, 0)
-  rightPanel:SetBackdropBorderColor(0.34, 0.17, 0.52, 0.95)
+  rightPanel:SetBackdropBorderColor(0, 0, 0, 0)
   rightPanel:SetFrameStrata(CharacterFrame:GetFrameStrata() or "MEDIUM")
   rightPanel:SetClampedToScreen(true)
   rightPanel:SetMovable(false)
@@ -2416,21 +4002,24 @@ local function EnsureRightPanel(db)
   rightPanel.colDungeon:SetText("Dungeon")
 
   rightPanel.colLevel = rightPanel.tableHeader:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  rightPanel.colLevel:SetPoint("RIGHT", -196, 0)
+  rightPanel.colLevel:SetPoint("RIGHT", -240, 0)
   rightPanel.colLevel:SetWidth(64)
   rightPanel.colLevel:SetJustifyH("RIGHT")
   rightPanel.colLevel:SetText("Level")
 
   rightPanel.colRating = rightPanel.tableHeader:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  rightPanel.colRating:SetPoint("RIGHT", -126, 0)
+  rightPanel.colRating:SetPoint("RIGHT", -170, 0)
   rightPanel.colRating:SetWidth(64)
   rightPanel.colRating:SetJustifyH("CENTER")
   rightPanel.colRating:SetText("Rating")
 
   rightPanel.colBest = rightPanel.tableHeader:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   rightPanel.colBest:SetPoint("RIGHT", -10, 0)
-  rightPanel.colBest:SetWidth(112)
-  rightPanel.colBest:SetJustifyH("CENTER")
+  rightPanel.colBest:SetWidth(180)
+  rightPanel.colBest:SetJustifyH("RIGHT")
+  rightPanel.colBest:SetMaxLines(1)
+  if rightPanel.colBest.SetWordWrap then rightPanel.colBest:SetWordWrap(false) end
+  if rightPanel.colBest.SetNonSpaceWrap then rightPanel.colBest:SetNonSpaceWrap(false) end
   rightPanel.colBest:SetText("Best")
 
   rightPanel.rowContainer = CreateFrame("Frame", nil, rightPanel)
@@ -2467,21 +4056,24 @@ local function EnsureRightPanel(db)
     row.name:SetText(("Dungeon %d"):format(i))
 
     row.level = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.level:SetPoint("RIGHT", -196, 0)
+    row.level:SetPoint("RIGHT", -240, 0)
     row.level:SetWidth(64)
     row.level:SetJustifyH("RIGHT")
     row.level:SetText("-")
 
     row.rating = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.rating:SetPoint("RIGHT", -126, 0)
+    row.rating:SetPoint("RIGHT", -170, 0)
     row.rating:SetWidth(64)
     row.rating:SetJustifyH("CENTER")
     row.rating:SetText("-")
 
     row.best = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.best:SetPoint("RIGHT", -10, 0)
-    row.best:SetWidth(112)
-    row.best:SetJustifyH("CENTER")
+    row.best:SetWidth(180)
+    row.best:SetJustifyH("RIGHT")
+    row.best:SetMaxLines(1)
+    if row.best.SetWordWrap then row.best:SetWordWrap(false) end
+    if row.best.SetNonSpaceWrap then row.best:SetNonSpaceWrap(false) end
     row.best:SetText("-")
 
     row.castBtn = CreateFrame("Button", nil, row, "SecureActionButtonTemplate")
@@ -2511,20 +4103,20 @@ local function EnsureRightPanel(db)
   end
 
   rightPanel.vaultTitle = rightPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-  rightPanel.vaultTitle:SetPoint("BOTTOM", rightPanel, "BOTTOM", 0, 154)
+  rightPanel.vaultTitle:SetPoint("BOTTOM", rightPanel, "BOTTOM", 0, 172)
   rightPanel.vaultTitle:SetText("Great Vault")
 
   rightPanel.vault = CreateFrame("Frame", nil, rightPanel)
-  rightPanel.vault:SetSize(606, 126)
+  rightPanel.vault:SetSize(606, 144)
   rightPanel.vault:SetPoint("BOTTOM", rightPanel, "BOTTOM", 0, 20)
   rightPanel.vault.cards = {}
 
   for i = 1, 9 do
     local card = CreateFrame("Frame", nil, rightPanel.vault, "BackdropTemplate")
-    card:SetSize(198, 38)
+    card:SetSize(198, 44)
     local col = (i - 1) % 3
     local row = math.floor((i - 1) / 3)
-    card:SetPoint("TOPLEFT", col * 204, -(row * 44))
+    card:SetPoint("TOPLEFT", col * 204, -(row * 50))
     card:SetBackdrop({
       bgFile = "Interface/Buttons/WHITE8x8",
       edgeFile = "Interface/Buttons/WHITE8x8",
@@ -2622,12 +4214,20 @@ local function PositionRightPanel(db)
   rightPanel:ClearAllPoints()
   -- Fixed Mythic+ panel size: keep this stable.
   rightPanel:SetSize(640, 620)
+  -- Migrate legacy integrated gap defaults (8) to flush join (0).
+  local xOffset = tonumber(db.charsheet.rightPanelOffsetX)
+  if xOffset == nil then
+    xOffset = 0
+  elseif math.abs(xOffset - INTEGRATED_RIGHT_GAP) < 0.001 then
+    xOffset = 0
+    db.charsheet.rightPanelOffsetX = 0
+  end
   rightPanel:SetPoint(
-    "TOPLEFT",
+    "LEFT",
     CharacterFrame,
-    "TOPRIGHT",
-    db.charsheet.rightPanelOffsetX or INTEGRATED_RIGHT_GAP,
-    db.charsheet.rightPanelOffsetY or 0
+    "RIGHT",
+    xOffset,
+    (db.charsheet.rightPanelOffsetY or 0) + RIGHT_PANEL_CENTER_Y_BIAS
   )
 end
 
@@ -3291,6 +4891,18 @@ local function CopyRuns(runs)
   return out
 end
 
+local function GetPlayerSnapshotKey()
+  local guid = UnitGUID and UnitGUID("player") or nil
+  if type(guid) == "string" and guid ~= "" then
+    return guid
+  end
+  local name, realm = UnitName and UnitName("player") or nil, GetRealmName and GetRealmName() or nil
+  if type(name) == "string" and name ~= "" then
+    return (name or "") .. "-" .. (realm or "")
+  end
+  return nil
+end
+
 local function GetRunDeltaMS(run)
   if not run then return nil end
   if type(run.overTimeMS) == "number" then
@@ -3310,6 +4922,15 @@ end
 
 local function RefreshRightPanelData()
   if not rightPanel then return end
+  local snapshotKey = GetPlayerSnapshotKey()
+  local sameSnapshotOwner = (snapshotKey ~= nil and lastMPlusSnapshot.ownerKey == snapshotKey)
+
+  if snapshotKey ~= nil and not sameSnapshotOwner then
+    -- Prevent cross-character bleed when opening on alts/new characters.
+    lastMPlusSnapshot.ownerKey = snapshotKey
+    lastMPlusSnapshot.affixIDs = nil
+    lastMPlusSnapshot.runs = nil
+  end
 
   if C_MythicPlus and C_MythicPlus.RequestMapInfo then
     pcall(C_MythicPlus.RequestMapInfo)
@@ -3341,9 +4962,10 @@ local function RefreshRightPanelData()
     end
   end
   if rightPanel.affixSlots then
-    if #affixIDs == 0 and type(lastMPlusSnapshot.affixIDs) == "table" and #lastMPlusSnapshot.affixIDs > 0 then
+    if #affixIDs == 0 and sameSnapshotOwner and type(lastMPlusSnapshot.affixIDs) == "table" and #lastMPlusSnapshot.affixIDs > 0 then
       affixIDs = ShallowCopyArray(lastMPlusSnapshot.affixIDs) or affixIDs
     elseif #affixIDs > 0 then
+      lastMPlusSnapshot.ownerKey = snapshotKey
       lastMPlusSnapshot.affixIDs = ShallowCopyArray(affixIDs)
     end
 
@@ -3472,9 +5094,10 @@ local function RefreshRightPanelData()
     end
   end
 
-  if #runs == 0 and type(lastMPlusSnapshot.runs) == "table" and #lastMPlusSnapshot.runs > 0 then
+  if #runs == 0 and sameSnapshotOwner and type(lastMPlusSnapshot.runs) == "table" and #lastMPlusSnapshot.runs > 0 then
     runs = CopyRuns(lastMPlusSnapshot.runs) or runs
   elseif #runs > 0 then
+    lastMPlusSnapshot.ownerKey = snapshotKey
     lastMPlusSnapshot.runs = CopyRuns(runs)
   end
 
@@ -3672,8 +5295,8 @@ local function RefreshRightPanelData()
 
     local trackTypeByRow = { 2, 1, 3 } -- Mythic+, Raid, World/Delves
     local trackNameByType = {
-      [1] = "Raid",
-      [2] = "Mythic+",
+      [1] = "Raids",
+      [2] = "Dungeons",
       [3] = "World",
     }
     local thresholdsByType = {
@@ -3778,6 +5401,7 @@ function M:Refresh()
   local db = NS:GetDB()
   if not db then return end
   if not CharacterFrame then return end
+  SyncCustomModeToNativePanel()
 
   if db.charsheet.styleStats then
     ApplyCustomCharacterLayout()
@@ -3808,6 +5432,7 @@ function M:Refresh()
 
   if db.charsheet.styleStats then
     ApplyCoreCharacterFontAndName(db)
+    RestorePaperDollSidebarButtons()
     if SIMPLE_BASE_PANEL_MODE then
       -- 1.0 baseline: one character base panel only, no extra stat/section sub-panels.
       StylePaperDollSlots()
@@ -3869,7 +5494,13 @@ function M:Refresh()
     RestoreFonts()
   end
 
-  local showRight = db.charsheet.showRightPanel ~= false
+  local activeMode = ResolveEffectiveCharacterMode()
+  if customStatsFrame then
+    customStatsFrame.activeMode = activeMode
+  end
+  local blankBottomMode = db.charsheet.styleStats and (activeMode == 2 or activeMode == 3)
+  local rightCollapsed = db.charsheet.rightPanelCollapsed == true
+  local showRight = (db.charsheet.showRightPanel ~= false) and not blankBottomMode and not rightCollapsed
   if showRight then
     local panel = EnsureRightPanel(db)
     if panel then
@@ -3882,6 +5513,8 @@ function M:Refresh()
   elseif rightPanel then
     rightPanel:Hide()
   end
+
+  SyncBottomModeButtonsVisibility(db)
 end
 
 function M:Apply()
@@ -3891,23 +5524,81 @@ function M:Apply()
     return
   end
   M.active = true
+  liveUpdateQueued = false
+  liveUpdateIncludeRightPanel = false
+  wipe(inventoryTooltipCache)
 
   if not IsAddonLoadedCompat("Blizzard_CharacterUI") then
     LoadAddonCompat("Blizzard_CharacterUI")
   end
 
+  -- Unconditional slot-position enforcer: re-applies ApplyChonkySlotLayout
+  -- every frame for a short window after the character frame is shown so that
+  -- any late Blizzard re-anchoring is immediately corrected.
+  if not slotEnforcer then
+    slotEnforcer = CreateFrame("Frame")
+    slotEnforcer:Hide()
+    slotEnforcer:SetScript("OnUpdate", function(self)
+      if GetTime() >= slotEnforceUntil then
+        self:Hide()
+        return
+      end
+      if not M.active or not layoutApplied then self:Hide() return end
+      if not (CharacterFrame and CharacterFrame:IsShown()) then self:Hide() return end
+      if InCombatLockdown and InCombatLockdown() then return end
+      ApplyChonkySlotLayout()
+    end)
+  end
+
   if CharacterFrame and not hookedShow then
     CharacterFrame:HookScript("OnShow", function()
+      if rightPanel then
+        rightPanel:Hide()
+      end
       if M.active then
+        local liveDB = NS and NS.GetDB and NS:GetDB() or nil
+        if liveDB and liveDB.charsheet and liveDB.charsheet.styleStats then
+          -- Always re-open on full-size Character mode baseline.
+          M._pendingNativeMode = nil
+          if customStatsFrame and (customStatsFrame.activeMode == 2 or customStatsFrame.activeMode == 3) then
+            customStatsFrame.activeMode = 1
+            ShowNativeCharacterMode(1)
+          end
+          ApplyCustomCharacterLayout()
+          if C_Timer and C_Timer.After then
+            C_Timer.After(0, function()
+              if not (M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
+              ApplyCustomCharacterLayout()
+              if UpdateCustomStatsFrame then
+                UpdateCustomStatsFrame(liveDB)
+              end
+              if UpdateCustomGearFrame then
+                UpdateCustomGearFrame(liveDB)
+              end
+            end)
+          end
+        end
+        SyncCustomModeToNativePanel()
         M:Refresh()
+        -- Start the slot enforcer for 0.5 s to overwrite any late Blizzard re-anchors.
+        if slotEnforcer then
+          slotEnforceUntil = GetTime() + 0.5
+          slotEnforcer:Show()
+        end
       end
     end)
     hookedShow = true
   end
   if CharacterFrame and not hookedHide then
     CharacterFrame:HookScript("OnHide", function()
+      if slotEnforcer then slotEnforcer:Hide() end
       if rightPanel then
         rightPanel:Hide()
+      end
+      LeaveReputationPaneMode()
+      LeaveCurrencyPaneMode()
+      if customStatsFrame and customStatsFrame.modeBar then
+        customStatsFrame.modeBar:Hide()
       end
       if customCharacterFrame then
         customCharacterFrame:Hide()
@@ -3916,19 +5607,48 @@ function M:Apply()
     hookedHide = true
   end
 
+  local function QueueLiveUpdate(includeRightPanel)
+    if includeRightPanel then
+      liveUpdateIncludeRightPanel = true
+    end
+    if liveUpdateQueued then return end
+    liveUpdateQueued = true
+    if C_Timer and C_Timer.After then
+      C_Timer.After(EVENT_DEBOUNCE_INTERVAL, function()
+        liveUpdateQueued = false
+        if not M.active then
+          liveUpdateIncludeRightPanel = false
+          return
+        end
+        if not (CharacterFrame and CharacterFrame:IsShown()) then
+          liveUpdateIncludeRightPanel = false
+          return
+        end
+        local liveDB = NS:GetDB()
+        if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then
+          liveUpdateIncludeRightPanel = false
+          return
+        end
+        ApplyCoreCharacterFontAndName(liveDB)
+        UpdateCustomStatsFrame(liveDB)
+        UpdateCustomGearFrame(liveDB)
+        if liveUpdateIncludeRightPanel and rightPanel and rightPanel:IsShown() then
+          RefreshRightPanelData()
+        end
+        liveUpdateIncludeRightPanel = false
+      end)
+    else
+      liveUpdateQueued = false
+    end
+  end
+
   if not ticker then
     ticker = CreateFrame("Frame")
   end
-  elapsedSinceTick = 0
   elapsedSinceData = 0
   ticker:SetScript("OnUpdate", function(_, elapsed)
     if not M.active then return end
-    elapsedSinceTick = elapsedSinceTick + (elapsed or 0)
-    if elapsedSinceTick < TICK_INTERVAL then return end
-    elapsedSinceTick = 0
-    if CharacterFrame and CharacterFrame:IsShown() then
-      M:Refresh()
-    elseif rightPanel and rightPanel:IsShown() then
+    if not (CharacterFrame and CharacterFrame:IsShown()) and rightPanel and rightPanel:IsShown() then
       rightPanel:Hide()
     end
     elapsedSinceData = elapsedSinceData + (elapsed or 0)
@@ -3947,13 +5667,62 @@ function M:Apply()
     end
   end)
 
+  if not moduleEventFrame then
+    moduleEventFrame = CreateFrame("Frame")
+  end
+  local function SafeRegisterEvent(frame, eventName)
+    if not (frame and eventName and frame.RegisterEvent) then return end
+    pcall(frame.RegisterEvent, frame, eventName)
+  end
+  local function SafeRegisterUnitEvent(frame, eventName, unit)
+    if not (frame and eventName and unit and frame.RegisterUnitEvent) then return end
+    pcall(frame.RegisterUnitEvent, frame, eventName, unit)
+  end
+  moduleEventFrame:UnregisterAllEvents()
+  SafeRegisterEvent(moduleEventFrame, "PLAYER_EQUIPMENT_CHANGED")
+  SafeRegisterEvent(moduleEventFrame, "PLAYER_SPECIALIZATION_CHANGED")
+  SafeRegisterEvent(moduleEventFrame, "ACTIVE_TALENT_GROUP_CHANGED")
+  SafeRegisterEvent(moduleEventFrame, "PLAYER_LEVEL_UP")
+  SafeRegisterEvent(moduleEventFrame, "KNOWN_TITLES_UPDATE")
+  SafeRegisterEvent(moduleEventFrame, "UPDATE_FACTION")
+  SafeRegisterEvent(moduleEventFrame, "CURRENCY_DISPLAY_UPDATE")
+  SafeRegisterEvent(moduleEventFrame, "CURRENCY_LIST_UPDATE")
+  SafeRegisterUnitEvent(moduleEventFrame, "UNIT_MAXHEALTH", "player")
+  SafeRegisterUnitEvent(moduleEventFrame, "UNIT_MAXPOWER", "player")
+  SafeRegisterUnitEvent(moduleEventFrame, "UNIT_STATS", "player")
+  moduleEventFrame:SetScript("OnEvent", function(_, event, unitOrSlot)
+    if not M.active then return end
+    if event == "UNIT_MAXHEALTH" or event == "UNIT_MAXPOWER" or event == "UNIT_STATS" then
+      if unitOrSlot and unitOrSlot ~= "player" then return end
+    end
+    if event == "PLAYER_EQUIPMENT_CHANGED" then
+      local slotID = tonumber(unitOrSlot)
+      if slotID then
+        inventoryTooltipCache[slotID] = nil
+      else
+        wipe(inventoryTooltipCache)
+      end
+    end
+    if not (CharacterFrame and CharacterFrame:IsShown()) then return end
+    local liveDB = NS:GetDB()
+    if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then return end
+    QueueLiveUpdate(true)
+  end)
+
   self:Refresh()
 end
 
 function M:Disable()
   M.active = false
+  liveUpdateQueued = false
+  liveUpdateIncludeRightPanel = false
+  wipe(inventoryTooltipCache)
   if ticker then
     ticker:SetScript("OnUpdate", nil)
+  end
+  if moduleEventFrame then
+    moduleEventFrame:SetScript("OnEvent", nil)
+    moduleEventFrame:UnregisterAllEvents()
   end
   if skinFrame then
     skinFrame:Hide()
@@ -3987,6 +5756,9 @@ function M:Disable()
   end
   if customStatsFrame then
     customStatsFrame:Hide()
+    if customStatsFrame.modeBar then
+      customStatsFrame.modeBar:Hide()
+    end
   end
   if customGearFrame then
     customGearFrame:Hide()

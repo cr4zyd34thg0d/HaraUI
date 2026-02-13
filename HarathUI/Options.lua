@@ -17,17 +17,20 @@
 local ADDON, NS = ...
 local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 
-local function GetAddonVersion()
+local function GetAddonMetadataField(field)
   if C_AddOns and C_AddOns.GetAddOnMetadata then
-    return C_AddOns.GetAddOnMetadata(ADDON, "Version")
+    return C_AddOns.GetAddOnMetadata(ADDON, field)
   end
   if GetAddOnMetadata then
-    return GetAddOnMetadata(ADDON, "Version")
+    return GetAddOnMetadata(ADDON, field)
   end
   return nil
 end
 
-local ADDON_VERSION = GetAddonVersion() or "dev"
+local CompareVersions = NS and NS.CompareVersions
+
+local ADDON_VERSION = GetAddonMetadataField("Version") or "dev"
+local GIT_VERSION = GetAddonMetadataField("X-GitVersion") or GetAddonMetadataField("X-Git-Version")
 
 local ORANGE = { 0.949, 0.431, 0.031 } -- #F26E08
 local ORANGE_SIZE = 11
@@ -504,6 +507,23 @@ function NS:InitOptions()
     navVersion:SetPoint("BOTTOMRIGHT", -12, 10)
     navVersion:SetText("v" .. tostring(ADDON_VERSION))
     ApplyUIFont(navVersion, 10, "OUTLINE", ORANGE)
+
+    local navGitIndicator = nav:CreateTexture(nil, "OVERLAY")
+    navGitIndicator:SetSize(10, 10)
+    navGitIndicator:SetPoint("RIGHT", navVersion, "LEFT", -6, 0)
+
+    do
+      local cmp = CompareVersions and CompareVersions(ADDON_VERSION, GIT_VERSION) or nil
+      if type(GIT_VERSION) ~= "string" or GIT_VERSION == "" then
+        navGitIndicator:Hide()
+      elseif cmp and cmp < 0 then
+        navGitIndicator:Show()
+        navGitIndicator:SetTexture("Interface\\FriendsFrame\\StatusIcon-Offline")
+      else
+        navGitIndicator:Show()
+        navGitIndicator:SetTexture("Interface\\FriendsFrame\\StatusIcon-Online")
+      end
+    end
 
     local content = CreateFrame("Frame", nil, panel, "BackdropTemplate")
     -- Small gap so the two panel borders read as separate.
@@ -1245,54 +1265,8 @@ function NS:InitOptions()
       end
     end)
 
-    local hideArt = MakeCheckbox(pages.charsheet, "Hide Blizzard Artwork", "Hide default character panel art behind the HarathUI skin.")
-    hideArt:SetPoint("TOPLEFT", openChar, "BOTTOMLEFT", 0, GROUP_GAP)
-    hideArt:SetChecked(db.charsheet.hideArt == true)
-    hideArt:SetScript("OnClick", function()
-      db.charsheet.hideArt = hideArt:GetChecked()
-      NS:ApplyAll()
-    end)
-
-    local styleStats = MakeCheckbox(pages.charsheet, "Style Stat Rows", "Apply pixel row striping and stat font styling.")
-    styleStats:SetPoint("LEFT", hideArt, "RIGHT", 180, 0)
-    styleStats:SetChecked(db.charsheet.styleStats == true)
-    styleStats:SetScript("OnClick", function()
-      db.charsheet.styleStats = styleStats:GetChecked()
-      NS:ApplyAll()
-    end)
-
-    local rightPanel = MakeCheckbox(pages.charsheet, "Show Right Data Panel", "Show Chonky-style Mythic+ and Vault side panel.")
-    rightPanel:SetPoint("TOPLEFT", hideArt, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
-    rightPanel:SetChecked(db.charsheet.showRightPanel == true)
-    rightPanel:SetScript("OnClick", function()
-      db.charsheet.showRightPanel = rightPanel:GetChecked()
-      NS:ApplyAll()
-    end)
-
-    local stripe = MakeSlider(pages.charsheet, "Row Stripe Opacity", 0.05, 0.5, 0.01)
-    stripe:SetPoint("TOPLEFT", rightPanel, "BOTTOMLEFT", 0, GROUP_GAP)
-    stripe:SetValue(db.charsheet.stripeAlpha or 0.22)
-    stripe:SetLabelValue(db.charsheet.stripeAlpha or 0.22, "%.2f")
-    stripe:SetScript("OnValueChanged", function(_, v)
-      v = Round2(v)
-      db.charsheet.stripeAlpha = v
-      stripe:SetLabelValue(v, "%.2f")
-      NS:ApplyAll()
-    end)
-
-    local size = MakeSlider(pages.charsheet, "Stat Font Size", 10, 18, 1)
-    size:SetPoint("TOPLEFT", stripe, "BOTTOMLEFT", 0, SLIDER_GAP)
-    size:SetValue(db.charsheet.fontSize or 12)
-    size:SetLabelValue(db.charsheet.fontSize or 12, "%.0f")
-    size:SetScript("OnValueChanged", function(_, v)
-      v = math.floor(v + 0.5)
-      db.charsheet.fontSize = v
-      size:SetLabelValue(v, "%.0f")
-      NS:ApplyAll()
-    end)
-
     local fontLabel = pages.charsheet:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    fontLabel:SetPoint("TOPLEFT", size, "BOTTOMLEFT", 0, GROUP_GAP)
+    fontLabel:SetPoint("TOPLEFT", openChar, "BOTTOMLEFT", 0, GROUP_GAP)
     fontLabel:SetText("Stat Font")
     ApplyUIFont(fontLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
 

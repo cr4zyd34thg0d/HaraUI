@@ -23,6 +23,49 @@ local function Print(msg)
 end
 NS.Print = Print
 
+local function GetAddonMetadataField(field)
+  if C_AddOns and C_AddOns.GetAddOnMetadata then
+    return C_AddOns.GetAddOnMetadata(ADDON, field)
+  end
+  if GetAddOnMetadata then
+    return GetAddOnMetadata(ADDON, field)
+  end
+  return nil
+end
+
+function NS.NormalizeVersion(version)
+  if type(version) ~= "string" then return nil end
+  local parts = {}
+  for n in version:gmatch("%d+") do
+    parts[#parts + 1] = tonumber(n)
+  end
+  if #parts == 0 then return nil end
+  return parts
+end
+
+function NS.CompareVersions(left, right)
+  local a = NS.NormalizeVersion(left)
+  local b = NS.NormalizeVersion(right)
+  if not a or not b then return nil end
+  local count = math.max(#a, #b)
+  for i = 1, count do
+    local av = a[i] or 0
+    local bv = b[i] or 0
+    if av < bv then return -1 end
+    if av > bv then return 1 end
+  end
+  return 0
+end
+
+local function PrintOutOfDateNotice()
+  local installed = GetAddonMetadataField("Version")
+  local gitVersion = GetAddonMetadataField("X-GitVersion") or GetAddonMetadataField("X-Git-Version")
+  local cmp = NS.CompareVersions(installed, gitVersion)
+  if cmp and cmp < 0 then
+    Print(("Update available: installed v%s, latest v%s."):format(tostring(installed), tostring(gitVersion)))
+  end
+end
+
 function NS:Debug(...)
   local db = NS:GetDB()
   if db and db.general.debug then
@@ -330,6 +373,7 @@ f:SetScript("OnEvent", function(_, event, arg1)
     NS:ApplyAll()
     EnsureMinimapButton()
     HookSpellIDTooltips()
+    PrintOutOfDateNotice()
     local db = NS:GetDB()
     if db and NS.SetFramesLocked then NS:SetFramesLocked(db.general.framesLocked) end
     Print("Loaded. Type /hui for options.")
