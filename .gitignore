@@ -7,6 +7,10 @@
 !OPie/**
 !Platynator/
 !Platynator/**
+!patches/
+!patches/**
+!scripts/
+!scripts/**
 
 # Never track nested repo metadata if present inside addon folder.
 HarathUI/.git/
