@@ -27,10 +27,24 @@ local function GetAddonMetadataField(field)
   return nil
 end
 
-local CompareVersions = NS and NS.CompareVersions
-
-local ADDON_VERSION = GetAddonMetadataField("Version") or "dev"
-local GIT_VERSION = GetAddonMetadataField("X-GitVersion") or GetAddonMetadataField("X-Git-Version")
+local function GetVersionInfo()
+  if NS and NS.GetVersionInfo then
+    return NS.GetVersionInfo()
+  end
+  local installed = GetAddonMetadataField("Version")
+  local latest = GetAddonMetadataField("X-GitVersion") or GetAddonMetadataField("X-Git-Version")
+  local commit = GetAddonMetadataField("X-Build-Commit") or GetAddonMetadataField("X-Git-Commit")
+  local buildDate = GetAddonMetadataField("X-Build-Date")
+  local cmp = NS and NS.CompareVersions and NS.CompareVersions(installed, latest) or nil
+  return {
+    installed = installed,
+    latest = latest,
+    commit = commit,
+    buildDate = buildDate,
+    cmp = cmp,
+    source = "toc-metadata",
+  }
+end
 
 local ORANGE = { 0.949, 0.431, 0.031 } -- #F26E08
 local ORANGE_SIZE = 11
@@ -505,25 +519,65 @@ function NS:InitOptions()
 
     local navVersion = nav:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     navVersion:SetPoint("BOTTOMRIGHT", -12, 10)
-    navVersion:SetText("v" .. tostring(ADDON_VERSION))
     ApplyUIFont(navVersion, 10, "OUTLINE", ORANGE)
 
     local navGitIndicator = nav:CreateTexture(nil, "OVERLAY")
     navGitIndicator:SetSize(10, 10)
     navGitIndicator:SetPoint("RIGHT", navVersion, "LEFT", -6, 0)
+    if navGitIndicator.EnableMouse then
+      navGitIndicator:EnableMouse(true)
+    end
+    if navGitIndicator.SetScript then
+      navGitIndicator:SetScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        local info = GetVersionInfo()
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Version Status", ORANGE[1], ORANGE[2], ORANGE[3])
+        GameTooltip:AddLine(("Installed: v%s"):format(tostring(info and info.installed or "unknown")), 0.95, 0.95, 0.95)
+        GameTooltip:AddLine(("Latest: v%s"):format(tostring(info and info.latest or "unknown")), 0.95, 0.95, 0.95)
+        GameTooltip:AddLine(("Commit: %s"):format(tostring(info and info.commit or "unknown")), 0.85, 0.85, 0.85)
+        GameTooltip:AddLine(("Build date: %s"):format(tostring(info and info.buildDate or "unknown")), 0.85, 0.85, 0.85)
+        if info and info.cmp ~= nil then
+          if info.cmp < 0 then
+            GameTooltip:AddLine("Status: Update available", 1.0, 0.35, 0.35)
+          elseif info.cmp > 0 then
+            GameTooltip:AddLine("Status: Local build is ahead", 0.95, 0.80, 0.35)
+          else
+            GameTooltip:AddLine("Status: Up to date", 0.35, 1.0, 0.45)
+          end
+        else
+          GameTooltip:AddLine("Status: Unknown", 0.8, 0.8, 0.8)
+        end
+        GameTooltip:AddLine("Source: add-on metadata (X-GitVersion, X-Build-Commit)", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+      end)
+      navGitIndicator:SetScript("OnLeave", function()
+        if GameTooltip then GameTooltip:Hide() end
+      end)
+    end
 
-    do
-      local cmp = CompareVersions and CompareVersions(ADDON_VERSION, GIT_VERSION) or nil
-      if type(GIT_VERSION) ~= "string" or GIT_VERSION == "" then
+    local function UpdateVersionIndicator()
+      local info = GetVersionInfo()
+      local installed = info and info.installed or nil
+      local latest = info and info.latest or nil
+      local cmp = info and info.cmp or nil
+
+      navVersion:SetText("v" .. tostring(installed or "dev"))
+
+      if type(latest) ~= "string" or latest == "" then
         navGitIndicator:Hide()
-      elseif cmp and cmp < 0 then
-        navGitIndicator:Show()
+        return
+      end
+
+      navGitIndicator:Show()
+      if cmp and cmp < 0 then
         navGitIndicator:SetTexture("Interface\\FriendsFrame\\StatusIcon-Offline")
       else
-        navGitIndicator:Show()
         navGitIndicator:SetTexture("Interface\\FriendsFrame\\StatusIcon-Online")
       end
     end
+
+    UpdateVersionIndicator()
 
     local content = CreateFrame("Frame", nil, panel, "BackdropTemplate")
     -- Small gap so the two panel borders read as separate.
@@ -1897,6 +1951,7 @@ function NS:InitOptions()
             or "Interface\\FriendsFrame\\StatusIcon-Offline")
         end
       end
+      UpdateVersionIndicator()
     end
 
     UpdateNavIndicators()

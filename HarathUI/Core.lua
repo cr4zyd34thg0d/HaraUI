@@ -57,12 +57,29 @@ function NS.CompareVersions(left, right)
   return 0
 end
 
-local function PrintOutOfDateNotice()
+function NS.GetVersionInfo()
   local installed = GetAddonMetadataField("Version")
-  local gitVersion = GetAddonMetadataField("X-GitVersion") or GetAddonMetadataField("X-Git-Version")
-  local cmp = NS.CompareVersions(installed, gitVersion)
+  local latest = GetAddonMetadataField("X-GitVersion") or GetAddonMetadataField("X-Git-Version")
+  local commit = GetAddonMetadataField("X-Build-Commit") or GetAddonMetadataField("X-Git-Commit")
+  local buildDate = GetAddonMetadataField("X-Build-Date")
+  local cmp = NS.CompareVersions(installed, latest)
+  return {
+    installed = installed,
+    latest = latest,
+    commit = commit,
+    buildDate = buildDate,
+    cmp = cmp,
+    source = "toc-metadata",
+  }
+end
+
+local function PrintOutOfDateNotice()
+  local info = NS.GetVersionInfo and NS.GetVersionInfo() or nil
+  local installed = info and info.installed or nil
+  local latest = info and info.latest or nil
+  local cmp = info and info.cmp or nil
   if cmp and cmp < 0 then
-    Print(("Update available: installed v%s, latest v%s."):format(tostring(installed), tostring(gitVersion)))
+    Print(("Update available: installed v%s, latest v%s."):format(tostring(installed), tostring(latest)))
   end
 end
 
@@ -356,7 +373,37 @@ local function HandleSlash(msg)
     Print("Debug: " .. (db.general.debug and "On" or "Off"))
     return
   end
-  Print("Commands: /hui (options) | lock | xp | cast | loot | summon | debug")
+  if msg == "version" then
+    local info = NS.GetVersionInfo and NS.GetVersionInfo() or nil
+    if not info then
+      Print("Version info unavailable.")
+      return
+    end
+    local installed = tostring(info.installed or "unknown")
+    local latest = tostring(info.latest or "unknown")
+    local commit = tostring(info.commit or "unknown")
+    local buildDate = tostring(info.buildDate or "unknown")
+    local status = "unknown"
+    if info.cmp ~= nil then
+      if info.cmp < 0 then
+        status = "out-of-date"
+      elseif info.cmp > 0 then
+        status = "ahead"
+      else
+        status = "up-to-date"
+      end
+    end
+    Print(("Version status: %s (installed v%s, latest v%s; commit=%s; build=%s; source=%s)"):format(
+      status,
+      installed,
+      latest,
+      commit,
+      buildDate,
+      tostring(info.source or "unknown")
+    ))
+    return
+  end
+  Print("Commands: /hui (options) | lock | xp | cast | loot | summon | debug | version")
 end
 
 SLASH_HARATHUI1 = "/harathui"
