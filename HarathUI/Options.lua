@@ -27,29 +27,6 @@ local function GetAddonMetadataField(field)
   return nil
 end
 
-local function NormalizeCommitHash(hash)
-  if NS and NS.NormalizeCommitHash then
-    return NS.NormalizeCommitHash(hash)
-  end
-  if type(hash) ~= "string" then return nil end
-  local clean = hash:lower():match("(%x+)")
-  if not clean or clean == "" then return nil end
-  return clean
-end
-
-local function CompareCommitHashes(installed, latest)
-  if NS and NS.CompareCommitHashes then
-    return NS.CompareCommitHashes(installed, latest)
-  end
-  local a = NormalizeCommitHash(installed)
-  local b = NormalizeCommitHash(latest)
-  if not a or not b then return nil end
-  if a == b then return 0 end
-  if #a < #b and b:sub(1, #a) == a then return 0 end
-  if #b < #a and a:sub(1, #b) == b then return 0 end
-  return -1
-end
-
 local function GetVersionStatus(info)
   if NS and NS.GetVersionStatus then
     return NS.GetVersionStatus(info)
@@ -59,16 +36,8 @@ local function GetVersionStatus(info)
   if cmp ~= nil then
     if cmp < 0 then return "out-of-date" end
     if cmp > 0 then return "ahead" end
+    if cmp == 0 then return "up-to-date" end
   end
-  local hashCmp = info.hashCmp
-  if hashCmp == nil then
-    hashCmp = CompareCommitHashes(info.buildCommit or info.commit, info.latestCommit)
-  end
-  if hashCmp ~= nil then
-    if hashCmp == 0 then return "up-to-date" end
-    if hashCmp < 0 then return "out-of-date" end
-  end
-  if cmp == 0 then return "up-to-date" end
   return "unknown"
 end
 
@@ -77,30 +46,18 @@ local function GetVersionInfo()
     return NS.GetVersionInfo()
   end
   local installed = GetAddonMetadataField("Version")
-  local latest = GetAddonMetadataField("X-GitVersion") or GetAddonMetadataField("X-Git-Version")
-  local buildCommit = GetAddonMetadataField("X-Build-Commit")
-  local latestCommit = GetAddonMetadataField("X-Git-Commit")
-  local commit = buildCommit or latestCommit
-  local buildDate = GetAddonMetadataField("X-Build-Date")
-  local cmp = NS and NS.CompareVersions and NS.CompareVersions(installed, latest) or nil
-  local hashCmp = CompareCommitHashes(buildCommit or commit, latestCommit)
+  local latest = installed
+  local cmp = nil
   local status = GetVersionStatus({
     cmp = cmp,
-    hashCmp = hashCmp,
-    buildCommit = buildCommit or commit,
-    latestCommit = latestCommit,
   })
   return {
     installed = installed,
     latest = latest,
-    commit = commit,
-    buildCommit = buildCommit or commit,
-    latestCommit = latestCommit,
-    buildDate = buildDate,
     cmp = cmp,
-    hashCmp = hashCmp,
     status = status,
-    source = "toc-metadata",
+    source = "local-metadata",
+    authoritative = false,
   }
 end
 
@@ -585,17 +542,13 @@ function NS:InitOptions()
         if not GameTooltip then return end
         local info = GetVersionInfo()
         local status = (info and (info.status or GetVersionStatus(info))) or "unknown"
-        local source = tostring(info and info.sourceLabel or info and info.source or "unknown")
-        local peerName = tostring(info and info.peerName or "n/a")
+        local source = tostring(info and info.source or "unknown")
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine("Version Status", ORANGE[1], ORANGE[2], ORANGE[3])
         GameTooltip:AddLine(("Installed: v%s"):format(tostring(info and info.installed or "unknown")), 0.95, 0.95, 0.95)
         GameTooltip:AddLine(("Latest: v%s"):format(tostring(info and info.latest or "n/a")), 0.95, 0.95, 0.95)
-        GameTooltip:AddLine(("Build commit: %s"):format(tostring(info and (info.buildCommit or info.commit) or "unknown")), 0.85, 0.85, 0.85)
-        GameTooltip:AddLine(("Latest commit: %s"):format(tostring(info and info.latestCommit or "n/a")), 0.85, 0.85, 0.85)
-        GameTooltip:AddLine(("Build date: %s"):format(tostring(info and info.buildDate or "unknown")), 0.85, 0.85, 0.85)
         if info and info.peerName then
-          GameTooltip:AddLine(("Peer: %s"):format(peerName), 0.85, 0.85, 0.85)
+          GameTooltip:AddLine(("Peer: %s"):format(tostring(info.peerName)), 0.85, 0.85, 0.85)
         end
         if status == "out-of-date" then
           GameTooltip:AddLine("Status: Update available", 1.0, 0.35, 0.35)
@@ -608,7 +561,7 @@ function NS:InitOptions()
         end
         GameTooltip:AddLine(("Source: %s"):format(source), 0.7, 0.7, 0.7)
         if not (info and info.authoritative) then
-          GameTooltip:AddLine("Waiting for peer/hosted version data.", 0.7, 0.7, 0.7)
+          GameTooltip:AddLine("Waiting for peer version data.", 0.7, 0.7, 0.7)
         end
         GameTooltip:Show()
       end)

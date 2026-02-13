@@ -105,15 +105,6 @@ local function IsChatMessagingLocked()
   return false
 end
 
-local function CompareBuildDates(left, right)
-  if type(left) ~= "string" or type(right) ~= "string" then return nil end
-  if not left:match("^%d%d%d%d%-%d%d%-%d%d$") then return nil end
-  if not right:match("^%d%d%d%d%-%d%d%-%d%d$") then return nil end
-  if left < right then return -1 end
-  if left > right then return 1 end
-  return 0
-end
-
 local function GetSelfShortName()
   local me = UnitName and UnitName("player") or nil
   if type(me) ~= "string" or me == "" then
@@ -138,9 +129,9 @@ end
 local function NormalizeSender(sender)
   if type(sender) ~= "string" or sender == "" then return nil end
   if Ambiguate then
-    return Ambiguate(sender, "short")
+    return Ambiguate(sender, "none")
   end
-  return sender:match("^[^-]+") or sender
+  return sender
 end
 
 local function GetVersionBroadcastChannels()
@@ -175,18 +166,8 @@ end
 
 local function GetLocalBuildInfo()
   local installed = GetAddonMetadataField("Version")
-  local packagedVersion = GetAddonMetadataField("X-GitVersion") or GetAddonMetadataField("X-Git-Version")
-  local buildCommit = GetAddonMetadataField("X-Build-Commit")
-  local packagedCommit = GetAddonMetadataField("X-Git-Commit")
-  local buildDate = GetAddonMetadataField("X-Build-Date")
-  local commit = buildCommit or packagedCommit
   return {
     installed = installed,
-    packagedVersion = packagedVersion,
-    buildCommit = buildCommit,
-    packagedCommit = packagedCommit,
-    commit = commit,
-    buildDate = buildDate,
   }
 end
 
@@ -200,10 +181,10 @@ local function ComparePeerInfo(left, right)
     return cmp
   end
 
-  local dateCmp = CompareBuildDates(left.buildDate, right.buildDate)
-  if dateCmp and dateCmp ~= 0 then
-    return dateCmp
-  end
+  local leftSeen = left.seenAt or 0
+  local rightSeen = right.seenAt or 0
+  if leftSeen < rightSeen then return -1 end
+  if leftSeen > rightSeen then return 1 end
 
   return 0
 end
@@ -277,25 +258,6 @@ function NS.CompareVersions(left, right)
   return 0
 end
 
-function NS.NormalizeCommitHash(hash)
-  if type(hash) ~= "string" then return nil end
-  local clean = hash:lower():match("(%x+)")
-  if not clean or clean == "" then return nil end
-  return clean
-end
-
-function NS.CompareCommitHashes(installed, latest)
-  local a = NS.NormalizeCommitHash(installed)
-  local b = NS.NormalizeCommitHash(latest)
-  if not a or not b then return nil end
-  if a == b then return 0 end
-  -- Treat short/long forms of the same SHA as equal.
-  if #a < #b and b:sub(1, #a) == a then return 0 end
-  if #b < #a and a:sub(1, #b) == b then return 0 end
-  -- Git hashes alone cannot tell ahead/behind without graph context.
-  return -1
-end
-
 function NS.GetVersionStatus(info)
   if type(info) ~= "table" then return "unknown" end
   if type(info.status) == "string" and info.status ~= "" then
@@ -309,72 +271,39 @@ function NS.GetVersionStatus(info)
     if cmp == 0 then return "up-to-date" end
   end
 
-  if info.strictCommit then
-    local hashCmp = info.hashCmp
-    if hashCmp == nil and (info.buildCommit or info.commit) and info.latestCommit then
-      hashCmp = NS.CompareCommitHashes(info.buildCommit or info.commit, info.latestCommit)
-    end
-    if hashCmp ~= nil then
-      if hashCmp == 0 then return "up-to-date" end
-      if hashCmp < 0 then return "out-of-date" end
-    end
-  end
-
   return "unknown"
 end
 
 function NS.GetVersionInfo()
   local localInfo = GetLocalBuildInfo()
   local installed = localInfo.installed
-  local buildCommit = localInfo.buildCommit or localInfo.commit
-  local buildDate = localInfo.buildDate
   RecomputeBestPeer()
 
-  local latest, latestCommit, latestBuildDate
-  local source = "local-toc"
-  local sourceLabel = "Local metadata only"
+  local latest
+  local source = "local-metadata"
   local authoritative = false
   local peerName
 
-  local external = NS._huiHostedVersionInfo
-  if type(external) == "table" and type(external.version) == "string" and external.version ~= "" then
-    authoritative = true
-    source = "external-feed"
-    sourceLabel = external.sourceLabel or "External feed"
-    latest = external.version
-    latestCommit = external.commit
-    latestBuildDate = external.buildDate
-  elseif versionTracker.bestPeer and type(versionTracker.bestPeer.version) == "string" and versionTracker.bestPeer.version ~= "" then
+  if versionTracker.bestPeer and type(versionTracker.bestPeer.version) == "string" and versionTracker.bestPeer.version ~= "" then
     authoritative = true
     source = "addon-comms"
-    sourceLabel = "Addon comms"
     latest = versionTracker.bestPeer.version
-    latestCommit = versionTracker.bestPeer.commit
-    latestBuildDate = versionTracker.bestPeer.buildDate
     peerName = versionTracker.bestPeer.sender
+  else
+    latest = installed
   end
 
   local cmp = authoritative and NS.CompareVersions(installed, latest) or nil
-  local hashCmp = (latestCommit and buildCommit) and NS.CompareCommitHashes(buildCommit, latestCommit) or nil
   local status = authoritative and NS.GetVersionStatus({ cmp = cmp }) or "unknown"
 
   return {
     installed = installed,
     latest = latest,
-    commit = buildCommit or localInfo.commit,
-    buildCommit = buildCommit or localInfo.commit,
-    latestCommit = latestCommit,
-    buildDate = buildDate,
-    latestBuildDate = latestBuildDate,
     cmp = cmp,
-    hashCmp = hashCmp,
     status = status,
     source = source,
-    sourceLabel = sourceLabel,
     authoritative = authoritative,
     peerName = peerName,
-    packagedVersion = localInfo.packagedVersion,
-    packagedCommit = localInfo.packagedCommit,
   }
 end
 
@@ -395,8 +324,6 @@ local function PrintOutOfDateNotice()
     local detail = ""
     if source == "addon-comms" and info and info.peerName then
       detail = (" (seen from %s)"):format(tostring(info.peerName))
-    elseif source == "external-feed" and info and info.sourceLabel then
-      detail = (" (%s)"):format(tostring(info.sourceLabel))
     end
     Print(("Update available: installed v%s, latest v%s%s."):format(tostring(installed), tostring(latest), detail))
     versionTracker.warnedOutdated = true
@@ -406,9 +333,7 @@ end
 local function BuildVersionResponseMessage()
   local localInfo = GetLocalBuildInfo()
   local installed = tostring(localInfo.installed or "0.0.0")
-  local commit = tostring(localInfo.buildCommit or localInfo.commit or "")
-  local buildDate = tostring(localInfo.buildDate or "")
-  return ("V|%d|%s|%s|%s"):format(VERSION_COMM_PROTOCOL, installed, commit, buildDate)
+  return ("V|%d|%s"):format(VERSION_COMM_PROTOCOL, installed)
 end
 
 local function SendVersionCommMessage(payload)
@@ -439,7 +364,7 @@ local function SendVersionResponse(force)
   SendVersionCommMessage(BuildVersionResponseMessage())
 end
 
-local function ProcessPeerVersion(sender, version, commit, peerBuildDate)
+local function ProcessPeerVersion(sender, version)
   if type(version) ~= "string" or version == "" then return end
   if IsSelfSender(sender) then return end
   local key = NormalizeSender(sender) or sender
@@ -448,15 +373,11 @@ local function ProcessPeerVersion(sender, version, commit, peerBuildDate)
   local current = versionTracker.peers[key]
   local changed = (not current)
     or current.version ~= version
-    or current.commit ~= commit
-    or current.buildDate ~= peerBuildDate
 
   versionTracker.peers[key] = {
     sender = key,
     rawSender = sender,
     version = version,
-    commit = commit,
-    buildDate = peerBuildDate,
     seenAt = time(),
   }
 
@@ -472,7 +393,7 @@ local function HandleVersionCommMessage(message, sender)
   if type(message) ~= "string" or message == "" then return end
   if IsSelfSender(sender) then return end
 
-  local msgType, protocol, p1, p2, p3 = strsplit("|", message)
+  local msgType, protocol, p1 = strsplit("|", message)
   if tonumber(protocol) ~= VERSION_COMM_PROTOCOL then
     return
   end
@@ -487,9 +408,7 @@ local function HandleVersionCommMessage(message, sender)
   end
 
   local version = tostring(p1 or "")
-  local commit = (type(p2) == "string" and p2 ~= "") and p2 or nil
-  local peerBuildDate = (type(p3) == "string" and p3 ~= "") and p3 or nil
-  ProcessPeerVersion(sender, version, commit, peerBuildDate)
+  ProcessPeerVersion(sender, version)
 end
 
 local function InitializeVersionTracker()
@@ -503,42 +422,6 @@ local function InitializeVersionTracker()
   elseif versionTracker.prefixRegistrationWarned then
     NS:Debug("Version comm prefix registration recovered:", VERSION_COMM_PREFIX)
     versionTracker.prefixRegistrationWarned = false
-  end
-end
-
-function NS:SetHostedVersionInfo(info)
-  local old = NS._huiHostedVersionInfo
-  if type(info) ~= "table" then
-    NS._huiHostedVersionInfo = nil
-  else
-    local version = type(info.version) == "string" and info.version or nil
-    local commit = type(info.commit) == "string" and info.commit or nil
-    local buildDate = type(info.buildDate) == "string" and info.buildDate or nil
-    local sourceLabel = type(info.sourceLabel) == "string" and info.sourceLabel or "External feed"
-    if version and version ~= "" then
-      NS._huiHostedVersionInfo = {
-        version = version,
-        commit = commit,
-        buildDate = buildDate,
-        sourceLabel = sourceLabel,
-      }
-    else
-      NS._huiHostedVersionInfo = nil
-    end
-  end
-
-  local new = NS._huiHostedVersionInfo
-  local changed = (old == nil and new ~= nil)
-    or (old ~= nil and new == nil)
-    or (old and new and (
-      old.version ~= new.version
-      or old.commit ~= new.commit
-      or old.buildDate ~= new.buildDate
-      or old.sourceLabel ~= new.sourceLabel
-    ))
-  if changed then
-    NotifyVersionInfoUpdated()
-    PrintOutOfDateNotice()
   end
 end
 
@@ -874,27 +757,15 @@ local function HandleSlash(msg)
     end
     local installed = tostring(info.installed or "unknown")
     local latest = tostring(info.latest or "unknown")
-    local buildCommit = tostring(info.buildCommit or info.commit or "unknown")
-    local latestCommit = tostring(info.latestCommit or "unknown")
-    local buildDate = tostring(info.buildDate or "unknown")
     local source = tostring(info.source or "unknown")
-    local sourceLabel = tostring(info.sourceLabel or source)
     local peerName = tostring(info.peerName or "n/a")
-    local packagedVersion = tostring(info.packagedVersion or "n/a")
-    local packagedCommit = tostring(info.packagedCommit or "n/a")
     local status = (info.status or (NS.GetVersionStatus and NS.GetVersionStatus(info)) or "unknown")
-    Print(("Version status: %s (installed v%s, latest v%s; buildCommit=%s; latestCommit=%s; build=%s; source=%s; peer=%s; tocVersion=%s; tocCommit=%s; sourceLabel=%s)"):format(
+    Print(("Version status: %s (installed v%s, latest v%s; source=%s; peer=%s)"):format(
       status,
       installed,
       latest,
-      buildCommit,
-      latestCommit,
-      buildDate,
       source,
-      peerName,
-      packagedVersion,
-      packagedCommit,
-      sourceLabel
+      peerName
     ))
     return
   end
