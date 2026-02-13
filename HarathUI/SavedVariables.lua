@@ -55,7 +55,6 @@ NS.DEFAULTS = {
       showText = true,
       showShield = true,
       showLatencySpark = true,
-      previewWhenUnlocked = true,
       textFont = "BigNoodleTilting",
       textColor = { r = 1.0, g = 1.0, b = 1.0 },
       textOutline = "NONE",

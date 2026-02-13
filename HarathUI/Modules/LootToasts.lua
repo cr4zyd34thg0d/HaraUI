@@ -747,6 +747,7 @@ function M:Apply()
 end
 
 function M:SetLocked(locked)
+  if not M.active then return end
   local anchor = EnsureAnchor()
   if locked then
     anchor._huiMover:Hide()

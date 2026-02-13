@@ -1553,6 +1553,28 @@ ApplyCoreCharacterFontAndName = function(db)
 end
 
 local function HideDefaultCharacterStats()
+  local function SetDefaultStatRowsMouseEnabled(enabled)
+    local pane = _G.CharacterStatsPane
+    if pane then
+      if pane.EnableMouse then pane:EnableMouse(enabled) end
+      if pane.SetMouseClickEnabled then pane:SetMouseClickEnabled(enabled) end
+      if pane.SetMouseMotionEnabled then pane:SetMouseMotionEnabled(enabled) end
+    end
+
+    for i = 1, 80 do
+      local row = _G["CharacterStatFrame" .. i]
+      if row then
+        if row.EnableMouse then row:EnableMouse(enabled) end
+        if row.SetMouseClickEnabled then row:SetMouseClickEnabled(enabled) end
+        if row.SetMouseMotionEnabled then row:SetMouseMotionEnabled(enabled) end
+        if not enabled then
+          if row.SetAlpha then row:SetAlpha(0) end
+          if row.Hide then row:Hide() end
+        end
+      end
+    end
+  end
+
   if _G.CharacterStatsPane then
     _G.CharacterStatsPane:SetAlpha(0)
     _G.CharacterStatsPane:EnableMouse(false)
@@ -1590,6 +1612,7 @@ local function HideDefaultCharacterStats()
       SaveAndHideRegion(row.Value or _G[row:GetName() .. "Value"])
     end
   end
+  SetDefaultStatRowsMouseEnabled(false)
 
   local slotFrameNames = {
     "CharacterBackSlotFrame",
@@ -1630,6 +1653,24 @@ local function HideDefaultCharacterStats()
 end
 
 local function ShowDefaultCharacterStats()
+  local function SetDefaultStatRowsMouseEnabled(enabled)
+    local pane = _G.CharacterStatsPane
+    if pane then
+      if pane.EnableMouse then pane:EnableMouse(enabled) end
+      if pane.SetMouseClickEnabled then pane:SetMouseClickEnabled(enabled) end
+      if pane.SetMouseMotionEnabled then pane:SetMouseMotionEnabled(enabled) end
+    end
+
+    for i = 1, 80 do
+      local row = _G["CharacterStatFrame" .. i]
+      if row then
+        if row.EnableMouse then row:EnableMouse(enabled) end
+        if row.SetMouseClickEnabled then row:SetMouseClickEnabled(enabled) end
+        if row.SetMouseMotionEnabled then row:SetMouseMotionEnabled(enabled) end
+      end
+    end
+  end
+
   if _G.CharacterStatsPane then
     _G.CharacterStatsPane:SetAlpha(1)
     _G.CharacterStatsPane:EnableMouse(true)
@@ -1655,6 +1696,7 @@ local function ShowDefaultCharacterStats()
       ShowRegion(row.Value or _G[row:GetName() .. "Value"])
     end
   end
+  SetDefaultStatRowsMouseEnabled(true)
 end
 
 local function ApplyReputationPaneMode(db)
@@ -3827,6 +3869,20 @@ local function HideCharacterTabsButtons()
 end
 
 local function ApplyMinimalChonkyBase()
+  local function SuppressDefaultStatRows()
+    for i = 1, 80 do
+      local row = _G["CharacterStatFrame" .. i]
+      if row then
+        SaveAndHideRegion(row)
+        SaveAndHideRegion(row.Label or _G[row:GetName() .. "Label"])
+        SaveAndHideRegion(row.Value or _G[row:GetName() .. "Value"])
+        if row.EnableMouse then row:EnableMouse(false) end
+        if row.SetMouseClickEnabled then row:SetMouseClickEnabled(false) end
+        if row.SetMouseMotionEnabled then row:SetMouseMotionEnabled(false) end
+      end
+    end
+  end
+
   -- Keep only the essential character foundation visible.
   local toHide = {
     _G.CharacterFrameBg,
@@ -3891,7 +3947,10 @@ local function ApplyMinimalChonkyBase()
   if _G.CharacterStatsPane then
     _G.CharacterStatsPane:SetAlpha(0)
     _G.CharacterStatsPane:EnableMouse(false)
+    if _G.CharacterStatsPane.SetMouseClickEnabled then _G.CharacterStatsPane:SetMouseClickEnabled(false) end
+    if _G.CharacterStatsPane.SetMouseMotionEnabled then _G.CharacterStatsPane:SetMouseMotionEnabled(false) end
   end
+  SuppressDefaultStatRows()
   if _G.CharacterModelScene and _G.CharacterModelScene.ControlFrame then
     SaveAndHideRegion(_G.CharacterModelScene.ControlFrame)
   end
@@ -3964,7 +4023,10 @@ local function EnsureRightPanel(db)
   })
   rightPanel:SetBackdropColor(0, 0, 0, 0)
   rightPanel:SetBackdropBorderColor(0, 0, 0, 0)
-  rightPanel:SetFrameStrata(CharacterFrame:GetFrameStrata() or "MEDIUM")
+  -- Keep Mythic+ panel above custom stats layers to avoid tooltip/hit-test bleed.
+  rightPanel:SetFrameStrata("HIGH")
+  SafeFrameLevel(rightPanel, (CharacterFrame:GetFrameLevel() or 1) + 80)
+  rightPanel:EnableMouse(true)
   rightPanel:SetClampedToScreen(true)
   rightPanel:SetMovable(false)
 
@@ -4263,6 +4325,10 @@ local function PositionRightPanel(db)
   if xOffset == nil then
     xOffset = 0
   elseif math.abs(xOffset - INTEGRATED_RIGHT_GAP) < 0.001 then
+    xOffset = 0
+    db.charsheet.rightPanelOffsetX = 0
+  elseif xOffset < 0 then
+    -- Keep integrated panel flush/right of CharacterFrame; no overlap into stats pane.
     xOffset = 0
     db.charsheet.rightPanelOffsetX = 0
   end
@@ -5600,7 +5666,8 @@ function M:Refresh()
   end
   local blankBottomMode = db.charsheet.styleStats and (activeMode == 2 or activeMode == 3)
   local rightCollapsed = db.charsheet.rightPanelCollapsed == true
-  local showRight = (db.charsheet.showRightPanel ~= false) and not blankBottomMode and not rightCollapsed
+  local charVisible = CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()
+  local showRight = charVisible and (db.charsheet.showRightPanel ~= false) and not blankBottomMode and not rightCollapsed
   if showRight then
     local panel = EnsureRightPanel(db)
     if panel then

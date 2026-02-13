@@ -5,6 +5,7 @@
     M:Apply()        - Initialize/update with current settings
     M:Disable()      - Clean up and restore Blizzard cast bar
     M:SetLocked()    - Toggle drag mode
+    M:Preview()      - Toggle preview state
 
   Events Registered:
     - UNIT_SPELLCAST_START
@@ -27,6 +28,8 @@ local state = {
   startMS = 0,
   endMS = 0,
   preview = false,
+  manualPreview = false,
+  unlockPlaceholder = false,
   notInterruptible = false,
 }
 local lagCache
@@ -141,7 +144,34 @@ local function Create()
   NS:MakeMovable(f, "castbar", "Cast Bar (drag)")
 end
 
-local function StartCast(preview)
+local function IsFramesUnlocked()
+  local db = NS:GetDB()
+  return db and db.general and db.general.framesLocked == false
+end
+
+local function ShowUnlockPlaceholder()
+  if not f then return end
+  if state.active then return end
+
+  state.unlockPlaceholder = true
+  f.icon:SetTexture(134400)
+  f.text:SetText("Cast Bar")
+  f.time:SetText("")
+  f.bar:SetMinMaxValues(0, 1)
+  f.bar:SetValue(0)
+  if f.spark then f.spark:Hide() end
+  if f.shield then f.shield:Hide() end
+  f:Show()
+end
+
+local function HideUnlockPlaceholder()
+  state.unlockPlaceholder = false
+  if not state.active and f then
+    f:Hide()
+  end
+end
+
+local function StartCast(preview, manualPreview)
   local name, _, texture, startMS, endMS, _, _, notInterruptible = UnitCastingInfo("player")
   local channel = false
 
@@ -162,7 +192,9 @@ local function StartCast(preview)
   if not name then return end
 
   state.active = true
-  state.preview = preview
+  state.preview = preview and true or false
+  state.manualPreview = (preview and manualPreview) and true or false
+  state.unlockPlaceholder = false
   state.channel = channel
   state.startMS = startMS
   state.endMS = endMS
@@ -176,8 +208,13 @@ end
 local function Stop()
   state.active = false
   state.preview = false
+  state.manualPreview = false
   state.notInterruptible = false
-  if f then f:Hide() end
+  if IsFramesUnlocked() then
+    ShowUnlockPlaceholder()
+  elseif f then
+    f:Hide()
+  end
 end
 
 local function OnUpdate()
@@ -230,17 +267,10 @@ local function OnUpdate()
   end
 
   if now >= state.endMS then
-    if state.preview then
-      if db.castbar.previewWhenUnlocked then
-        StartCast(true)
-      else
-        Stop()
-      end
+    if state.preview and state.manualPreview then
+      StartCast(true, true)
     else
       Stop()
-      if db.castbar.previewWhenUnlocked then
-        StartCast(true)
-      end
     end
   end
 end
@@ -264,11 +294,17 @@ local function ApplyLayout(db)
 end
 
 function M:SetLocked(locked)
-  if not f then return end
+  if not M.active or not f then return end
   if locked then
     f._huiMover:Hide()
+    if state.unlockPlaceholder then
+      HideUnlockPlaceholder()
+    end
   else
     f._huiMover:Show()
+    if not state.active then
+      ShowUnlockPlaceholder()
+    end
   end
 end
 
@@ -318,22 +354,34 @@ function M:Apply()
   ApplyTextAppearance(db)
 
   M:SetLocked(db.general.framesLocked)
-
-  if db.castbar.previewWhenUnlocked then
-    if not state.active then
-      local name = UnitCastingInfo("player")
-      local cname = UnitChannelInfo("player")
-      if not name and not cname then
-        StartCast(true)
-      end
-    end
-  else
-    if state.preview then Stop() end
+  if state.unlockPlaceholder and db.general.framesLocked then
+    HideUnlockPlaceholder()
   end
+end
+
+function M:Preview()
+  local db = NS:GetDB()
+  if not db or not db.castbar or not db.castbar.enabled then return false end
+  if not f then
+    Create()
+  end
+
+  if state.preview and state.manualPreview then
+    Stop()
+    return false
+  end
+
+  StartCast(true, true)
+  return true
 end
 
 function M:Disable()
   M.active = false
+  state.active = false
+  state.preview = false
+  state.manualPreview = false
+  state.unlockPlaceholder = false
+  state.notInterruptible = false
   if f then f:Hide() end
   if f then
     f:SetScript("OnUpdate", nil)

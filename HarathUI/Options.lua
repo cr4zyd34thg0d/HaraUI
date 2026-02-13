@@ -675,13 +675,12 @@ function NS:InitOptions()
         UpdateNavIndicators()
       end)
 
-      local move = MakeCheckbox(parent, "Unlock Frames", "Drag XP/Rep and Cast Bar when enabled.")
+      local move = MakeCheckbox(parent, "Unlock Frames", "Show simple drag outlines for movable UI elements.")
       move:SetPoint("TOPLEFT", enable, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
       move:SetChecked(not db.general.framesLocked)
       move:SetScript("OnClick", function()
         db.general.framesLocked = not move:GetChecked()
         if NS.SetFramesLocked then NS:SetFramesLocked(db.general.framesLocked) end
-        NS:ApplyAll()
       end)
 
       local moveOptions = MakeCheckbox(parent, "Move Options", "Drag the Blizzard Settings window.")

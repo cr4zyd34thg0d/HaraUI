@@ -325,13 +325,47 @@ function NS:MakeMovable(frame, moduleKey, label)
   handle:SetFrameLevel(frame:GetFrameLevel() + 50)
   handle:Hide()
 
-  handle.tex = handle:CreateTexture(nil, "OVERLAY")
+  local accent = (NS.THEME and NS.THEME.ACCENT) or { r = 1, g = 0.45, b = 0.1 }
+  local ar = accent.r or 1
+  local ag = accent.g or 0.45
+  local ab = accent.b or 0.1
+  local moverAlpha = (NS.THEME and NS.THEME.MOVER_ALPHA) or 0.06
+
+  -- Keep unlock visuals lightweight: thin outline with subtle fill.
+  handle.tex = handle:CreateTexture(nil, "BACKGROUND")
   handle.tex:SetAllPoints(true)
-  handle.tex:SetColorTexture(1, 1, 1, NS.THEME.MOVER_ALPHA)
+  handle.tex:SetColorTexture(ar, ag, ab, math.min(0.03, moverAlpha * 0.5))
+
+  handle.borderTop = handle:CreateTexture(nil, "OVERLAY")
+  handle.borderTop:SetPoint("TOPLEFT", 0, 0)
+  handle.borderTop:SetPoint("TOPRIGHT", 0, 0)
+  handle.borderTop:SetHeight(1)
+  handle.borderTop:SetColorTexture(ar, ag, ab, 0.95)
+
+  handle.borderBottom = handle:CreateTexture(nil, "OVERLAY")
+  handle.borderBottom:SetPoint("BOTTOMLEFT", 0, 0)
+  handle.borderBottom:SetPoint("BOTTOMRIGHT", 0, 0)
+  handle.borderBottom:SetHeight(1)
+  handle.borderBottom:SetColorTexture(ar, ag, ab, 0.95)
+
+  handle.borderLeft = handle:CreateTexture(nil, "OVERLAY")
+  handle.borderLeft:SetPoint("TOPLEFT", 0, 0)
+  handle.borderLeft:SetPoint("BOTTOMLEFT", 0, 0)
+  handle.borderLeft:SetWidth(1)
+  handle.borderLeft:SetColorTexture(ar, ag, ab, 0.95)
+
+  handle.borderRight = handle:CreateTexture(nil, "OVERLAY")
+  handle.borderRight:SetPoint("TOPRIGHT", 0, 0)
+  handle.borderRight:SetPoint("BOTTOMRIGHT", 0, 0)
+  handle.borderRight:SetWidth(1)
+  handle.borderRight:SetColorTexture(ar, ag, ab, 0.95)
 
   handle.label = handle:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   handle.label:SetPoint("CENTER")
   handle.label:SetText(label or "Drag to move")
+  handle.label:SetTextColor(ar, ag, ab, 1)
+  handle.label:SetShadowColor(0, 0, 0, 1)
+  handle.label:SetShadowOffset(1, -1)
 
   handle:SetScript("OnMouseDown", function(_, btn)
     if btn == "LeftButton" then frame:StartMoving() end

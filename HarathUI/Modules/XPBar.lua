@@ -22,7 +22,7 @@ NS:RegisterModule("xpbar", M)
 M.active = false
 
 local bar
-local previewUntil
+local previewActive = false
 local sessionStart
 local sessionStartXP
 local cachedQuestXP = 0
@@ -225,13 +225,33 @@ local function GetQuestXP(force)
   return cachedQuestXP
 end
 
+local function IsFramesUnlocked(db)
+  return db and db.general and db.general.framesLocked == false
+end
+
+local function ShowUnlockPlaceholder()
+  if not bar then return end
+  bar._huiUnlockPlaceholder = true
+  bar:SetValue(0)
+  bar.overlay:SetValue(0)
+  UpdateSegments(0, 1, 0, 0)
+  bar.levelText:SetText("XP / Rep Bar")
+  bar.xpText:SetText("")
+  bar.pctText:SetText("")
+  bar.detailText:SetText("")
+  bar.sessionText:SetText("")
+  bar.rateText:SetText("")
+  bar:Show()
+end
+
 local function Update(forceQuest)
   if not bar then return end
   local db = NS:GetDB()
   if not db or not db.xpbar.enabled then return end
 
-  if previewUntil and GetTime() < previewUntil then
-    -- Short preview state for the options button.
+  if previewActive then
+    -- Toggle preview state from the options button.
+    bar._huiUnlockPlaceholder = nil
     bar:SetValue(0.658)
     bar.overlay:SetValue(0)
     UpdateSegments(0.658, 1, 0.048, 0.064)
@@ -264,22 +284,27 @@ local function Update(forceQuest)
     end
     bar:Show()
     return
-  elseif previewUntil then
-    previewUntil = nil
   end
 
+  local unlocked = IsFramesUnlocked(db)
   local level = UnitLevel("player")
   local xpMax = UnitXPMax("player") or 0
   local atMaxLevel = (xpMax == 0) or (level >= 80)
 
   if atMaxLevel then
     if not db.xpbar.showAtMaxLevel then
-      bar:Hide()
+      if unlocked then
+        ShowUnlockPlaceholder()
+      else
+        bar._huiUnlockPlaceholder = nil
+        bar:Hide()
+      end
       return
     end
 
     local rep = WatchedReputationInfo()
     if rep then
+      bar._huiUnlockPlaceholder = nil
       local cur = (rep.currentStanding or 0) - (rep.min or 0)
       local max = (rep.max or 1) - (rep.min or 0)
       local pct = (max > 0) and (cur / max) or 0
@@ -304,10 +329,16 @@ local function Update(forceQuest)
     end
 
     if db.xpbar.hideAtMaxIfNoRep and not db.xpbar.showAtMaxLevel then
-      bar:Hide()
+      if unlocked then
+        ShowUnlockPlaceholder()
+      else
+        bar._huiUnlockPlaceholder = nil
+        bar:Hide()
+      end
       return
     end
 
+    bar._huiUnlockPlaceholder = nil
     if db.xpbar.showAtMaxLevel then
       bar:SetValue(1)
     else
@@ -334,6 +365,7 @@ local function Update(forceQuest)
     return
   end
 
+  bar._huiUnlockPlaceholder = nil
   local cur = UnitXP("player")
   local max = xpMax
   local pct = (max > 0) and (cur / max) or 0
@@ -402,13 +434,20 @@ local function ShouldRealtimeUpdate(db)
 end
 
 function M:SetLocked(locked)
-  if not bar or not bar._huiMover then return end
+  if not M.active or not bar or not bar._huiMover then return end
   if locked then
     bar:EnableMouse(false)
     bar._huiMover:Hide()
+    if bar._huiUnlockPlaceholder then
+      bar._huiUnlockPlaceholder = nil
+      Update(false)
+    end
   else
     bar:EnableMouse(true)
     bar._huiMover:Show()
+    if not bar:IsShown() then
+      ShowUnlockPlaceholder()
+    end
   end
 end
 
@@ -515,12 +554,17 @@ function M:Apply()
 end
 
 function M:Preview()
-  previewUntil = GetTime() + 3
+  previewActive = not previewActive
   Update()
+  return previewActive
 end
 
 function M:Disable()
   M.active = false
+  previewActive = false
+  if bar then
+    bar._huiUnlockPlaceholder = nil
+  end
   if bar then bar:Hide() end
   if updateTimer then
     updateTimer:Cancel()
