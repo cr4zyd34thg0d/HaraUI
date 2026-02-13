@@ -13,6 +13,7 @@ local VERSION_PEER_TTL = 600
 
 local versionTracker = {
   prefixRegistered = false,
+  prefixRegistrationWarned = false,
   peers = {},
   bestPeer = nil,
   lastQueryAt = 0,
@@ -48,15 +49,43 @@ local function GetAddonMetadataField(field)
 end
 
 local function RegisterAddonMessagePrefixCompat(prefix)
+  local function IsRegistered()
+    if C_ChatInfo and C_ChatInfo.IsAddonMessagePrefixRegistered then
+      local ok = C_ChatInfo.IsAddonMessagePrefixRegistered(prefix)
+      if ok == true or ok == 1 then
+        return true
+      end
+    end
+    if IsAddonMessagePrefixRegistered then
+      local ok = IsAddonMessagePrefixRegistered(prefix)
+      if ok == true or ok == 1 then
+        return true
+      end
+    end
+    return false
+  end
+
+  if type(prefix) ~= "string" or prefix == "" then
+    return false
+  end
+
+  if IsRegistered() then
+    return true
+  end
+
   if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
     local ok = C_ChatInfo.RegisterAddonMessagePrefix(prefix)
-    return ok == true or ok == 1
+    if ok == true or ok == 1 or IsRegistered() then
+      return true
+    end
   end
   if RegisterAddonMessagePrefix then
     local ok = RegisterAddonMessagePrefix(prefix)
-    return ok == true or ok == 1
+    if ok == true or ok == 1 or IsRegistered() then
+      return true
+    end
   end
-  return false
+  return IsRegistered()
 end
 
 local function SendAddonMessageCompat(prefix, message, channel, target)
@@ -467,7 +496,13 @@ local function InitializeVersionTracker()
   if versionTracker.prefixRegistered then return end
   versionTracker.prefixRegistered = RegisterAddonMessagePrefixCompat(VERSION_COMM_PREFIX)
   if not versionTracker.prefixRegistered then
-    NS:Debug("Version comm prefix registration failed:", VERSION_COMM_PREFIX)
+    if not versionTracker.prefixRegistrationWarned then
+      NS:Debug("Version comm prefix registration failed:", VERSION_COMM_PREFIX)
+      versionTracker.prefixRegistrationWarned = true
+    end
+  elseif versionTracker.prefixRegistrationWarned then
+    NS:Debug("Version comm prefix registration recovered:", VERSION_COMM_PREFIX)
+    versionTracker.prefixRegistrationWarned = false
   end
 end
 
@@ -903,6 +938,9 @@ f:SetScript("OnEvent", function(_, event, ...)
       HandleVersionCommMessage(message, sender)
     end
   elseif event == "GROUP_ROSTER_UPDATE" or event == "GUILD_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
+    if not versionTracker.prefixRegistered then
+      InitializeVersionTracker()
+    end
     SendVersionQuery(false)
     if event == "GROUP_ROSTER_UPDATE" then
       SendVersionResponse(false)

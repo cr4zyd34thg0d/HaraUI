@@ -4,6 +4,9 @@ NS:RegisterModule("charsheet", M)
 
 M.active = false
 M._pendingNativeMode = nil
+M._mirroringNativeSubframeSwitch = false
+M._deferredNativeModeMirror = nil
+M._deferredNativeModeRefreshQueued = false
 
 local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 
@@ -2436,6 +2439,88 @@ local function ResolveEffectiveCharacterMode()
   return 1
 end
 
+M._ResolveModeFromSubFrameToken = function(subFrameToken)
+  local name = subFrameToken
+  if type(name) == "table" and name.GetName then
+    name = name:GetName()
+  end
+  if type(name) ~= "string" or name == "" then
+    return ResolveNativeCharacterMode()
+  end
+  if name == "PaperDollFrame" then
+    return 1
+  end
+  if name == "ReputationFrame" then
+    return 2
+  end
+  if name == "TokenFrame" or name == "CurrencyFrame" or name == "CharacterFrameTokenFrame" then
+    return 3
+  end
+  if name:find("PaperDoll", 1, true) then
+    return 1
+  end
+  if name:find("Reputation", 1, true) then
+    return 2
+  end
+  if name:find("Token", 1, true) or name:find("Currency", 1, true) then
+    return 3
+  end
+  return ResolveNativeCharacterMode()
+end
+
+M._TriggerBottomModeButton = function(mode)
+  if mode ~= 1 and mode ~= 2 and mode ~= 3 then
+    return false
+  end
+  local stats = EnsureCustomStatsFrame and EnsureCustomStatsFrame() or customStatsFrame
+  local btn = stats and stats.modeButtons and stats.modeButtons[mode]
+  if not (btn and btn.Click) then
+    return false
+  end
+  M._mirroringNativeSubframeSwitch = true
+  local ok = pcall(btn.Click, btn)
+  M._mirroringNativeSubframeSwitch = false
+  return ok == true
+end
+
+M._RunDeferredNativeModeMirror = function()
+  M._deferredNativeModeRefreshQueued = false
+  if not M.active then return end
+  if suppressSubFrameRefresh or M._mirroringNativeSubframeSwitch then return end
+  local liveDB = NS and NS.GetDB and NS:GetDB() or nil
+  if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then
+    M._deferredNativeModeMirror = nil
+    return
+  end
+  if not (CharacterFrame and CharacterFrame:IsShown()) then
+    return
+  end
+  local mode = M._deferredNativeModeMirror
+  if mode == 0 then
+    mode = nil
+  end
+  if not mode then
+    mode = ResolveNativeCharacterMode()
+  end
+  M._deferredNativeModeMirror = nil
+  if mode and M._TriggerBottomModeButton(mode) then
+    return
+  end
+  M._pendingNativeMode = nil
+  SyncCustomModeToNativePanel()
+  M:Refresh()
+end
+
+M._QueueDeferredNativeModeMirror = function()
+  if M._deferredNativeModeRefreshQueued then return end
+  if C_Timer and C_Timer.After then
+    M._deferredNativeModeRefreshQueued = true
+    C_Timer.After(0, M._RunDeferredNativeModeMirror)
+  else
+    M._RunDeferredNativeModeMirror()
+  end
+end
+
 ShowNativeCharacterMode = function(mode)
   if not CharacterFrame_ShowSubFrame then
     return false
@@ -3321,21 +3406,21 @@ local function EnsureCustomGearFrame()
     row.bg:SetAllPoints(true)
     row.bg:SetColorTexture(0.14, 0.02, 0.20, 0.32)
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -5)
+    row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -4)
     row.name:SetJustifyH("LEFT")
     row.name:SetWidth(GEAR_ROW_WIDTH - 16)
     row.name:SetMaxLines(1)
     if row.name.SetWordWrap then row.name:SetWordWrap(false) end
     row.name:SetTextColor(0.92, 0.46, 1.0, 1)
     row.track = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.track:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -1)
+    row.track:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -4)
     row.track:SetJustifyH("LEFT")
     row.track:SetWidth(GEAR_ROW_WIDTH - 16)
     row.track:SetMaxLines(1)
     if row.track.SetWordWrap then row.track:SetWordWrap(false) end
     row.track:SetTextColor(0.98, 0.90, 0.35, 1)
     row.enchant = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.enchant:SetPoint("TOPLEFT", row.track, "BOTTOMLEFT", 0, -1)
+    row.enchant:SetPoint("TOPLEFT", row.track, "BOTTOMLEFT", 0, -4)
     row.enchant:SetJustifyH("LEFT")
     row.enchant:SetWidth(GEAR_ROW_WIDTH - 30)
     row.enchant:SetMaxLines(1)
@@ -3358,21 +3443,21 @@ local function EnsureCustomGearFrame()
     row.bg:SetAllPoints(true)
     row.bg:SetColorTexture(0.14, 0.02, 0.20, 0.32)
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.name:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -5)
+    row.name:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -4)
     row.name:SetJustifyH("RIGHT")
     row.name:SetWidth(GEAR_ROW_WIDTH - 16)
     row.name:SetMaxLines(1)
     if row.name.SetWordWrap then row.name:SetWordWrap(false) end
     row.name:SetTextColor(0.92, 0.46, 1.0, 1)
     row.track = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.track:SetPoint("TOPRIGHT", row.name, "BOTTOMRIGHT", 0, -1)
+    row.track:SetPoint("TOPRIGHT", row.name, "BOTTOMRIGHT", 0, -4)
     row.track:SetJustifyH("RIGHT")
     row.track:SetWidth(GEAR_ROW_WIDTH - 16)
     row.track:SetMaxLines(1)
     if row.track.SetWordWrap then row.track:SetWordWrap(false) end
     row.track:SetTextColor(0.98, 0.90, 0.35, 1)
     row.enchant = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.enchant:SetPoint("TOPRIGHT", row.track, "BOTTOMRIGHT", 0, -1)
+    row.enchant:SetPoint("TOPRIGHT", row.track, "BOTTOMRIGHT", 0, -4)
     row.enchant:SetJustifyH("RIGHT")
     row.enchant:SetWidth(GEAR_ROW_WIDTH - 30)
     row.enchant:SetMaxLines(1)
@@ -3775,15 +3860,15 @@ local function UpdateGearRows(rows, slots, rightAlign)
           local iconSpan = SLOT_ICON_SIZE + GEAR_TEXT_GAP + 2
           row.bg:ClearAllPoints()
           row.bg:SetColorTexture(c1r, c1g, c1b, 0.30)
-          -- Make the bar slightly taller than the icon for a nested look.
-          local iconPad = math.max(0, math.floor((row:GetHeight() - SLOT_ICON_SIZE) * 0.25))
+          -- Keep bars slightly taller than icon while preserving overall slot cadence.
+          local iconPad = math.max(2, math.floor((row:GetHeight() - SLOT_ICON_SIZE) * 0.35))
           if rightAlign then
-            row.bg:SetPoint("TOPLEFT", row, "TOPRIGHT", -split, -iconPad)
-            row.bg:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", iconSpan, iconPad)
+            row.bg:SetPoint("TOPLEFT", row, "TOPRIGHT", -split, iconPad)
+            row.bg:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", iconSpan, -iconPad)
             SetHorizontalGradient(row.bg, c1r, c1g, c1b, 0.00, c1r, c1g, c1b, 0.92)
           else
-            row.bg:SetPoint("TOPLEFT", row, "TOPLEFT", -iconSpan, -iconPad)
-            row.bg:SetPoint("BOTTOMRIGHT", row, "BOTTOMLEFT", split, iconPad)
+            row.bg:SetPoint("TOPLEFT", row, "TOPLEFT", -iconSpan, iconPad)
+            row.bg:SetPoint("BOTTOMRIGHT", row, "BOTTOMLEFT", split, -iconPad)
             SetHorizontalGradient(row.bg, c1r, c1g, c1b, 0.92, c1r, c1g, c1b, 0.00)
           end
           if row.bg.SetBlendMode then row.bg:SetBlendMode("BLEND") end
@@ -4204,7 +4289,7 @@ local function ApplyChonkySlotLayout()
   -- collapse the chain.  Use absolute Y offsets from the anchor instead of
   -- chaining through BOTTOMLEFT, making layout immune to height changes.
   local stride = SLOT_ICON_SIZE + vpad
-  local topY = -60
+  local topY = -64
   local leftX = 14
   local statsWidth = math.max(140, math.floor((CUSTOM_STATS_WIDTH * 0.9) + 0.5))
   local rightColumnX = PRIMARY_SHEET_WIDTH - statsWidth - 55
@@ -6236,8 +6321,15 @@ function M:Apply()
       if not M.active or not layoutApplied then self:Hide() return end
       if not (CharacterFrame and CharacterFrame:IsShown()) then self:Hide() return end
       if InCombatLockdown and InCombatLockdown() then return end
+      ApplyCustomCharacterLayout()
       ApplyChonkySlotLayout()
     end)
+  end
+
+  local function StartSlotEnforcer()
+    if not slotEnforcer then return end
+    slotEnforceUntil = GetTime() + 0.6
+    slotEnforcer:Show()
   end
 
   if CharacterFrame and not hookedShow then
@@ -6260,10 +6352,10 @@ function M:Apply()
             ApplyCustomCharacterLayout()
           end)
         end
-        -- Start the slot enforcer for 0.5 s to overwrite any late Blizzard re-anchors.
-        if slotEnforcer then
-          slotEnforceUntil = GetTime() + 0.5
-          slotEnforcer:Show()
+        -- Start the slot enforcer to overwrite any late Blizzard re-anchors.
+        StartSlotEnforcer()
+        if M._deferredNativeModeMirror ~= nil then
+          M._QueueDeferredNativeModeMirror()
         end
       end
     end)
@@ -6283,36 +6375,62 @@ function M:Apply()
       if customCharacterFrame then
         customCharacterFrame:Hide()
       end
+      M._deferredNativeModeMirror = nil
+      M._deferredNativeModeRefreshQueued = false
     end)
     hookedHide = true
   end
-  local function RefreshForNativeSubframeSwitch()
+  local function RefreshForNativeSubframeSwitch(subFrameToken)
     if not M.active then return end
-    if suppressSubFrameRefresh then return end
-    if not (CharacterFrame and CharacterFrame:IsShown()) then return end
+    if suppressSubFrameRefresh or M._mirroringNativeSubframeSwitch then return end
     local liveDB = NS and NS.GetDB and NS:GetDB() or nil
     if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then return end
+    local requestedMode = M._ResolveModeFromSubFrameToken(subFrameToken)
+    if requestedMode then
+      M._deferredNativeModeMirror = requestedMode
+    elseif M._deferredNativeModeMirror == nil then
+      M._deferredNativeModeMirror = 0
+    end
+    if not (CharacterFrame and CharacterFrame:IsShown()) then
+      M._QueueDeferredNativeModeMirror()
+      return
+    end
+    if not requestedMode then
+      requestedMode = ResolveNativeCharacterMode()
+    end
+    if requestedMode and M._TriggerBottomModeButton(requestedMode) then
+      M._deferredNativeModeMirror = nil
+      StartSlotEnforcer()
+      return
+    end
     M._pendingNativeMode = nil
     SyncCustomModeToNativePanel()
     M:Refresh()
+    StartSlotEnforcer()
   end
   if not hookedSubFrame and hooksecurefunc and CharacterFrame_ShowSubFrame then
-    hooksecurefunc("CharacterFrame_ShowSubFrame", function()
-      RefreshForNativeSubframeSwitch()
+    hooksecurefunc("CharacterFrame_ShowSubFrame", function(subFrameToken)
+      RefreshForNativeSubframeSwitch(subFrameToken)
     end)
     hookedSubFrame = true
   end
+  if not M._hookedToggleCharacter and hooksecurefunc and ToggleCharacter then
+    hooksecurefunc("ToggleCharacter", function(subFrameToken)
+      RefreshForNativeSubframeSwitch(subFrameToken)
+    end)
+    M._hookedToggleCharacter = true
+  end
   local repFrame = _G.ReputationFrame
   if repFrame and repFrame.HookScript and not repFrame._haraModeHooked then
-    repFrame:HookScript("OnShow", function()
-      RefreshForNativeSubframeSwitch()
+    repFrame:HookScript("OnShow", function(self)
+      RefreshForNativeSubframeSwitch(self)
     end)
     repFrame._haraModeHooked = true
   end
   local tokenFrame = GetCurrencyPaneFrame and GetCurrencyPaneFrame() or _G.TokenFrame or _G.CurrencyFrame
   if tokenFrame and tokenFrame.HookScript and not tokenFrame._haraModeHooked then
-    tokenFrame:HookScript("OnShow", function()
-      RefreshForNativeSubframeSwitch()
+    tokenFrame:HookScript("OnShow", function(self)
+      RefreshForNativeSubframeSwitch(self)
     end)
     tokenFrame._haraModeHooked = true
   end
