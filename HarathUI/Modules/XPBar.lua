@@ -29,6 +29,8 @@ local cachedQuestXP = 0
 local questDirty = true
 local updateTimer
 local UPDATE_INTERVAL = 1
+local hideBlizzardTicker
+local hideBlizzardHooked = false
 
 -- Cache color codes for performance (avoid string creation in hot paths)
 local QUEST_COLOR = NS.THEME.QUEST_COLOR
@@ -46,6 +48,36 @@ local function ApplyBarFont(fontString, size)
   local path = LSM and LSM:Fetch("font", fontName, true) or STANDARD_TEXT_FONT
   if path then
     fontString:SetFont(path, size or 12, outline)
+  end
+end
+
+local function HideBlizzardXPTrackingBars()
+  local candidates = {
+    "MainMenuExpBar",
+    "MainMenuBarExpBar",
+    "MainMenuXPBar",
+    "MainMenuBarMaxLevelBar",
+    "ReputationWatchBar",
+    "HonorWatchBar",
+    "ArtifactWatchBar",
+    "AzeriteBar",
+    "StatusTrackingBarManager",
+    "MainStatusTrackingBarContainer",
+    "MainStatusTrackingBarContainer.BarFrame",
+  }
+
+  for _, key in ipairs(candidates) do
+    local frame = _G[key]
+    if not frame and key:find("%.", 1, true) then
+      local root, child = key:match("^([^.]+)%.(.+)$")
+      local parent = root and _G[root]
+      frame = parent and parent[child]
+    end
+    if frame then
+      if frame.SetAlpha then frame:SetAlpha(0) end
+      if frame.EnableMouse then frame:EnableMouse(false) end
+      if frame.Hide then frame:Hide() end
+    end
   end
 end
 
@@ -92,15 +124,15 @@ local function Create()
 
   bar.detailText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   bar.detailText:SetPoint("TOP", bar, "BOTTOM", 0, -4)
-  ApplyBarFont(bar.detailText, 11)
+  ApplyBarFont(bar.detailText, 10)
 
   bar.sessionText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   bar.sessionText:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 2, -4)
-  ApplyBarFont(bar.sessionText, 11)
+  ApplyBarFont(bar.sessionText, 10)
 
   bar.rateText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   bar.rateText:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", -2, -4)
-  ApplyBarFont(bar.rateText, 11)
+  ApplyBarFont(bar.rateText, 10)
 
   bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 80)
 
@@ -394,9 +426,9 @@ function M:Apply()
     ApplyBarFont(bar.levelText, 12)
     ApplyBarFont(bar.xpText, 12)
     ApplyBarFont(bar.pctText, 12)
-    ApplyBarFont(bar.detailText, 11)
-    ApplyBarFont(bar.sessionText, 11)
-    ApplyBarFont(bar.rateText, 11)
+    ApplyBarFont(bar.detailText, 10)
+    ApplyBarFont(bar.sessionText, 10)
+    ApplyBarFont(bar.rateText, 10)
   end
 
   if db.xpbar.hideAtMaxIfNoRep == nil then
@@ -452,6 +484,19 @@ function M:Apply()
 
   M:SetLocked(db.general.framesLocked)
 
+  HideBlizzardXPTrackingBars()
+  if not hideBlizzardHooked then
+    if StatusTrackingBarManager and hooksecurefunc then
+      hooksecurefunc(StatusTrackingBarManager, "UpdateBarsShown", HideBlizzardXPTrackingBars)
+    elseif MainStatusTrackingBarContainer and hooksecurefunc then
+      hooksecurefunc(MainStatusTrackingBarContainer, "UpdateBarsShown", HideBlizzardXPTrackingBars)
+    end
+    hideBlizzardHooked = true
+  end
+  if not hideBlizzardTicker and C_Timer and C_Timer.NewTicker then
+    hideBlizzardTicker = C_Timer.NewTicker(3, HideBlizzardXPTrackingBars)
+  end
+
   -- Use C_Timer instead of OnUpdate for better performance
   if ShouldRealtimeUpdate(db) then
     if not updateTimer then
@@ -480,6 +525,10 @@ function M:Disable()
   if updateTimer then
     updateTimer:Cancel()
     updateTimer = nil
+  end
+  if hideBlizzardTicker then
+    hideBlizzardTicker:Cancel()
+    hideBlizzardTicker = nil
   end
   if M.eventFrame then
     M.eventFrame:UnregisterAllEvents()

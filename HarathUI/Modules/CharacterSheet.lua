@@ -793,16 +793,17 @@ local function BuildKnownTitlesData()
   for i = 1, total do
     if IsTitleKnown(i) then
       local raw = GetTitleName(i)
+      local clean = ""
       if type(raw) == "string" and raw ~= "" then
-        local clean = raw:gsub("%%s%s*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-        rows[#rows + 1] = {
-          id = i,
-          label = clean ~= "" and clean or ("Title " .. i),
-          detail = (current == i) and "Active" or "",
-          selected = (current == i),
-          icon = 133742,
-        }
+        clean = raw:gsub("%%s%s*", ""):gsub("^%s+", ""):gsub("%s+$", "")
       end
+      rows[#rows + 1] = {
+        id = i,
+        label = clean ~= "" and clean or ("Title " .. i),
+        detail = (current == i) and "Active" or "",
+        selected = false,
+        icon = 133742,
+      }
     end
   end
   table.sort(rows, function(a, b)
@@ -997,6 +998,9 @@ local function EnsureCustomStatsFrame()
   customStatsFrame.modeList:SetBackdropColor(0.02, 0.02, 0.03, 0.75)
   customStatsFrame.modeList:SetBackdropBorderColor(0.30, 0.18, 0.48, 0.9)
   customStatsFrame.modeList:Hide()
+  customStatsFrame.modeList.viewOffsetByMode = {}
+  customStatsFrame.modeList.currentMode = nil
+  customStatsFrame.modeList.maxOffset = 0
 
   customStatsFrame.modeList.header = customStatsFrame.modeList:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   customStatsFrame.modeList.header:SetPoint("TOP", customStatsFrame.modeList, "TOP", 0, -5)
@@ -1122,6 +1126,15 @@ local function EnsureCustomStatsFrame()
           pcall(SetCurrentTitle, data.id)
           if UpdateCustomStatsFrame and NS and NS.GetDB then
             UpdateCustomStatsFrame(NS:GetDB())
+          end
+          if C_Timer and C_Timer.After then
+            C_Timer.After(0.12, function()
+              if not (M and M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
+              if not (customStatsFrame and customStatsFrame.activeMode == 4) then return end
+              if UpdateCustomStatsFrame and NS and NS.GetDB then
+                UpdateCustomStatsFrame(NS:GetDB())
+              end
+            end)
           end
         end
       elseif customStatsFrame.activeMode == 5 then
@@ -2263,9 +2276,19 @@ UpdateCustomStatsFrame = function(db)
     end
 
     frame.modeList.header:SetText(headerText)
+    frame.modeList.currentMode = modeIndex
+    local rowsPerPage = #(frame.modeList.rows or {})
+    local maxOffset = math.max(0, #rows - rowsPerPage)
+    local viewOffsetByMode = frame.modeList.viewOffsetByMode or {}
+    frame.modeList.viewOffsetByMode = viewOffsetByMode
+    local offset = viewOffsetByMode[modeIndex] or 0
+    if offset < 0 then offset = 0 end
+    if offset > maxOffset then offset = maxOffset end
+    viewOffsetByMode[modeIndex] = offset
+    frame.modeList.maxOffset = maxOffset
     local listY = rowStartY
     for i, rowFrame in ipairs(frame.modeList.rows or {}) do
-      local rowData = rows[i]
+      local rowData = rows[i + offset]
       rowFrame:ClearAllPoints()
       rowFrame:SetPoint("TOPLEFT", frame.modeList, "TOPLEFT", 6, listY)
       rowFrame:SetPoint("TOPRIGHT", frame.modeList, "TOPRIGHT", -6, listY)
@@ -2309,6 +2332,27 @@ UpdateCustomStatsFrame = function(db)
         end
       end
     end
+  end
+
+  if frame.modeList and not frame.modeList._haraWheelHooked then
+    frame.modeList:EnableMouseWheel(true)
+    frame.modeList:SetScript("OnMouseWheel", function(list, delta)
+      if not list or not list.currentMode then return end
+      local modeIndex = list.currentMode
+      local offsets = list.viewOffsetByMode or {}
+      local cur = offsets[modeIndex] or 0
+      local maxOffset = list.maxOffset or 0
+      local step = 1
+      if delta < 0 then
+        cur = math.min(maxOffset, cur + step)
+      elseif delta > 0 then
+        cur = math.max(0, cur - step)
+      end
+      offsets[modeIndex] = cur
+      list.viewOffsetByMode = offsets
+      UpdateModeListRows(modeIndex)
+    end)
+    frame.modeList._haraWheelHooked = true
   end
 
   if mode == 1 and frame.topInfo then
@@ -4891,7 +4935,9 @@ local function CopyRuns(runs)
   return out
 end
 
-local function GetPlayerSnapshotKey()
+local RP = {}
+
+function RP.GetPlayerSnapshotKey()
   local guid = UnitGUID and UnitGUID("player") or nil
   if type(guid) == "string" and guid ~= "" then
     return guid
@@ -4903,7 +4949,7 @@ local function GetPlayerSnapshotKey()
   return nil
 end
 
-local function GetRunDeltaMS(run)
+function RP.GetRunDeltaMS(run)
   if not run then return nil end
   if type(run.overTimeMS) == "number" then
     return run.overTimeMS
@@ -4920,22 +4966,101 @@ local function GetRunDeltaMS(run)
   return nil
 end
 
-local function RefreshRightPanelData()
-  if not rightPanel then return end
-  local snapshotKey = GetPlayerSnapshotKey()
-  local sameSnapshotOwner = (snapshotKey ~= nil and lastMPlusSnapshot.ownerKey == snapshotKey)
+function RP.VaultToNumber(v)
+  if type(v) == "number" then return v end
+  if type(v) == "string" then
+    local n = tonumber(v)
+    if n then return n end
+  end
+  return nil
+end
 
-  if snapshotKey ~= nil and not sameSnapshotOwner then
-    -- Prevent cross-character bleed when opening on alts/new characters.
-    lastMPlusSnapshot.ownerKey = snapshotKey
-    lastMPlusSnapshot.affixIDs = nil
-    lastMPlusSnapshot.runs = nil
+function RP.GetVaultActivityProgress(act)
+  if type(act) ~= "table" then return 0 end
+  return RP.VaultToNumber(act.progress) or RP.VaultToNumber(act.completedActivities) or RP.VaultToNumber(act.currentProgress) or 0
+end
+
+function RP.GetVaultActivityItemLevel(act)
+  if type(act) ~= "table" then return nil end
+  local direct = RP.VaultToNumber(act.itemLevel) or RP.VaultToNumber(act.rewardItemLevel) or RP.VaultToNumber(act.rewardLevel) or RP.VaultToNumber(act.ilvl)
+  if direct and direct > 100 then
+    return math.floor(direct + 0.5)
+  end
+  if C_WeeklyRewards and C_WeeklyRewards.GetActivityEncounterInfo and act.id then
+    local ok, info = pcall(C_WeeklyRewards.GetActivityEncounterInfo, act.id)
+    if ok and type(info) == "table" then
+      local n = RP.VaultToNumber(info.itemLevel) or RP.VaultToNumber(info.rewardItemLevel) or RP.VaultToNumber(info.ilvl)
+      if n and n > 100 then
+        return math.floor(n + 0.5)
+      end
+    end
+  end
+  return nil
+end
+
+function RP.GetVaultRaidDifficultyLabel(act)
+  if type(act) ~= "table" then return "Raid" end
+  local diff = RP.VaultToNumber(act.difficultyID) or RP.VaultToNumber(act.difficulty) or RP.VaultToNumber(act.level)
+  local map = {
+    [17] = "LFR",
+    [14] = "Normal",
+    [15] = "Heroic",
+    [16] = "Mythic",
+  }
+  if diff and map[diff] then
+    return map[diff]
+  end
+  return nil
+end
+
+function RP.GetVaultHardestDifficultyLabel(trackType, act)
+  if type(act) ~= "table" then return "" end
+
+  if trackType == 1 then
+    local raidDiff = RP.GetVaultRaidDifficultyLabel(act)
+    if raidDiff and raidDiff ~= "" then
+      return raidDiff
+    end
+    return ""
   end
 
-  if C_MythicPlus and C_MythicPlus.RequestMapInfo then
-    pcall(C_MythicPlus.RequestMapInfo)
+  if trackType == 2 then
+    local lvl = RP.VaultToNumber(act.level) or RP.VaultToNumber(act.keystoneLevel) or RP.VaultToNumber(act.bestLevel) or RP.VaultToNumber(act.bestRunLevel) or RP.VaultToNumber(act.challengeLevel)
+    if lvl and lvl > 0 then
+      return ("+%d"):format(math.floor(lvl + 0.5))
+    end
+    return ""
   end
 
+  if trackType == 3 then
+    local tier = RP.VaultToNumber(act.level) or RP.VaultToNumber(act.tier) or RP.VaultToNumber(act.tierID) or RP.VaultToNumber(act.difficulty) or RP.VaultToNumber(act.difficultyID)
+    if tier and tier > 0 then
+      return ("Tier %d"):format(math.floor(tier + 0.5))
+    end
+    return ""
+  end
+
+  return ""
+end
+
+RP.VAULT_TRACK_TYPE_BY_ROW = { 2, 1, 3 } -- Dungeons, Raids, World
+RP.VAULT_TRACK_NAME_BY_TYPE = {
+  [1] = "Raids",
+  [2] = "Dungeons",
+  [3] = "World",
+}
+RP.VAULT_THRESHOLDS_BY_TYPE = {
+  [2] = { 2, 4, 8 }, -- Dungeons
+  [1] = { 1, 4, 6 }, -- Raids
+  [3] = { 2, 4, 8 }, -- World
+}
+RP.VAULT_TRACK_COLOR = {
+  [1] = { 0.05, 0.08, 0.16, 0.74, 0.20, 0.30, 0.55, 0.88 },
+  [2] = { 0.12, 0.04, 0.18, 0.74, 0.38, 0.22, 0.56, 0.90 },
+  [3] = { 0.06, 0.11, 0.08, 0.74, 0.20, 0.40, 0.26, 0.88 },
+}
+
+function RP.RefreshRightPanelHeaderAndAffixes(snapshotKey, sameSnapshotOwner)
   local currentRunText = "No active key"
   if C_MythicPlus and C_MythicPlus.GetOwnedKeystoneChallengeMapID then
     local mapID = C_MythicPlus.GetOwnedKeystoneChallengeMapID()
@@ -4945,7 +5070,7 @@ local function RefreshRightPanelData()
       currentRunText = ("%s (%s)"):format(name or ("Map " .. mapID), level and ("+" .. level) or "?")
     end
   end
-  if rightPanel.headerTitle then
+  if rightPanel and rightPanel.headerTitle then
     rightPanel.headerTitle:SetText(currentRunText)
   end
 
@@ -4961,7 +5086,8 @@ local function RefreshRightPanelData()
       end
     end
   end
-  if rightPanel.affixSlots then
+
+  if rightPanel and rightPanel.affixSlots then
     if #affixIDs == 0 and sameSnapshotOwner and type(lastMPlusSnapshot.affixIDs) == "table" and #lastMPlusSnapshot.affixIDs > 0 then
       affixIDs = ShallowCopyArray(lastMPlusSnapshot.affixIDs) or affixIDs
     elseif #affixIDs > 0 then
@@ -4982,7 +5108,9 @@ local function RefreshRightPanelData()
       slot.level:Show()
     end
   end
+end
 
+function RP.GetCurrentMythicRating()
   local rating = 0
   if C_MythicPlus and C_MythicPlus.GetSeasonBestMythicRatingInfo then
     local info = C_MythicPlus.GetSeasonBestMythicRatingInfo()
@@ -5000,10 +5128,10 @@ local function RefreshRightPanelData()
       rating = info
     end
   end
-  if rightPanel.mplusValue then
-    rightPanel.mplusValue:SetText(("%d"):format(math.floor((rating or 0) + 0.5)))
-  end
+  return rating or 0
+end
 
+function RP.GatherMythicRuns()
   local runs = {}
   if C_MythicPlus and C_MythicPlus.GetRunHistory then
     local calls = {
@@ -5021,7 +5149,6 @@ local function RefreshRightPanelData()
     end
   end
 
-  -- Fallback for clients where run history API is empty but map score APIs exist.
   if #runs == 0 and C_ChallengeMode and C_ChallengeMode.GetMapTable then
     local mapTable = C_ChallengeMode.GetMapTable()
     if type(mapTable) == "table" then
@@ -5079,10 +5206,10 @@ local function RefreshRightPanelData()
       end
     end
   end
+  return runs
+end
 
-  -- Guard against stale cross-character API data after fast character swaps.
-  -- If this character reports no M+ rating yet, ignore any non-empty run list
-  -- returned during this transient state.
+function RP.FilterAndNormalizeRuns(runs, rating)
   if #runs > 0 and (rating or 0) <= 0 then
     local hasPositiveRun = false
     for _, run in ipairs(runs) do
@@ -5113,108 +5240,121 @@ local function RefreshRightPanelData()
       runs = MergeBestRunsByMap(runs)
     end
   end
+  return runs
+end
 
+function RP.ApplyRunSnapshotCache(runs, snapshotKey, sameSnapshotOwner)
   if #runs == 0 and sameSnapshotOwner and type(lastMPlusSnapshot.runs) == "table" and #lastMPlusSnapshot.runs > 0 then
-    runs = CopyRuns(lastMPlusSnapshot.runs) or runs
-  elseif #runs > 0 then
+    return CopyRuns(lastMPlusSnapshot.runs) or runs
+  end
+  if #runs > 0 then
     lastMPlusSnapshot.ownerKey = snapshotKey
     lastMPlusSnapshot.runs = CopyRuns(runs)
   end
+  return runs
+end
 
-  if rightPanel.rowContainer and rightPanel.rowContainer.rows then
-    table.sort(runs, function(a, b)
-      local al = a and (a.level or a.bestLevel or a.keystoneLevel or 0) or 0
-      local bl = b and (b.level or b.bestLevel or b.keystoneLevel or 0) or 0
-      if al ~= bl then return al > bl end
-      local as = a and (a.score or a.rating or 0) or 0
-      local bs = b and (b.score or b.rating or 0) or 0
-      return as > bs
-    end)
+function RP.RenderRunRows(runs)
+  if not (rightPanel and rightPanel.rowContainer and rightPanel.rowContainer.rows) then
+    return
+  end
 
-    for i, row in ipairs(rightPanel.rowContainer.rows) do
-      local run = runs[i]
-      if run then
-        local mapID = run.mapChallengeModeID or run.mapID
-        local name = (C_ChallengeMode and C_ChallengeMode.GetMapUIInfo and mapID) and C_ChallengeMode.GetMapUIInfo(mapID) or ("Dungeon " .. i)
-        local mapIcon = GetDungeonMapIcon(mapID)
-        local level = run.level or run.bestLevel or run.keystoneLevel or 0
-        local score = run.score or run.rating or 0
-        local stars = run.stars or run.numKeystoneUpgrades or 0
-        local bestMS = run.bestRunDurationMS or run.durationMS
-        local parMS = run.parTimeMS or GetDungeonMapTimeLimitMS(mapID)
-        local best = FormatMS(bestMS)
-        local deltaMS = GetRunDeltaMS(run)
-        if not deltaMS and type(bestMS) == "number" and type(parMS) == "number" and parMS > 0 then
-          deltaMS = bestMS - parMS
-        end
+  table.sort(runs, function(a, b)
+    local al = a and (a.level or a.bestLevel or a.keystoneLevel or 0) or 0
+    local bl = b and (b.level or b.bestLevel or b.keystoneLevel or 0) or 0
+    if al ~= bl then return al > bl end
+    local as = a and (a.score or a.rating or 0) or 0
+    local bs = b and (b.score or b.rating or 0) or 0
+    return as > bs
+  end)
 
-        if (not stars or stars <= 0) and type(bestMS) == "number" and type(parMS) == "number" and parMS > 0 then
-          if bestMS > parMS then
-            stars = 0
-          else
-            local remainingPct = (parMS - bestMS) / parMS
-            if remainingPct >= 0.40 then
-              stars = 3
-            elseif remainingPct >= 0.20 then
-              stars = 2
-            else
-              stars = 1
-            end
-          end
-        end
+  for i, row in ipairs(rightPanel.rowContainer.rows) do
+    local run = runs[i]
+    if run then
+      local mapID = run.mapChallengeModeID or run.mapID
+      local name = (C_ChallengeMode and C_ChallengeMode.GetMapUIInfo and mapID) and C_ChallengeMode.GetMapUIInfo(mapID) or ("Dungeon " .. i)
+      local mapIcon = GetDungeonMapIcon(mapID)
+      local level = run.level or run.bestLevel or run.keystoneLevel or 0
+      local score = run.score or run.rating or 0
+      local stars = run.stars or run.numKeystoneUpgrades or 0
+      local bestMS = run.bestRunDurationMS or run.durationMS
+      local parMS = run.parTimeMS or GetDungeonMapTimeLimitMS(mapID)
+      local best = FormatMS(bestMS)
+      local deltaMS = RP.GetRunDeltaMS(run)
+      if not deltaMS and type(bestMS) == "number" and type(parMS) == "number" and parMS > 0 then
+        deltaMS = bestMS - parMS
+      end
 
-        if deltaMS and best ~= "-" then
-          local absText = FormatMS(math.abs(deltaMS))
-          if deltaMS <= 0 then
-            row.best:SetText(best .. " |cff33ff99(-" .. absText .. ")|r")
-            row.best:SetTextColor(0.95, 0.95, 0.95, 1)
-          else
-            row.best:SetText(best .. " |cffff6666(+" .. absText .. ")|r")
-            row.best:SetTextColor(0.95, 0.95, 0.95, 1)
-          end
+      if (not stars or stars <= 0) and type(bestMS) == "number" and type(parMS) == "number" and parMS > 0 then
+        if bestMS > parMS then
+          stars = 0
         else
-          row.best:SetText(best)
+          local remainingPct = (parMS - bestMS) / parMS
+          if remainingPct >= 0.40 then
+            stars = 3
+          elseif remainingPct >= 0.20 then
+            stars = 2
+          else
+            stars = 1
+          end
+        end
+      end
+
+      if deltaMS and best ~= "-" then
+        local absText = FormatMS(math.abs(deltaMS))
+        if deltaMS <= 0 then
+          row.best:SetText(best .. " |cff33ff99(-" .. absText .. ")|r")
+          row.best:SetTextColor(0.95, 0.95, 0.95, 1)
+        else
+          row.best:SetText(best .. " |cffff6666(+" .. absText .. ")|r")
           row.best:SetTextColor(0.95, 0.95, 0.95, 1)
         end
-        row.name:SetText(name or ("Dungeon " .. i))
-        row.mapID = mapID
-        row.mapName = name
-        UpdateRowSecureCast(row)
-        if row.icon then
-          row.icon:SetTexture(mapIcon or 134400)
-        end
-        if level > 0 then
-          local starsText = StarIconsText(stars)
-          if starsText ~= "" then
-            row.level:SetText(("%s +%d"):format(starsText, level))
-          else
-            row.level:SetText((" +%d"):format(level))
-          end
-        else
-          row.level:SetText("-")
-        end
-        row.rating:SetText(score > 0 and tostring(math.floor(score + 0.5)) or "-")
-        row.rating:SetTextColor(score > 0 and 1 or 0.85, score > 0 and 0.55 or 0.85, score > 0 and 0.2 or 0.85, 1)
       else
-        row.name:SetText(("Dungeon %d"):format(i))
-        row.mapID = nil
-        row.mapName = nil
-        UpdateRowSecureCast(row)
-        if row.icon then
-          row.icon:SetTexture(134400)
-        end
-        row.level:SetText("-")
-        row.rating:SetText("-")
-        row.best:SetText("-")
-        row.best:SetTextColor(0.9, 0.9, 0.9, 1)
-        row.rating:SetTextColor(0.9, 0.9, 0.9, 1)
+        row.best:SetText(best)
+        row.best:SetTextColor(0.95, 0.95, 0.95, 1)
       end
-    end
-    if not (InCombatLockdown and InCombatLockdown()) then
-      pendingSecureUpdate = false
+
+      row.name:SetText(name or ("Dungeon " .. i))
+      row.mapID = mapID
+      row.mapName = name
+      UpdateRowSecureCast(row)
+      if row.icon then
+        row.icon:SetTexture(mapIcon or 134400)
+      end
+      if level > 0 then
+        local starsText = StarIconsText(stars)
+        if starsText ~= "" then
+          row.level:SetText(("%s +%d"):format(starsText, level))
+        else
+          row.level:SetText((" +%d"):format(level))
+        end
+      else
+        row.level:SetText("-")
+      end
+      row.rating:SetText(score > 0 and tostring(math.floor(score + 0.5)) or "-")
+      row.rating:SetTextColor(score > 0 and 1 or 0.85, score > 0 and 0.55 or 0.85, score > 0 and 0.2 or 0.85, 1)
+    else
+      row.name:SetText(("Dungeon %d"):format(i))
+      row.mapID = nil
+      row.mapName = nil
+      UpdateRowSecureCast(row)
+      if row.icon then
+        row.icon:SetTexture(134400)
+      end
+      row.level:SetText("-")
+      row.rating:SetText("-")
+      row.best:SetText("-")
+      row.best:SetTextColor(0.9, 0.9, 0.9, 1)
+      row.rating:SetTextColor(0.9, 0.9, 0.9, 1)
     end
   end
 
+  if not (InCombatLockdown and InCombatLockdown()) then
+    pendingSecureUpdate = false
+  end
+end
+
+function RP.GetWeeklyVaultActivities()
   local acts = {}
   if C_WeeklyRewards and C_WeeklyRewards.GetActivities then
     local t = C_WeeklyRewards.GetActivities()
@@ -5222,156 +5362,96 @@ local function RefreshRightPanelData()
       acts = t
     end
   end
+  return acts
+end
 
-  local function ToNumber(v)
-    if type(v) == "number" then return v end
-    if type(v) == "string" then
-      local n = tonumber(v)
-      if n then return n end
+function RP.RenderVaultCards(acts)
+  if not (rightPanel and rightPanel.vault and rightPanel.vault.cards) then
+    return
+  end
+  local byType = {
+    [1] = {},
+    [2] = {},
+    [3] = {},
+  }
+  for _, act in ipairs(acts or {}) do
+    local t = act and act.type
+    if byType[t] then
+      byType[t][#byType[t] + 1] = act
     end
-    return nil
   end
 
-  local function GetActivityProgress(act)
-    if type(act) ~= "table" then return 0 end
-    return ToNumber(act.progress) or ToNumber(act.completedActivities) or ToNumber(act.currentProgress) or 0
-  end
+  for i, card in ipairs(rightPanel.vault.cards) do
+    local col = ((i - 1) % 3) + 1
+    local row = math.floor((i - 1) / 3) + 1
+    local trackType = RP.VAULT_TRACK_TYPE_BY_ROW[row] or 2
+    local actList = byType[trackType] or {}
+    local act = actList[col]
 
-  local function GetActivityItemLevel(act)
-    if type(act) ~= "table" then return nil end
-    local direct = ToNumber(act.itemLevel) or ToNumber(act.rewardItemLevel) or ToNumber(act.rewardLevel) or ToNumber(act.ilvl)
-    if direct and direct > 100 then
-      return math.floor(direct + 0.5)
-    end
-    if C_WeeklyRewards and C_WeeklyRewards.GetActivityEncounterInfo and act.id then
-      local ok, info = pcall(C_WeeklyRewards.GetActivityEncounterInfo, act.id)
-      if ok and type(info) == "table" then
-        local n = ToNumber(info.itemLevel) or ToNumber(info.rewardItemLevel) or ToNumber(info.ilvl)
-        if n and n > 100 then
-          return math.floor(n + 0.5)
-        end
-      end
-    end
-    return nil
-  end
+    local c = RP.VAULT_TRACK_COLOR[trackType] or RP.VAULT_TRACK_COLOR[2]
+    card:SetBackdropColor(c[1], c[2], c[3], c[4])
+    card:SetBackdropBorderColor(c[5], c[6], c[7], c[8])
 
-  local function GetRaidDifficultyLabel(act)
-    if type(act) ~= "table" then return "Raid" end
-    local diff = ToNumber(act.difficultyID) or ToNumber(act.difficulty) or ToNumber(act.level)
-    local map = {
-      [17] = "LFR",
-      [14] = "Normal",
-      [15] = "Heroic",
-      [16] = "Mythic",
-    }
-    if diff and map[diff] then
-      return map[diff]
-    end
-    return nil
-  end
+    local label = RP.VAULT_TRACK_NAME_BY_TYPE[trackType] or "Vault"
+    local target = (RP.VAULT_THRESHOLDS_BY_TYPE[trackType] and RP.VAULT_THRESHOLDS_BY_TYPE[trackType][col]) or 0
+    local progress = RP.GetVaultActivityProgress(act)
+    local complete = (target > 0 and progress >= target)
 
-  local function GetHardestDifficultyLabel(trackType, act)
-    if type(act) ~= "table" then return "" end
+    card.title:SetText(label)
+    card.progress:SetText(("%d / %d"):format(progress, target))
 
-    if trackType == 1 then
-      local raidDiff = GetRaidDifficultyLabel(act)
-      if raidDiff and raidDiff ~= "" then
-        return raidDiff
-      end
-      return ""
-    end
+    local ilvl = RP.GetVaultActivityItemLevel(act)
+    card.ilvl:SetText(ilvl and tostring(ilvl) or "")
+    card.difficulty:SetText(RP.GetVaultHardestDifficultyLabel(trackType, act))
 
-    if trackType == 2 then
-      local lvl = ToNumber(act.level) or ToNumber(act.keystoneLevel) or ToNumber(act.bestLevel) or ToNumber(act.bestRunLevel) or ToNumber(act.challengeLevel)
-      if lvl and lvl > 0 then
-        return ("+%d"):format(math.floor(lvl + 0.5))
-      end
-      return ""
-    end
-
-    if trackType == 3 then
-      local tier = ToNumber(act.level) or ToNumber(act.tier) or ToNumber(act.tierID) or ToNumber(act.difficulty) or ToNumber(act.difficultyID)
-      if tier and tier > 0 then
-        return ("Tier %d"):format(math.floor(tier + 0.5))
-      end
-      return ""
-    end
-
-    return ""
-  end
-
-  if rightPanel.vault and rightPanel.vault.cards then
-    local byType = {
-      [1] = {},
-      [2] = {},
-      [3] = {},
-    }
-    for _, act in ipairs(acts) do
-      local t = act and act.type
-      if byType[t] then
-        byType[t][#byType[t] + 1] = act
-      end
-    end
-
-    local trackTypeByRow = { 2, 1, 3 } -- Mythic+, Raid, World/Delves
-    local trackNameByType = {
-      [1] = "Raids",
-      [2] = "Dungeons",
-      [3] = "World",
-    }
-    local thresholdsByType = {
-      [2] = { 2, 4, 8 }, -- Mythic+
-      [1] = { 1, 4, 6 }, -- Raid
-      [3] = { 2, 4, 8 }, -- World
-    }
-    local trackColor = {
-      [1] = { 0.05, 0.08, 0.16, 0.74, 0.20, 0.30, 0.55, 0.88 },
-      [2] = { 0.12, 0.04, 0.18, 0.74, 0.38, 0.22, 0.56, 0.90 },
-      [3] = { 0.06, 0.11, 0.08, 0.74, 0.20, 0.40, 0.26, 0.88 },
-    }
-
-    for i, card in ipairs(rightPanel.vault.cards) do
-      local col = ((i - 1) % 3) + 1
-      local row = math.floor((i - 1) / 3) + 1
-      local trackType = trackTypeByRow[row] or 2
-      local actList = byType[trackType] or {}
-      local act = actList[col]
-
-      local c = trackColor[trackType] or trackColor[2]
-      card:SetBackdropColor(c[1], c[2], c[3], c[4])
-      card:SetBackdropBorderColor(c[5], c[6], c[7], c[8])
-
-      local label = trackNameByType[trackType] or "Vault"
-      local target = (thresholdsByType[trackType] and thresholdsByType[trackType][col]) or 0
-      local progress = GetActivityProgress(act)
-      local complete = (target > 0 and progress >= target)
-
-      card.title:SetText(label)
-      card.progress:SetText(("%d / %d"):format(progress, target))
-
-      local ilvl = GetActivityItemLevel(act)
-      card.ilvl:SetText(ilvl and tostring(ilvl) or "")
-
-      card.difficulty:SetText(GetHardestDifficultyLabel(trackType, act))
-
-      if complete then
-        card.title:SetTextColor(0.35, 1, 0.5, 1)
-        card.ilvl:SetTextColor(0.35, 1, 0.5, 1)
-        card.difficulty:SetTextColor(0.35, 1, 0.5, 1)
-        card.progress:SetTextColor(0.35, 1, 0.5, 1)
-        if card.overlay then card.overlay:Hide() end
-      else
-        card.title:SetTextColor(0.95, 0.95, 0.95, 1)
-        card.ilvl:SetTextColor(0.95, 0.95, 0.95, 1)
-        card.difficulty:SetTextColor(0.95, 0.95, 0.95, 1)
-        card.progress:SetTextColor(0.95, 0.95, 0.95, 1)
-        if card.overlay then card.overlay:Show() end
-      end
+    if complete then
+      card.title:SetTextColor(0.35, 1, 0.5, 1)
+      card.ilvl:SetTextColor(0.35, 1, 0.5, 1)
+      card.difficulty:SetTextColor(0.35, 1, 0.5, 1)
+      card.progress:SetTextColor(0.35, 1, 0.5, 1)
+      if card.overlay then card.overlay:Hide() end
+    else
+      card.title:SetTextColor(0.95, 0.95, 0.95, 1)
+      card.ilvl:SetTextColor(0.95, 0.95, 0.95, 1)
+      card.difficulty:SetTextColor(0.95, 0.95, 0.95, 1)
+      card.progress:SetTextColor(0.95, 0.95, 0.95, 1)
+      if card.overlay then card.overlay:Show() end
     end
   end
 end
 
-local function HideArtwork(db)
+function RP.RefreshRightPanelData()
+  if not rightPanel then return end
+  local snapshotKey = RP.GetPlayerSnapshotKey()
+  local sameSnapshotOwner = (snapshotKey ~= nil and lastMPlusSnapshot.ownerKey == snapshotKey)
+
+  if snapshotKey ~= nil and not sameSnapshotOwner then
+    -- Prevent cross-character bleed when opening on alts/new characters.
+    lastMPlusSnapshot.ownerKey = snapshotKey
+    lastMPlusSnapshot.affixIDs = nil
+    lastMPlusSnapshot.runs = nil
+  end
+
+  if C_MythicPlus and C_MythicPlus.RequestMapInfo then
+    pcall(C_MythicPlus.RequestMapInfo)
+  end
+
+  RP.RefreshRightPanelHeaderAndAffixes(snapshotKey, sameSnapshotOwner)
+  local rating = RP.GetCurrentMythicRating()
+  if rightPanel.mplusValue then
+    rightPanel.mplusValue:SetText(("%d"):format(math.floor((rating or 0) + 0.5)))
+  end
+
+  local runs = RP.GatherMythicRuns()
+  runs = RP.FilterAndNormalizeRuns(runs, rating)
+  runs = RP.ApplyRunSnapshotCache(runs, snapshotKey, sameSnapshotOwner)
+  RP.RenderRunRows(runs)
+
+  local acts = RP.GetWeeklyVaultActivities()
+  RP.RenderVaultCards(acts)
+end
+
+function RP.HideArtwork(db)
   if not db or not db.charsheet or not db.charsheet.hideArt then
     return
   end
@@ -5445,7 +5525,7 @@ function M:Refresh()
     end
   end
   if db.charsheet.hideArt then
-    HideArtwork(db)
+    RP.HideArtwork(db)
   else
     RestoreHiddenRegions()
   end
@@ -5527,7 +5607,7 @@ function M:Refresh()
       PositionRightPanel(db)
       panel:Show()
       ApplyRightPanelFont(db)
-      RefreshRightPanelData()
+      RP.RefreshRightPanelData()
       self:SetLocked(db.general and db.general.framesLocked ~= false)
     end
   elseif rightPanel then
@@ -5653,7 +5733,7 @@ function M:Apply()
         UpdateCustomStatsFrame(liveDB)
         UpdateCustomGearFrame(liveDB)
         if liveUpdateIncludeRightPanel and rightPanel and rightPanel:IsShown() then
-          RefreshRightPanelData()
+          RP.RefreshRightPanelData()
         end
         liveUpdateIncludeRightPanel = false
       end)
@@ -5675,12 +5755,12 @@ function M:Apply()
     if elapsedSinceData >= DATA_REFRESH_INTERVAL then
       elapsedSinceData = 0
       if rightPanel and rightPanel:IsShown() then
-        RefreshRightPanelData()
+        RP.RefreshRightPanelData()
       end
     end
     if pendingSecureUpdate and not (InCombatLockdown and InCombatLockdown()) then
       if rightPanel and rightPanel:IsShown() then
-        RefreshRightPanelData()
+        RP.RefreshRightPanelData()
       else
         pendingSecureUpdate = false
       end
@@ -5707,12 +5787,13 @@ function M:Apply()
   SafeRegisterEvent(moduleEventFrame, "UPDATE_FACTION")
   SafeRegisterEvent(moduleEventFrame, "CURRENCY_DISPLAY_UPDATE")
   SafeRegisterEvent(moduleEventFrame, "CURRENCY_LIST_UPDATE")
+  SafeRegisterUnitEvent(moduleEventFrame, "UNIT_NAME_UPDATE", "player")
   SafeRegisterUnitEvent(moduleEventFrame, "UNIT_MAXHEALTH", "player")
   SafeRegisterUnitEvent(moduleEventFrame, "UNIT_MAXPOWER", "player")
   SafeRegisterUnitEvent(moduleEventFrame, "UNIT_STATS", "player")
   moduleEventFrame:SetScript("OnEvent", function(_, event, unitOrSlot)
     if not M.active then return end
-    if event == "UNIT_MAXHEALTH" or event == "UNIT_MAXPOWER" or event == "UNIT_STATS" then
+    if event == "UNIT_MAXHEALTH" or event == "UNIT_MAXPOWER" or event == "UNIT_STATS" or event == "UNIT_NAME_UPDATE" then
       if unitOrSlot and unitOrSlot ~= "player" then return end
     end
     if event == "PLAYER_EQUIPMENT_CHANGED" then

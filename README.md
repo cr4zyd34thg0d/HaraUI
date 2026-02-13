@@ -9,11 +9,11 @@ A collection of World of Warcraft addons for patch 12.0.1 (Midnight).
 
 | Addon | Version | Interface | Author |
 |-------|---------|-----------|--------|
-| HarathUI | 1.4.1 | 120001 | Harath |
+| HarathUI | 1.4.5 | 120001 | Harath |
 | OPie | 7.11.3 | 120001 | foxlit |
 | Platynator | 287 | 120001 | plusmouse |
 
-### HarathUI (v1.4.1)
+### HarathUI (v1.4.5)
 Modular quality-of-life UI suite.
 
 **Features:**
