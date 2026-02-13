@@ -11,7 +11,7 @@ A collection of World of Warcraft addons for patch 12.0.1 (Midnight).
 |-------|---------|-----------|--------|
 | HarathUI | 1.4.6 | 120001 | Harath |
 | OPie | 7.11.3 | 120001 | foxlit |
-| Platynator | 287 | 120001 | plusmouse |
+| Platynator | 314 | 120001 | plusmouse |
 
 ### HarathUI (v1.4.6)
 Modular quality-of-life UI suite.
@@ -44,7 +44,7 @@ Groups abilities, items, mounts, macros, and more into customizable rings that a
 
 **Website:** [townlong-yak.com/addons/opie](https://www.townlong-yak.com/addons/opie)
 
-### Platynator (v287)
+### Platynator (v314)
 Nameplate customization addon.
 
 Highly configurable nameplate replacement with support for:

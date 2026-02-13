@@ -41,7 +41,7 @@ try {
   }
 
   Write-Host 'Mirroring upstream Platynator into repo...'
-  & robocopy $resolvedSource $targetPath /MIR /XD ".git" ".github" ".vscode" /R:2 /W:1 /NFL /NDL /NJH /NJS /NP
+  & robocopy $resolvedSource $targetPath /MIR /XD ".git" ".github" ".vscode" "AssetsRaw" /XF ".pkgmeta" /R:2 /W:1 /NFL /NDL /NJH /NJS /NP
   $rc = $LASTEXITCODE
   if ($rc -gt 7) {
     throw "robocopy failed with exit code $rc"

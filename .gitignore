@@ -21,3 +21,7 @@ HarathUI/AGENTS.md
 HarathUI/.luacheckrc
 HarathUI/.luarc.json
 HarathUI/.stylua.toml
+
+# Upstream Platynator source-only artifacts (not needed in addon bundle).
+Platynator/AssetsRaw/
+Platynator/.pkgmeta

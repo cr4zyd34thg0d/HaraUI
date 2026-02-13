@@ -260,7 +260,7 @@ local function SetupBehaviour(parent)
   table.insert(allFrames, applyNameplatesDropdown)
 
   local simplifiedScaleSlider
-  if addonTable.Constants.IsMidnight then
+  if addonTable.Constants.IsRetail then
     local simplifiedPlatesDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.SIMPLIFIED_NAMEPLATES)
     simplifiedPlatesDropdown:SetPoint("TOP", allFrames[#allFrames], "BOTTOM", 0, -30)
     do
@@ -394,9 +394,11 @@ local function SetupPositioning(parent)
   local stackingNameplatesDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.STACKING_NAMEPLATES)
   stackingNameplatesDropdown:SetPoint("TOP")
   local values = {
+    "friend",
     "enemy",
   }
   local labels = {
+    addonTable.Locales.FRIENDLY,
     addonTable.Locales.ENEMY,
   }
   stackingNameplatesDropdown.DropDown:SetDefaultText(NONE)
@@ -559,10 +561,24 @@ local function SetupFont(parent)
   shadowCheckbox:SetPoint("TOP", allFrames[#allFrames], "BOTTOM")
   table.insert(allFrames, shadowCheckbox)
 
+  local fontFixCheckbox = addonTable.CustomiseDialog.Components.GetCheckbox(container, addonTable.Locales.ENABLE_IF_LINES_FALLING_OFF_FONT, 28, function(value)
+    local design = addonTable.CustomiseDialog.GetCurrentDesign()
+    if value ~= not design.font.slug then
+      design.font.slug = not value
+      if addonTable.Config.Get(addonTable.Config.Options.STYLE):match("^_") then
+        addonTable.Config.Set(addonTable.Config.Options.STYLE, addonTable.Constants.CustomName)
+      end
+      addonTable.CallbackRegistry:TriggerEvent("RefreshStateChange", {[addonTable.Constants.RefreshReason.Design] = true})
+    end
+  end)
+  fontFixCheckbox:SetPoint("TOP", allFrames[#allFrames], "BOTTOM", 0, -30)
+  table.insert(allFrames, fontFixCheckbox)
+
   local function Update()
     local design = addonTable.CustomiseDialog.GetCurrentDesign()
     outlineCheckbox:SetValue(design.font.outline)
     shadowCheckbox:SetValue(design.font.shadow)
+    fontFixCheckbox:SetValue(not design.font.slug)
 
     for _, f in ipairs(allFrames) do
       if f.DropDown then
@@ -597,7 +613,7 @@ local function SetupFont(parent)
           button.fontString:SetFontObject(addonTable.Core.GetFontByID(label))
         end)
       end
-      rootDescription:SetScrollMode(20 * 20)
+      rootDescription:SetScrollMode(30 * 20)
     end)
   end
 
@@ -761,6 +777,10 @@ function addonTable.CustomiseDialog.Toggle()
   frame:SetSize(600, 830)
   frame:SetPoint("CENTER")
   frame:Hide()
+
+  if frame:GetHeight() >= UIParent:GetHeight() then
+    frame:SetScale(UIParent:GetHeight() / frame:GetHeight() * 0.99)
+  end
 
   frame.CloseButton:SetScript("OnClick", function()
     frame:Hide()

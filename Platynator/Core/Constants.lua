@@ -10,15 +10,13 @@ addonTable.Constants = {
   IsEra = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC,
   IsClassic = WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE,
 
-  IsMidnight = select(4, GetBuildInfo()) >= 120000,
+  IsMidnight = select(4, GetBuildInfo()) >= 120001,
 
   DeathKnightMaxRunes = 6,
 
   ButtonFrameOffset = 5,
 
   CustomName = "_custom",
-
-  ParentedToNameplates = (select(4, GetBuildInfo())) ~= 120000,
 
   DefaultFont = "Roboto Condensed Bold",
   FontFamilies = {"roman", "korean", "simplifiedchinese", "traditionalchinese", "russian"},
@@ -31,7 +29,8 @@ addonTable.Constants.Events = {
 
   "TextOverrideUpdated",
 
-  "LegacyInterrupter"
+  "LegacyInterrupter",
+  "QuestInfoUpdate",
 }
 
 addonTable.Constants.RefreshReason = {

@@ -126,11 +126,11 @@ end
 
 function addonTable.CustomiseDialog.ImportData(import, name, overwrite)
   if import.addon ~= "Platynator" then
-    return false
+    return false, 1
   end
 
   if name:match("^_") then
-    return false
+    return false, 2
   end
 
   import.version = nil
@@ -138,7 +138,7 @@ function addonTable.CustomiseDialog.ImportData(import, name, overwrite)
   if import.kind == nil or import.kind == "style" then
     local designs = addonTable.Config.Get(addonTable.Config.Options.DESIGNS)
     if designs[name] and not overwrite then
-      return false
+      return false, 3
     end
     import.kind = nil
     addonTable.Core.UpgradeDesign(import)
@@ -164,7 +164,7 @@ function addonTable.CustomiseDialog.ImportData(import, name, overwrite)
       addonTable.Config.ChangeProfile(name, old)
     else
       if PLATYNATOR_CONFIG.Profiles[name] then
-        return false
+        return false, 4
       end
       addonTable.Config.MakeProfile(name, false)
       local old = addonTable.Config.CurrentProfile

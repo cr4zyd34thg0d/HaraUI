@@ -24,72 +24,7 @@ local truncateMap = {
   ["RIGHT"] = "FIRST",
 }
 
-local validTextKinds = {
-  health = true,
-  damageAbsorb = true,
-  creatureName = true,
-  guild = true,
-  castSpellName = true,
-  level = true,
-  target = true,
-  castTarget = true,
-  castInterrupter = true,
-  castTimeLeft = true,
-}
-
-local fallbackMarkerAssetByKind = {
-  quest = "normal/quest-blizzard",
-  cannotInterrupt = "normal/blizzard-shield",
-  elite = "normal/blizzard-elite-midnight",
-  rare = "normal/blizzard-rare-midnight",
-  raid = "normal/blizzard-raid",
-  castIcon = "normal/cast-icon",
-  pvp = "normal/blizzard-pvp",
-}
-
-local function CompactArrayTables(list)
-  local out = {}
-  for _, item in ipairs(list) do
-    if type(item) == "table" then
-      out[#out + 1] = item
-    end
-  end
-  return out
-end
-
 function addonTable.Core.UpgradeDesign(design)
-  if type(design) ~= "table" then
-    return
-  end
-
-  if type(design.bars) ~= "table" then
-    design.bars = {}
-  end
-  if type(design.texts) ~= "table" then
-    design.texts = {}
-  end
-  if type(design.markers) ~= "table" then
-    design.markers = {}
-  end
-  if type(design.highlights) ~= "table" then
-    design.highlights = {}
-  end
-  if type(design.specialBars) ~= "table" then
-    design.specialBars = {}
-  end
-  if type(design.font) ~= "table" then
-    design.font = {}
-  end
-
-  design.bars = CompactArrayTables(design.bars)
-  design.texts = CompactArrayTables(design.texts)
-  design.markers = CompactArrayTables(design.markers)
-  design.highlights = CompactArrayTables(design.highlights)
-  design.specialBars = CompactArrayTables(design.specialBars)
-  if type(design.auras) == "table" then
-    design.auras = CompactArrayTables(design.auras)
-  end
-
   design.appliesToAll = nil
   design.addon = nil
   design.kind = nil
@@ -99,58 +34,42 @@ function addonTable.Core.UpgradeDesign(design)
   end
 
   for _, text in ipairs(design.texts) do
-    if type(text) == "table" then
-      if not text.color then
-        text.color = {r = 1, g = 1, b = 1}
-      end
-      if not text.align then
-        text.align = "CENTER"
-      end
-      if text.widthLimit == nil and text.maxWidth ~= nil then
-        text.widthLimit = text.maxWidth
-      end
-      text.maxWidth = nil
-      if text.widthLimit == nil then
-        text.widthLimit = 0
-      end
-      if type(text.truncate) == "string" then
-        text.shorten = truncateMap[text.truncate]
-        text.truncate = false
-      end
-      if text.truncate == nil then
-        text.truncate = false
-      end
-      if text.layer == nil then
-        text.layer = 2
-      end
-      if text.kind == "quest" then
-        text.kind = "creatureName"
-      end
-      if not validTextKinds[text.kind] then
-        text.kind = "creatureName"
-      end
+    if not text.color then
+      text.color = {r = 1, g = 1, b = 1}
+    end
+    if not text.align then
+      text.align = "CENTER"
+    end
+    if type(text.truncate) == "string" then
+      text.shorten = truncateMap[text.truncate]
+      text.truncate = false
+    end
+    if text.truncate == nil then
+      text.truncate = false
+    end
+    if text.layer == nil then
+      text.layer = 2
+    end
+    if text.maxWidth == nil then
+      text.maxWidth = math.floor((text.widthLimit or 0) / addonTable.Assets.BarBordersSize.width * 100) / 100
+      text.widthLimit = nil
     end
   end
   for _, marker in ipairs(design.markers) do
-    if type(marker) == "table" then
-      if not marker.color then
-        marker.color = {r = 1, g = 1, b = 1}
-      end
-      if marker.layer == nil then
-        marker.layer = 3
-      end
-      if marker.kind == "castIcon" and marker.square == nil then
-        marker.square = false
-      end
-      if marker.kind == "elite" and marker.openWorldOnly == nil then
-        marker.openWorldOnly = false
-      end
-      if marker.kind == "rare" and marker.includeElites == nil then
-        marker.includeElites = false
-      end
-      if marker.asset == nil or addonTable.Assets.Markers[marker.asset] == nil then
-        marker.asset = fallbackMarkerAssetByKind[marker.kind] or "normal/quest-blizzard"
-      end
+    if not marker.color then
+      marker.color = {r = 1, g = 1, b = 1}
+    end
+    if marker.layer == nil then
+      marker.layer = 3
+    end
+    if marker.kind == "castIcon" and marker.square == nil then
+      marker.square = false
+    end
+    if marker.kind == "elite" and marker.openWorldOnly == nil then
+      marker.openWorldOnly = false
+    end
+    if marker.kind == "rare" and marker.includeElites == nil then
+      marker.includeElites = false
     end
   end
   if not design.auras then
@@ -179,56 +98,56 @@ function addonTable.Core.UpgradeDesign(design)
     }
   end
   for _, aura in ipairs(design.auras) do
-    if type(aura) == "table" then
-      if type(aura.anchor) ~= "table" then
-        aura.anchor = {"CENTER", 0, 0}
+    if not aura.scale then
+      aura.scale = 1
+    end
+    if aura.showCountdown == nil then
+      aura.showCountdown = true
+    end
+    if aura.direction == nil then
+      if aura.anchor[1] and aura.anchor[1]:match("RIGHT") then
+        aura.direction = "LEFT"
+      else
+        aura.direction = "RIGHT"
       end
-      if not aura.scale then
-        aura.scale = 1
-      end
-      if aura.showCountdown == nil then
-        aura.showCountdown = true
-      end
-      if aura.direction == nil then
-        if aura.anchor[1] and aura.anchor[1]:match("RIGHT") then
-          aura.direction = "LEFT"
-        else
-          aura.direction = "RIGHT"
-        end
-      end
-      if not aura.height then
-        aura.height = 1
-      end
-      if not aura.textScale then
-        aura.textScale = 1
-      end
-      if aura.kind == "debuffs" and not aura.filters then
-        aura.showPandemic = true
-        aura.filters = {
-          important = true,
-          fromYou = true,
-        }
-      end
-      if aura.kind == "buffs" and not aura.filters then
-        aura.filters = {
-          dispelable = false,
-          important = true,
-        }
-      end
-      if aura.kind == "crowdControl" and not aura.filters then
-        aura.filters = {
-          fromYou = false,
-        }
-      end
-      if not aura.sorting then
-        aura.sorting = {
-          kind = "duration",
-          reversed = false,
-        }
-      end
-      if aura.kind == "debuffs" and aura.showPandemic == nil then
-        aura.showPandemic = true
-      end
+    end
+    if not aura.height then
+      aura.height = 1
+    end
+    if not aura.textScale then
+      aura.textScale = 1
+    end
+    if aura.kind == "debuffs" and not aura.filters then
+      aura.showPandemic = true
+      aura.filters = {
+        important = true,
+        fromYou = true,
+      }
+    end
+    if aura.kind == "buffs" and not aura.filters then
+      aura.filters = {
+        dispelable = false,
+        important = true,
+      }
+    end
+    if aura.kind == "buffs" and aura.showDispel == nil then
+      aura.showDispel = {enrage = true}
+    elseif aura.kind ~= "buffs" then
+      aura.showDispel = {}
+    end
+    if aura.kind == "crowdControl" and not aura.filters then
+      aura.filters = {
+        fromYou = false,
+      }
+    end
+    if not aura.sorting then
+      aura.sorting = {
+        kind = "duration",
+        reversed = false,
+      }
+    end
+    if aura.kind == "debuffs" and aura.showPandemic == nil then
+      aura.showPandemic = true
     end
   end
 
@@ -236,300 +155,269 @@ function addonTable.Core.UpgradeDesign(design)
     local index = 1
     while index <= #autoColors do
       local ac = autoColors[index]
-      if type(ac) == "table" then
-        if (ac.kind == "eliteType" or ac.kind == "threat" or ac.kind == "quest" or ac.kind == "cast") and type(ac.colors) ~= "table" then
-          ac.colors = {}
-        end
-        if ac.kind == "eliteType" and ac.colors.trivial == nil then
-          ac.colors.trivial = GetColor("b28e55")
-        elseif ac.kind == "threat" and ac.useSafeColor == nil then
-          ac.useSafeColor = true
-        elseif ac.kind == "quest" and ac.colors.hostile == nil then
-          ac.colors.hostile = ac.colors.quest
-          ac.colors.neutral = ac.colors.quest
-          ac.colors.friendly = ac.colors.quest
-          ac.colors.quest = nil
-        elseif ac.kind == "classColors" and ac.colors == nil then
-          ac.colors = {}
-        elseif ac.kind == "cast" and ac.colors.uninterruptable then
-          local new = CopyTable(addonTable.CustomiseDialog.ColorsConfig["uninterruptableCast"].default)
-          new.colors.uninterruptable = ac.colors.uninterruptable
-          table.insert(autoColors, index, new)
-          ac.colors.uninterruptable = nil
-          index = index - 1
-        elseif ac.kind == "interruptReady" and ac.notReady then
-          ac.notReady = nil
-        end
+      if ac.kind == "eliteType" and ac.colors.trivial == nil then
+        ac.colors.trivial = GetColor("b28e55")
+      elseif ac.kind == "threat" and ac.useSafeColor == nil then
+        ac.useSafeColor = true
+      elseif ac.kind == "quest" and ac.colors.hostile == nil then
+        ac.colors.hostile = ac.colors.quest
+        ac.colors.neutral = ac.colors.quest
+        ac.colors.friendly = ac.colors.quest
+        ac.colors.quest = nil
+      elseif ac.kind == "classColors" and ac.colors == nil then
+        ac.colors = {}
+      elseif ac.kind == "cast" and ac.colors.uninterruptable then
+        local new = CopyTable(addonTable.CustomiseDialog.ColorsConfig["uninterruptableCast"].default)
+        new.colors.uninterruptable = ac.colors.uninterruptable
+        table.insert(autoColors, index, new)
+        ac.colors.uninterruptable = nil
+        index = index - 1
+      elseif ac.kind == "interruptReady" and ac.notReady then
+        ac.notReady = nil
       end
 
       index = index + 1
     end
   end
 
+  local function RemoveAutoColorsAlpha(autoColors)
+    for _, ac in ipairs(autoColors) do
+      for _, color in pairs(ac.colors) do
+        color.a = nil
+      end
+    end
+  end
+
   for _, bar in ipairs(design.bars) do
-    if type(bar) == "table" then
-      if type(bar.border) ~= "table" then
-        bar.border = {}
+    if bar.kind == "health" and not bar.absorb then
+      local mode = bar.border.height and bar.border.height * 100 or addonTable.Assets.BarBordersLegacy[bar.border.asset].mode
+      local isNarrow = mode < 75
+      bar.absorb = {asset = isNarrow and "narrow/blizzard-absorb" or "wide/blizzard-absorb", color = {r = 1, g = 1, b = 1}}
+    end
+    if bar.kind == "health" and not bar.absorb.color then
+      bar.absorb.color = GetColor("FFFFFF")
+    end
+    if bar.kind == "health" and bar.animate == nil then
+      bar.animate = false
+    end
+    if bar.layer == nil then
+      bar.layer = 1
+    end
+    if bar and bar.absorb and bar.absorb.color.a == nil then
+      bar.absorb.color.a = 1
+    end
+    if bar.border.color.a == nil then
+      bar.border.color.a = 1
+    end
+    if bar.border.asset:match("/blizzard%-cast%-bar$") then
+      local map = {
+        ["200/blizzard-cast-bar"] = "200/blizzard-cast-bar-white",
+        ["175/blizzard-cast-bar"] = "175/blizzard-cast-bar-white",
+        ["150/blizzard-cast-bar"] = "150/blizzard-cast-bar-white",
+        ["125/blizzard-cast-bar"] = "125/blizzard-cast-bar-white",
+        ["100/blizzard-cast-bar"] = "100/blizzard-cast-bar-white",
+        ["75/blizzard-cast-bar"] = "75/blizzard-cast-bar-white",
+        ["special/blizzard-cast-bar"] = "50/blizzard-cast-bar-white",
+      }
+      if bar.border.color.r == 1 and bar.border.color.g == 1 and bar.border.color.b == 1 and bar.border.color.a == 1 then
+        bar.border.color = GetColor("fffb52")
+        bar.border.color.a = 0.5
       end
-      if type(bar.border.color) ~= "table" then
-        bar.border.color = GetColor("000000")
+      bar.border.asset = map[bar.border.asset]
+    end
+    if bar.kind == "health" and not bar.autoColors then
+      local classColors = CopyTable(addonTable.CustomiseDialog.ColorsConfig["classColors"].default)
+      local tapped = CopyTable(addonTable.CustomiseDialog.ColorsConfig["tapped"].default)
+      if bar.colors and bar.colors.tapped then
+        tapped.colors.tapped = bar.colors.tapped
       end
-      if bar.border.asset == nil then
-        bar.border.asset = "slight"
-      end
-      if type(bar.background) ~= "table" then
-        bar.background = {}
-      end
-      if type(bar.anchor) ~= "table" then
-        bar.anchor = {}
-      end
-      if bar.scale == nil then
-        bar.scale = 1
-      end
-      if bar.kind ~= "health" and bar.kind ~= "cast" then
-        bar.kind = "health"
-      end
+      local threat = CopyTable(addonTable.CustomiseDialog.ColorsConfig["threat"].default)
+      Mixin(threat.colors, bar.colors and bar.colors.threat or {})
+      local reaction = CopyTable(addonTable.CustomiseDialog.ColorsConfig["reaction"].default)
+      Mixin(reaction.colors, bar.colors and bar.colors.npc or {})
+      reaction.colors.tapped = nil
 
-      local legacyBorder = addonTable.Assets.BarBordersLegacy[bar.border.asset]
-      if bar.kind == "health" and not bar.absorb then
-        local mode = bar.border.height and bar.border.height * 100 or (legacyBorder and legacyBorder.mode) or 100
-        local isNarrow = mode < 75
-        bar.absorb = {asset = isNarrow and "narrow/blizzard-absorb" or "wide/blizzard-absorb", color = {r = 1, g = 1, b = 1}}
-      end
-      if bar.kind == "health" and bar.absorb and not bar.absorb.color then
-        bar.absorb.color = GetColor("FFFFFF")
-      end
-      if bar.layer == nil then
-        bar.layer = 1
-      end
-      if bar.absorb and bar.absorb.color and bar.absorb.color.a == nil then
-        bar.absorb.color.a = 1
-      end
-      if bar.border.color.a == nil then
-        bar.border.color.a = 1
-      end
-      if type(bar.border.asset) == "string" and bar.border.asset:match("/blizzard%-cast%-bar$") then
-        local map = {
-          ["200/blizzard-cast-bar"] = "200/blizzard-cast-bar-white",
-          ["175/blizzard-cast-bar"] = "175/blizzard-cast-bar-white",
-          ["150/blizzard-cast-bar"] = "150/blizzard-cast-bar-white",
-          ["125/blizzard-cast-bar"] = "125/blizzard-cast-bar-white",
-          ["100/blizzard-cast-bar"] = "100/blizzard-cast-bar-white",
-          ["75/blizzard-cast-bar"] = "75/blizzard-cast-bar-white",
-          ["special/blizzard-cast-bar"] = "50/blizzard-cast-bar-white",
-        }
-        if bar.border.color.r == 1 and bar.border.color.g == 1 and bar.border.color.b == 1 and bar.border.color.a == 1 then
-          bar.border.color = GetColor("fffb52")
-          bar.border.color.a = 0.5
-        end
-        bar.border.asset = map[bar.border.asset] or bar.border.asset
-      end
-      if bar.kind == "health" and not bar.autoColors then
-        local classColors = CopyTable(addonTable.CustomiseDialog.ColorsConfig["classColors"].default)
-        local tapped = CopyTable(addonTable.CustomiseDialog.ColorsConfig["tapped"].default)
-        if bar.colors and bar.colors.tapped then
-          tapped.colors.tapped = bar.colors.tapped
-        end
-        local threat = CopyTable(addonTable.CustomiseDialog.ColorsConfig["threat"].default)
-        Mixin(threat.colors, bar.colors and bar.colors.threat or {})
-        local reaction = CopyTable(addonTable.CustomiseDialog.ColorsConfig["reaction"].default)
-        Mixin(reaction.colors, bar.colors and bar.colors.npc or {})
-        reaction.colors.tapped = nil
+      threat.combatOnly = not bar.aggroColoursOnHostiles
+      bar.aggroColoursOnHostiles = nil
 
-        threat.combatOnly = not bar.aggroColoursOnHostiles
-        bar.aggroColoursOnHostiles = nil
+      bar.autoColors = {
+        classColors,
+        tapped,
+        threat,
+        reaction
+      }
+      bar.colors = nil
+    end
+    if not bar.background.color then
+      bar.background.color = GetColor("FFFFFF")
+      bar.background.color.a = bar.background.alpha or 1
+      bar.background.alpha = nil
+    end
+    if bar.kind == "cast" and bar.colors and bar.colors.normalChannel == nil then
+      bar.colors.normalChannel = GetColor("3ec637")
+    end
+    if bar.kind == "cast" and bar.colors and bar.colors.normalCast == nil then
+      bar.colors.importantCast = GetColor("ff1827")
+      bar.colors.importantChannel = GetColor("0a43ff")
+      bar.colors.normalCast = bar.colors.normal
+      bar.colors.normal = nil
+    end
+    if bar.kind == "cast" and not bar.autoColors then
+      local cast = {
+        kind = "cast",
+        colors = {
+          cast = bar.colors.normalCast,
+          channel = bar.colors.normalChannel,
+          uninterruptable = bar.colors.uninterruptable,
+          interrupted = bar.colors.interrupted,
+        },
+      }
+      local important = {
+        kind = "importantCast",
+        colors = {
+          cast = bar.colors.importantCast,
+          channel = bar.colors.importantChannel,
+        },
+      }
+      bar.autoColors = {
+        important,
+        cast,
+      }
+      bar.colors = nil
+    end
+    if not addonTable.Assets.BarBordersSliced[bar.border.asset] then
+      local size = addonTable.Assets.BarBordersLegacy[bar.border.asset].mode
+      bar.border.asset = addonTable.Assets.BarBordersLegacy[bar.border.asset].tag
+      bar.border.width = 1
+      bar.border.height = size ~= 50 and size/100 or 3.8/7.5
 
-        bar.autoColors = {
-          classColors,
-          tapped,
-          threat,
-          reaction
-        }
-        bar.colors = nil
+      if bar.border.asset == "blizzard-classic-level" then
+        bar.border.asset = "blizzard-classic"
+        table.insert(design.highlights, {
+          kind = "fixed",
+          asset = "100/classic-level",
+          layer = bar.layer + 1,
+          scale = bar.scale,
+          color = CopyTable(bar.border.color),
+          anchor = {"RIGHT", 84 * bar.scale, 0}
+        })
       end
-      if not bar.background.color then
-        bar.background.color = GetColor("FFFFFF")
-        bar.background.color.a = bar.background.alpha or 1
-        bar.background.alpha = nil
-      end
-      if bar.kind == "cast" and bar.colors and bar.colors.normalChannel == nil then
-        bar.colors.normalChannel = GetColor("3ec637")
-      end
-      if bar.kind == "cast" and bar.colors and bar.colors.normalCast == nil then
-        bar.colors.importantCast = GetColor("ff1827")
-        bar.colors.importantChannel = GetColor("0a43ff")
-        bar.colors.normalCast = bar.colors.normal
-        bar.colors.normal = nil
-      end
-      if bar.kind == "cast" and not bar.autoColors and bar.colors then
-        local cast = {
-          kind = "cast",
-          colors = {
-            cast = bar.colors.normalCast,
-            channel = bar.colors.normalChannel,
-            uninterruptable = bar.colors.uninterruptable,
-            interrupted = bar.colors.interrupted,
-          },
-        }
-        local important = {
-          kind = "importantCast",
-          colors = {
-            cast = bar.colors.importantCast,
-            channel = bar.colors.importantChannel,
-          },
-        }
-        bar.autoColors = {
-          important,
-          cast,
-        }
-        bar.colors = nil
-      end
-      if not addonTable.Assets.BarBordersSliced[bar.border.asset] then
-        local legacy = addonTable.Assets.BarBordersLegacy[bar.border.asset]
-        if legacy then
-          local size = legacy.mode
-          bar.border.asset = legacy.tag
-          bar.border.width = 1
-          bar.border.height = size ~= 50 and size/100 or 3.8/7.5
-
-          if bar.border.asset == "blizzard-classic-level" then
-            bar.border.asset = "blizzard-classic"
-            table.insert(design.highlights, {
-              kind = "fixed",
-              asset = "100/classic-level",
-              layer = bar.layer + 1,
-              scale = bar.scale,
-              color = CopyTable(bar.border.color),
-              anchor = {"RIGHT", 84 * bar.scale, 0}
-            })
-          end
-        else
-          bar.border.asset = "slight"
-          bar.border.width = bar.border.width or 1
-          bar.border.height = bar.border.height or 1
-        end
-      end
-      if bar.kind == "cast" and bar.interruptMarker == nil then
-        bar.interruptMarker = {asset = "none"}
-      end
-      if bar.kind == "cast" and bar.interruptMarker.color == nil then
-        bar.interruptMarker.color = GetColor("FFFFFF")
-      end
-      if bar.autoColors then
-        UpdateAutoColors(bar.autoColors)
-      end
+    end
+    if bar.kind == "cast" and bar.interruptMarker == nil then
+      bar.interruptMarker = {asset = "none"}
+    end
+    if bar.kind == "cast" and bar.interruptMarker.color == nil then
+      bar.interruptMarker.color = GetColor("FFFFFF")
+    end
+    if bar.autoColors then
+      UpdateAutoColors(bar.autoColors)
+      RemoveAutoColorsAlpha(bar.autoColors)
+    end
+    if addonTable.Assets.BarBackgroundsLegacyMap[bar.background.asset] then
+      bar.background.asset = addonTable.Assets.BarBackgroundsLegacyMap[bar.background.asset]
+    end
+    if addonTable.Assets.BarBackgroundsLegacyMap[bar.foreground.asset] then
+      bar.foreground.asset = addonTable.Assets.BarBackgroundsLegacyMap[bar.foreground.asset]
+    end
+    if bar.kind == "health" and addonTable.Assets.BarBackgroundsLegacyMap[bar.absorb.asset] then
+      bar.absorb.asset = addonTable.Assets.BarBackgroundsLegacyMap[bar.absorb.asset]
     end
   end
 
   for _, text in ipairs(design.texts) do
-    if type(text) == "table" then
-      if text.kind == "layer" then
-        text.kind = "level"
-      end
-      if text.kind == "target" and text.applyClassColors == nil then
-        text.applyClassColors = false
-      end
-      if (text.kind == "creatureName" or text.kind == "guild") and text.showWhenWowDoes == nil then
-        text.showWhenWowDoes = false
-      end
-      if text.shorten ~= nil then
-        local shorten = text.shorten
-        text.shorten = nil
-        if text.truncate == nil then
-          text.truncate = shorten ~= "NONE"
+    if text.kind == "layer" then
+      text.kind = "level"
+    end
+    if text.kind == "target" and text.applyClassColors == nil then
+      text.applyClassColors = false
+    end
+    if (text.kind == "creatureName" or text.kind == "guild") and text.showWhenWowDoes == nil then
+      text.showWhenWowDoes = false
+    end
+    if text.shorten ~= nil then
+      text.shorten = nil
+      text.truncate = text.truncate or text.shorten and true or false
+    end
+    if text.kind == "creatureName" and not text.autoColors then
+      if text.applyClassColors then
+        local classColors = CopyTable(addonTable.CustomiseDialog.ColorsConfig["classColors"].default)
+        local tapped = CopyTable(addonTable.CustomiseDialog.ColorsConfig["tapped"].default)
+        if text.colors and text.colors.tapped then
+          tapped.colors.tapped = text.colors.tapped
         end
+        local reaction = CopyTable(addonTable.CustomiseDialog.ColorsConfig["reaction"].default)
+        Mixin(reaction.colors, text.colors and text.colors.npc or {})
+        reaction.colors.tapped = nil
+        text.autoColors = {classColors, tapped, reaction}
+      else
+        text.autoColors = {}
       end
-      if text.kind == "creatureName" and not text.autoColors then
-        if text.applyClassColors then
-          local classColors = CopyTable(addonTable.CustomiseDialog.ColorsConfig["classColors"].default)
-          local tapped = CopyTable(addonTable.CustomiseDialog.ColorsConfig["tapped"].default)
-          if text.colors and text.colors.tapped then
-            tapped.colors.tapped = text.colors.tapped
-          end
-          local reaction = CopyTable(addonTable.CustomiseDialog.ColorsConfig["reaction"].default)
-          Mixin(reaction.colors, text.colors and text.colors.npc or {})
-          reaction.colors.tapped = nil
-          text.autoColors = {classColors, tapped, reaction}
-        else
-          text.autoColors = {}
-        end
-        text.applyClassColors = nil
-        text.colors = nil
+      text.applyClassColors = nil
+      text.colors = nil
+    end
+    if text.kind == "level" and not text.autoColors then
+      if text.applyDifficultyColors then
+        local difficulty = CopyTable(addonTable.CustomiseDialog.ColorsConfig["difficulty"].default)
+        Mixin(difficulty.colors, text.colors and text.colors.difficulty or {})
+        text.autoColors = {
+          difficulty,
+        }
+      else
+        text.autoColors = {}
       end
-      if text.kind == "level" and not text.autoColors then
-        if text.applyDifficultyColors then
-          local difficulty = CopyTable(addonTable.CustomiseDialog.ColorsConfig["difficulty"].default)
-          Mixin(difficulty.colors, text.colors and text.colors.difficulty or {})
-          text.autoColors = {
-            difficulty,
-          }
-        else
-          text.autoColors = {}
-        end
-        text.applyDifficultyColors = nil
-        text.colors = nil
-      end
-      if text.kind == "health" and text.significantFigures == nil then
-        text.significantFigures = 0
-      end
-      if text.autoColors then
-        UpdateAutoColors(text.autoColors)
-      end
+      text.applyDifficultyColors = nil
+      text.colors = nil
+    end
+    if text.kind == "health" and text.significantFigures == nil then
+      text.significantFigures = 0
+    end
+    if text.kind == "guild" and text.npcRole == nil then
+      text.playerGuild = true
+      text.npcRole = true
+    end
+    if text.autoColors then
+      UpdateAutoColors(text.autoColors)
+      RemoveAutoColorsAlpha(text.autoColors)
     end
   end
 
   for _, highlight in ipairs(design.highlights) do
-    if type(highlight) == "table" then
-      if type(highlight.color) ~= "table" then
-        highlight.color = {r = 1, g = 1, b = 1}
-      end
-      if type(highlight.anchor) ~= "table" then
-        highlight.anchor = {}
-      end
-      if highlight.scale == nil then
-        highlight.scale = 1
-      end
-      if highlight.layer == nil then
-        highlight.layer = 0
-      end
-      if highlight.color.a == nil then
-        highlight.color.a = 1
-      end
-      if highlight.width == nil then
+    if highlight.layer == nil then
+      highlight.layer = 0
+    end
+    if highlight.color.a == nil then
+      highlight.color.a = 1
+    end
+
+    if highlight.kind == "mouseover" and highlight.includeTarget == nil then
+      highlight.includeTarget = true
+    end
+
+    if not addonTable.Assets.Highlights[highlight.asset] then
+      local old = addonTable.Assets.HighlightsLegacy[highlight.asset]
+      highlight.asset = addonTable.Assets.HighlightsLegacy[highlight.asset].tag
+      local new = addonTable.Assets.Highlights[highlight.asset]
+
+      if new.mode == addonTable.Assets.RenderMode.Sliced then
+        local baseWidth, baseHeight = 125, 15.625
+        highlight.width = old.width / baseWidth
+        highlight.height = old.height / baseHeight
+      elseif new.mode == addonTable.Assets.RenderMode.Stretch then
+        highlight.width = old.width / new.width
+        highlight.height = old.height / new.height
+      else
         highlight.width = 1
-      end
-      if highlight.height == nil then
         highlight.height = 1
       end
+    end
 
-      local new = addonTable.Assets.Highlights[highlight.asset]
-      if not new then
-        local old = addonTable.Assets.HighlightsLegacy[highlight.asset]
-        if old and addonTable.Assets.Highlights[old.tag] then
-          highlight.asset = old.tag
-          new = addonTable.Assets.Highlights[highlight.asset]
-          if new.mode == addonTable.Assets.RenderMode.Sliced then
-            local baseWidth, baseHeight = 125, 15.625
-            highlight.width = old.width / baseWidth
-            highlight.height = old.height / baseHeight
-          elseif new.mode == addonTable.Assets.RenderMode.Stretch then
-            highlight.width = old.width / new.width
-            highlight.height = old.height / new.height
-          else
-            highlight.width = 1
-            highlight.height = 1
-          end
-        else
-          highlight.asset = "bold"
-          highlight.width = 1
-          highlight.height = 1
-        end
-      end
+    if highlight.autoColors then
+      UpdateAutoColors(highlight.autoColors)
     end
   end
 
   for _, bar in ipairs(design.specialBars) do
-    if type(bar) == "table" and bar.layer == nil then
+    if bar.layer == nil then
       bar.layer = 3
     end
   end
@@ -539,6 +427,11 @@ function addonTable.Core.UpgradeDesign(design)
     design.font.outline = design.font.flags == "OUTLINE"
     design.font.flags = nil
   end
+
+  if design.font.slug == nil then
+    design.font.slug = true
+  end
+  design.slug = nil
 
   if design.font.asset == "ArialShort" then
     design.font.asset = "ArialNarrow"
@@ -597,15 +490,17 @@ function addonTable.Core.MigrateSettings()
   end
 end
 
-local function SetStyle()
+local function SetStyle(isInit)
   local mapping = addonTable.Config.Get(addonTable.Config.Options.DESIGNS_ASSIGNED)
 
   local styleName = addonTable.Config.Get(addonTable.Config.Options.STYLE)
-  if mapping["friend"] == mapping["enemy"] and mapping["enemySimplified"] ~= styleName then
-    mapping["friend"] = styleName
-    mapping["enemy"] = styleName
-  elseif mapping["friend"] ~= styleName and mapping["enemy"] ~= styleName and mapping["enemySimplified"] ~= styleName then
-    mapping["enemy"] = styleName
+  if not isInit then
+    if mapping["friend"] == mapping["enemy"] and mapping["enemySimplified"] ~= styleName then
+      mapping["friend"] = styleName
+      mapping["enemy"] = styleName
+    elseif mapping["friend"] ~= styleName and mapping["enemy"] ~= styleName and mapping["enemySimplified"] ~= styleName then
+      mapping["enemy"] = styleName
+    end
   end
   if styleName:match("^_") then
     local designs = addonTable.Config.Get(addonTable.Config.Options.DESIGNS)
@@ -674,7 +569,8 @@ local function UpdateRect(design)
 
   for _, textDetails in ipairs(design.texts) do
     if textDetails.kind == "creatureName" then
-      local rect = GetRect({width = textDetails.widthLimit, height = 10 * textDetails.scale}, 1, textDetails.anchor)
+      local textWidth = (textDetails.maxWidth or 0) * addonTable.Assets.BarBordersSize.width
+      local rect = GetRect({width = textWidth, height = 10 * textDetails.scale}, 1, textDetails.anchor)
       CacheSize(rect)
     end
   end
@@ -720,15 +616,11 @@ function addonTable.Core.Initialize()
   addonTable.Config.InitializeData()
   addonTable.SlashCmd.Initialize()
 
-  --if next(addonTable.Config.Get(addonTable.Config.Options.DESIGN)) == nil then
-  --  addonTable.Config.Set(addonTable.Config.Options.DESIGN, addonTable.Design.GetDefaultDesignSlight())
-  --end
-
   addonTable.Assets.ApplyScale()
 
   addonTable.Core.MigrateSettings()
 
-  SetStyle()
+  SetStyle(true)
   addonTable.CallbackRegistry:RegisterCallback("SettingChanged", function(_, name)
     if name == addonTable.Config.Options.STYLE then
       SetStyle()

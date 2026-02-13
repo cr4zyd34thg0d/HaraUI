@@ -31,11 +31,10 @@ local settings = {
 
   SHOW_NAMEPLATES_ONLY_NEEDED = {key = "show_nameplates_only_needed", default = false, refresh = {addonTable.Constants.RefreshReason.ShowBehaviour}},
   SHOW_NAMEPLATES = {key = "show_nameplates", default = {friendlyNPC = true, friendlyPlayer = true, friendlyMinion = false, enemy = true, enemyMinion = true, enemyMinor = true}, refresh = {addonTable.Constants.RefreshReason.ShowBehaviour}},
-  ENABLE_FRIENDLY_NAMEPLATES = {key = "enable_friendly_nameplates", default = true, refresh = {addonTable.Constants.RefreshReason.ShowBehaviour}},
   SHOW_FRIENDLY_IN_INSTANCES = {key = "show_friendly_in_instances_1", default = "always", refresh = {addonTable.Constants.RefreshReason.ShowBehaviour}},
   SIMPLIFIED_NAMEPLATES = {key = "simplified_nameplates", default = {minion = true, minor = true, instancesNormal = true}, refresh = {addonTable.Constants.RefreshReason.Simplified}},
 
-  SIMPLIFIED_SCALE = {key = "simplified_scale", default = 0.4, refresh = {addonTable.Constants.RefreshReason.SimplifiedScale}},
+  SIMPLIFIED_SCALE = {key = "simplified_scale", default = 0.6, refresh = {addonTable.Constants.RefreshReason.SimplifiedScale}},
 
   APPLY_CVARS = {key = "apply_cvars", default = true},
 }
