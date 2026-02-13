@@ -1,0 +1,1824 @@
+diff --git a/Platynator/Core/Initialize.lua b/Platynator/Core/Initialize.lua
+index 8ca2734..68bd20f 100644
+--- a/Platynator/Core/Initialize.lua
++++ b/Platynator/Core/Initialize.lua
+@@ -24,7 +24,72 @@ local truncateMap = {
+   ["RIGHT"] = "FIRST",
+ }
+ 
++local validTextKinds = {
++  health = true,
++  damageAbsorb = true,
++  creatureName = true,
++  guild = true,
++  castSpellName = true,
++  level = true,
++  target = true,
++  castTarget = true,
++  castInterrupter = true,
++  castTimeLeft = true,
++}
++
++local fallbackMarkerAssetByKind = {
++  quest = "normal/quest-blizzard",
++  cannotInterrupt = "normal/blizzard-shield",
++  elite = "normal/blizzard-elite-midnight",
++  rare = "normal/blizzard-rare-midnight",
++  raid = "normal/blizzard-raid",
++  castIcon = "normal/cast-icon",
++  pvp = "normal/blizzard-pvp",
++}
++
++local function CompactArrayTables(list)
++  local out = {}
++  for _, item in ipairs(list) do
++    if type(item) == "table" then
++      out[#out + 1] = item
++    end
++  end
++  return out
++end
++
+ function addonTable.Core.UpgradeDesign(design)
++  if type(design) ~= "table" then
++    return
++  end
++
++  if type(design.bars) ~= "table" then
++    design.bars = {}
++  end
++  if type(design.texts) ~= "table" then
++    design.texts = {}
++  end
++  if type(design.markers) ~= "table" then
++    design.markers = {}
++  end
++  if type(design.highlights) ~= "table" then
++    design.highlights = {}
++  end
++  if type(design.specialBars) ~= "table" then
++    design.specialBars = {}
++  end
++  if type(design.font) ~= "table" then
++    design.font = {}
++  end
++
++  design.bars = CompactArrayTables(design.bars)
++  design.texts = CompactArrayTables(design.texts)
++  design.markers = CompactArrayTables(design.markers)
++  design.highlights = CompactArrayTables(design.highlights)
++  design.specialBars = CompactArrayTables(design.specialBars)
++  if type(design.auras) == "table" then
++    design.auras = CompactArrayTables(design.auras)
++  end
++
+   design.appliesToAll = nil
+   design.addon = nil
+   design.kind = nil
+@@ -34,38 +99,58 @@ function addonTable.Core.UpgradeDesign(design)
+   end
+ 
+   for _, text in ipairs(design.texts) do
+-    if not text.color then
+-      text.color = {r = 1, g = 1, b = 1}
+-    end
+-    if not text.align then
+-      text.align = "CENTER"
+-    end
+-    if type(text.truncate) == "string" then
+-      text.shorten = truncateMap[text.truncate]
+-      text.truncate = false
+-    end
+-    if text.truncate == nil then
+-      text.truncate = false
+-    end
+-    if text.layer == nil then
+-      text.layer = 2
++    if type(text) == "table" then
++      if not text.color then
++        text.color = {r = 1, g = 1, b = 1}
++      end
++      if not text.align then
++        text.align = "CENTER"
++      end
++      if text.widthLimit == nil and text.maxWidth ~= nil then
++        text.widthLimit = text.maxWidth
++      end
++      text.maxWidth = nil
++      if text.widthLimit == nil then
++        text.widthLimit = 0
++      end
++      if type(text.truncate) == "string" then
++        text.shorten = truncateMap[text.truncate]
++        text.truncate = false
++      end
++      if text.truncate == nil then
++        text.truncate = false
++      end
++      if text.layer == nil then
++        text.layer = 2
++      end
++      if text.kind == "quest" then
++        text.kind = "creatureName"
++      end
++      if not validTextKinds[text.kind] then
++        text.kind = "creatureName"
++      end
+     end
+   end
+   for _, marker in ipairs(design.markers) do
+-    if not marker.color then
+-      marker.color = {r = 1, g = 1, b = 1}
+-    end
+-    if marker.layer == nil then
+-      marker.layer = 3
+-    end
+-    if marker.kind == "castIcon" and marker.square == nil then
+-      marker.square = false
+-    end
+-    if marker.kind == "elite" and marker.openWorldOnly == nil then
+-      marker.openWorldOnly = false
+-    end
+-    if marker.kind == "rare" and marker.includeElites == nil then
+-      marker.includeElites = false
++    if type(marker) == "table" then
++      if not marker.color then
++        marker.color = {r = 1, g = 1, b = 1}
++      end
++      if marker.layer == nil then
++        marker.layer = 3
++      end
++      if marker.kind == "castIcon" and marker.square == nil then
++        marker.square = false
++      end
++      if marker.kind == "elite" and marker.openWorldOnly == nil then
++        marker.openWorldOnly = false
++      end
++      if marker.kind == "rare" and marker.includeElites == nil then
++        marker.includeElites = false
++      end
++      if marker.asset == nil or addonTable.Assets.Markers[marker.asset] == nil then
++        marker.asset = fallbackMarkerAssetByKind[marker.kind] or "normal/quest-blizzard"
++      end
+     end
+   end
+   if not design.auras then
+@@ -94,51 +179,56 @@ function addonTable.Core.UpgradeDesign(design)
+     }
+   end
+   for _, aura in ipairs(design.auras) do
+-    if not aura.scale then
+-      aura.scale = 1
+-    end
+-    if aura.showCountdown == nil then
+-      aura.showCountdown = true
+-    end
+-    if aura.direction == nil then
+-      if aura.anchor[1] and aura.anchor[1]:match("RIGHT") then
+-        aura.direction = "LEFT"
+-      else
+-        aura.direction = "RIGHT"
++    if type(aura) == "table" then
++      if type(aura.anchor) ~= "table" then
++        aura.anchor = {"CENTER", 0, 0}
++      end
++      if not aura.scale then
++        aura.scale = 1
++      end
++      if aura.showCountdown == nil then
++        aura.showCountdown = true
++      end
++      if aura.direction == nil then
++        if aura.anchor[1] and aura.anchor[1]:match("RIGHT") then
++          aura.direction = "LEFT"
++        else
++          aura.direction = "RIGHT"
++        end
++      end
++      if not aura.height then
++        aura.height = 1
++      end
++      if not aura.textScale then
++        aura.textScale = 1
++      end
++      if aura.kind == "debuffs" and not aura.filters then
++        aura.showPandemic = true
++        aura.filters = {
++          important = true,
++          fromYou = true,
++        }
++      end
++      if aura.kind == "buffs" and not aura.filters then
++        aura.filters = {
++          dispelable = false,
++          important = true,
++        }
++      end
++      if aura.kind == "crowdControl" and not aura.filters then
++        aura.filters = {
++          fromYou = false,
++        }
++      end
++      if not aura.sorting then
++        aura.sorting = {
++          kind = "duration",
++          reversed = false,
++        }
++      end
++      if aura.kind == "debuffs" and aura.showPandemic == nil then
++        aura.showPandemic = true
+       end
+-    end
+-    if not aura.height then
+-      aura.height = 1
+-    end
+-    if not aura.textScale then
+-      aura.textScale = 1
+-    end
+-    if aura.kind == "debuffs" and not aura.filters then
+-      aura.showPandemic = true
+-      aura.filters = {
+-        important = true,
+-        fromYou = true,
+-      }
+-    end
+-    if aura.kind == "buffs" and not aura.filters then
+-      aura.filters = {
+-        dispelable = false,
+-        important = true,
+-      }
+-    end
+-    if aura.kind == "crowdControl" and not aura.filters then
+-      aura.filters = {
+-        fromYou = false,
+-      }
+-    end
+-    if not aura.sorting then
+-      aura.sorting = {
+-        kind = "duration",
+-        reversed = false,
+-      }
+-    end
+-    if aura.kind == "debuffs" and aura.showPandemic == nil then
+-      aura.showPandemic = true
+     end
+   end
+ 
+@@ -146,25 +236,30 @@ function addonTable.Core.UpgradeDesign(design)
+     local index = 1
+     while index <= #autoColors do
+       local ac = autoColors[index]
+-      if ac.kind == "eliteType" and ac.colors.trivial == nil then
+-        ac.colors.trivial = GetColor("b28e55")
+-      elseif ac.kind == "threat" and ac.useSafeColor == nil then
+-        ac.useSafeColor = true
+-      elseif ac.kind == "quest" and ac.colors.hostile == nil then
+-        ac.colors.hostile = ac.colors.quest
+-        ac.colors.neutral = ac.colors.quest
+-        ac.colors.friendly = ac.colors.quest
+-        ac.colors.quest = nil
+-      elseif ac.kind == "classColors" and ac.colors == nil then
+-        ac.colors = {}
+-      elseif ac.kind == "cast" and ac.colors.uninterruptable then
+-        local new = CopyTable(addonTable.CustomiseDialog.ColorsConfig["uninterruptableCast"].default)
+-        new.colors.uninterruptable = ac.colors.uninterruptable
+-        table.insert(autoColors, index, new)
+-        ac.colors.uninterruptable = nil
+-        index = index - 1
+-      elseif ac.kind == "interruptReady" and ac.notReady then
+-        ac.notReady = nil
++      if type(ac) == "table" then
++        if (ac.kind == "eliteType" or ac.kind == "threat" or ac.kind == "quest" or ac.kind == "cast") and type(ac.colors) ~= "table" then
++          ac.colors = {}
++        end
++        if ac.kind == "eliteType" and ac.colors.trivial == nil then
++          ac.colors.trivial = GetColor("b28e55")
++        elseif ac.kind == "threat" and ac.useSafeColor == nil then
++          ac.useSafeColor = true
++        elseif ac.kind == "quest" and ac.colors.hostile == nil then
++          ac.colors.hostile = ac.colors.quest
++          ac.colors.neutral = ac.colors.quest
++          ac.colors.friendly = ac.colors.quest
++          ac.colors.quest = nil
++        elseif ac.kind == "classColors" and ac.colors == nil then
++          ac.colors = {}
++        elseif ac.kind == "cast" and ac.colors.uninterruptable then
++          local new = CopyTable(addonTable.CustomiseDialog.ColorsConfig["uninterruptableCast"].default)
++          new.colors.uninterruptable = ac.colors.uninterruptable
++          table.insert(autoColors, index, new)
++          ac.colors.uninterruptable = nil
++          index = index - 1
++        elseif ac.kind == "interruptReady" and ac.notReady then
++          ac.notReady = nil
++        end
+       end
+ 
+       index = index + 1
+@@ -172,209 +267,269 @@ function addonTable.Core.UpgradeDesign(design)
+   end
+ 
+   for _, bar in ipairs(design.bars) do
+-    if bar.kind == "health" and not bar.absorb then
+-      local mode = bar.border.height and bar.border.height * 100 or addonTable.Assets.BarBordersLegacy[bar.border.asset].mode
+-      local isNarrow = mode < 75
+-      bar.absorb = {asset = isNarrow and "narrow/blizzard-absorb" or "wide/blizzard-absorb", color = {r = 1, g = 1, b = 1}}
+-    end
+-    if bar.kind == "health" and not bar.absorb.color then
+-      bar.absorb.color = GetColor("FFFFFF")
+-    end
+-    if bar.layer == nil then
+-      bar.layer = 1
+-    end
+-    if bar and bar.absorb and bar.absorb.color.a == nil then
+-      bar.absorb.color.a = 1
+-    end
+-    if bar.border.color.a == nil then
+-      bar.border.color.a = 1
+-    end
+-    if bar.border.asset:match("/blizzard%-cast%-bar$") then
+-      local map = {
+-        ["200/blizzard-cast-bar"] = "200/blizzard-cast-bar-white",
+-        ["175/blizzard-cast-bar"] = "175/blizzard-cast-bar-white",
+-        ["150/blizzard-cast-bar"] = "150/blizzard-cast-bar-white",
+-        ["125/blizzard-cast-bar"] = "125/blizzard-cast-bar-white",
+-        ["100/blizzard-cast-bar"] = "100/blizzard-cast-bar-white",
+-        ["75/blizzard-cast-bar"] = "75/blizzard-cast-bar-white",
+-        ["special/blizzard-cast-bar"] = "50/blizzard-cast-bar-white",
+-      }
+-      if bar.border.color.r == 1 and bar.border.color.g == 1 and bar.border.color.b == 1 and bar.border.color.a == 1 then
+-        bar.border.color = GetColor("fffb52")
+-        bar.border.color.a = 0.5
+-      end
+-      bar.border.asset = map[bar.border.asset]
+-    end
+-    if bar.kind == "health" and not bar.autoColors then
+-      local classColors = CopyTable(addonTable.CustomiseDialog.ColorsConfig["classColors"].default)
+-      local tapped = CopyTable(addonTable.CustomiseDialog.ColorsConfig["tapped"].default)
+-      if bar.colors and bar.colors.tapped then
+-        tapped.colors.tapped = bar.colors.tapped
+-      end
+-      local threat = CopyTable(addonTable.CustomiseDialog.ColorsConfig["threat"].default)
+-      Mixin(threat.colors, bar.colors and bar.colors.threat or {})
+-      local reaction = CopyTable(addonTable.CustomiseDialog.ColorsConfig["reaction"].default)
+-      Mixin(reaction.colors, bar.colors and bar.colors.npc or {})
+-      reaction.colors.tapped = nil
+-
+-      threat.combatOnly = not bar.aggroColoursOnHostiles
+-      bar.aggroColoursOnHostiles = nil
+-
+-      bar.autoColors = {
+-        classColors,
+-        tapped,
+-        threat,
+-        reaction
+-      }
+-      bar.colors = nil
+-    end
+-    if not bar.background.color then
+-      bar.background.color = GetColor("FFFFFF")
+-      bar.background.color.a = bar.background.alpha or 1
+-      bar.background.alpha = nil
+-    end
+-    if bar.kind == "cast" and bar.colors and bar.colors.normalChannel == nil then
+-      bar.colors.normalChannel = GetColor("3ec637")
+-    end
+-    if bar.kind == "cast" and bar.colors and bar.colors.normalCast == nil then
+-      bar.colors.importantCast = GetColor("ff1827")
+-      bar.colors.importantChannel = GetColor("0a43ff")
+-      bar.colors.normalCast = bar.colors.normal
+-      bar.colors.normal = nil
+-    end
+-    if bar.kind == "cast" and not bar.autoColors then
+-      local cast = {
+-        kind = "cast",
+-        colors = {
+-          cast = bar.colors.normalCast,
+-          channel = bar.colors.normalChannel,
+-          uninterruptable = bar.colors.uninterruptable,
+-          interrupted = bar.colors.interrupted,
+-        },
+-      }
+-      local important = {
+-        kind = "importantCast",
+-        colors = {
+-          cast = bar.colors.importantCast,
+-          channel = bar.colors.importantChannel,
+-        },
+-      }
+-      bar.autoColors = {
+-        important,
+-        cast,
+-      }
+-      bar.colors = nil
+-    end
+-    if not addonTable.Assets.BarBordersSliced[bar.border.asset] then
+-      local size = addonTable.Assets.BarBordersLegacy[bar.border.asset].mode
+-      bar.border.asset = addonTable.Assets.BarBordersLegacy[bar.border.asset].tag
+-      bar.border.width = 1
+-      bar.border.height = size ~= 50 and size/100 or 3.8/7.5
+-
+-      if bar.border.asset == "blizzard-classic-level" then
+-        bar.border.asset = "blizzard-classic"
+-        table.insert(design.highlights, {
+-          kind = "fixed",
+-          asset = "100/classic-level",
+-          layer = bar.layer + 1,
+-          scale = bar.scale,
+-          color = CopyTable(bar.border.color),
+-          anchor = {"RIGHT", 84 * bar.scale, 0}
+-        })
++    if type(bar) == "table" then
++      if type(bar.border) ~= "table" then
++        bar.border = {}
++      end
++      if type(bar.border.color) ~= "table" then
++        bar.border.color = GetColor("000000")
++      end
++      if bar.border.asset == nil then
++        bar.border.asset = "slight"
++      end
++      if type(bar.background) ~= "table" then
++        bar.background = {}
++      end
++      if type(bar.anchor) ~= "table" then
++        bar.anchor = {}
++      end
++      if bar.scale == nil then
++        bar.scale = 1
++      end
++      if bar.kind ~= "health" and bar.kind ~= "cast" then
++        bar.kind = "health"
+       end
+-    end
+-    if bar.kind == "cast" and bar.interruptMarker == nil then
+-      bar.interruptMarker = {asset = "none"}
+-    end
+-    if bar.kind == "cast" and bar.interruptMarker.color == nil then
+-      bar.interruptMarker.color = GetColor("FFFFFF")
+-    end
+-    if bar.autoColors then
+-      UpdateAutoColors(bar.autoColors)
+-    end
+-  end
+ 
+-  for _, text in ipairs(design.texts) do
+-    if text.kind == "layer" then
+-      text.kind = "level"
+-    end
+-    if text.kind == "target" and text.applyClassColors == nil then
+-      text.applyClassColors = false
+-    end
+-    if (text.kind == "creatureName" or text.kind == "guild") and text.showWhenWowDoes == nil then
+-      text.showWhenWowDoes = false
+-    end
+-    if text.shorten ~= nil then
+-      text.shorten = nil
+-      text.truncate = text.truncate or text.shorten and true or false
+-    end
+-    if text.kind == "creatureName" and not text.autoColors then
+-      if text.applyClassColors then
++      local legacyBorder = addonTable.Assets.BarBordersLegacy[bar.border.asset]
++      if bar.kind == "health" and not bar.absorb then
++        local mode = bar.border.height and bar.border.height * 100 or (legacyBorder and legacyBorder.mode) or 100
++        local isNarrow = mode < 75
++        bar.absorb = {asset = isNarrow and "narrow/blizzard-absorb" or "wide/blizzard-absorb", color = {r = 1, g = 1, b = 1}}
++      end
++      if bar.kind == "health" and bar.absorb and not bar.absorb.color then
++        bar.absorb.color = GetColor("FFFFFF")
++      end
++      if bar.layer == nil then
++        bar.layer = 1
++      end
++      if bar.absorb and bar.absorb.color and bar.absorb.color.a == nil then
++        bar.absorb.color.a = 1
++      end
++      if bar.border.color.a == nil then
++        bar.border.color.a = 1
++      end
++      if type(bar.border.asset) == "string" and bar.border.asset:match("/blizzard%-cast%-bar$") then
++        local map = {
++          ["200/blizzard-cast-bar"] = "200/blizzard-cast-bar-white",
++          ["175/blizzard-cast-bar"] = "175/blizzard-cast-bar-white",
++          ["150/blizzard-cast-bar"] = "150/blizzard-cast-bar-white",
++          ["125/blizzard-cast-bar"] = "125/blizzard-cast-bar-white",
++          ["100/blizzard-cast-bar"] = "100/blizzard-cast-bar-white",
++          ["75/blizzard-cast-bar"] = "75/blizzard-cast-bar-white",
++          ["special/blizzard-cast-bar"] = "50/blizzard-cast-bar-white",
++        }
++        if bar.border.color.r == 1 and bar.border.color.g == 1 and bar.border.color.b == 1 and bar.border.color.a == 1 then
++          bar.border.color = GetColor("fffb52")
++          bar.border.color.a = 0.5
++        end
++        bar.border.asset = map[bar.border.asset] or bar.border.asset
++      end
++      if bar.kind == "health" and not bar.autoColors then
+         local classColors = CopyTable(addonTable.CustomiseDialog.ColorsConfig["classColors"].default)
+         local tapped = CopyTable(addonTable.CustomiseDialog.ColorsConfig["tapped"].default)
+-        if text.colors and text.colors.tapped then
+-          tapped.colors.tapped = text.colors.tapped
++        if bar.colors and bar.colors.tapped then
++          tapped.colors.tapped = bar.colors.tapped
+         end
++        local threat = CopyTable(addonTable.CustomiseDialog.ColorsConfig["threat"].default)
++        Mixin(threat.colors, bar.colors and bar.colors.threat or {})
+         local reaction = CopyTable(addonTable.CustomiseDialog.ColorsConfig["reaction"].default)
+-        Mixin(reaction.colors, text.colors and text.colors.npc or {})
++        Mixin(reaction.colors, bar.colors and bar.colors.npc or {})
+         reaction.colors.tapped = nil
+-        text.autoColors = {classColors, tapped, reaction}
+-      else
+-        text.autoColors = {}
++
++        threat.combatOnly = not bar.aggroColoursOnHostiles
++        bar.aggroColoursOnHostiles = nil
++
++        bar.autoColors = {
++          classColors,
++          tapped,
++          threat,
++          reaction
++        }
++        bar.colors = nil
+       end
+-      text.applyClassColors = nil
+-      text.colors = nil
+-    end
+-    if text.kind == "level" and not text.autoColors then
+-      if text.applyDifficultyColors then
+-        local difficulty = CopyTable(addonTable.CustomiseDialog.ColorsConfig["difficulty"].default)
+-        Mixin(difficulty.colors, text.colors and text.colors.difficulty or {})
+-        text.autoColors = {
+-          difficulty,
++      if not bar.background.color then
++        bar.background.color = GetColor("FFFFFF")
++        bar.background.color.a = bar.background.alpha or 1
++        bar.background.alpha = nil
++      end
++      if bar.kind == "cast" and bar.colors and bar.colors.normalChannel == nil then
++        bar.colors.normalChannel = GetColor("3ec637")
++      end
++      if bar.kind == "cast" and bar.colors and bar.colors.normalCast == nil then
++        bar.colors.importantCast = GetColor("ff1827")
++        bar.colors.importantChannel = GetColor("0a43ff")
++        bar.colors.normalCast = bar.colors.normal
++        bar.colors.normal = nil
++      end
++      if bar.kind == "cast" and not bar.autoColors and bar.colors then
++        local cast = {
++          kind = "cast",
++          colors = {
++            cast = bar.colors.normalCast,
++            channel = bar.colors.normalChannel,
++            uninterruptable = bar.colors.uninterruptable,
++            interrupted = bar.colors.interrupted,
++          },
++        }
++        local important = {
++          kind = "importantCast",
++          colors = {
++            cast = bar.colors.importantCast,
++            channel = bar.colors.importantChannel,
++          },
+         }
+-      else
+-        text.autoColors = {}
++        bar.autoColors = {
++          important,
++          cast,
++        }
++        bar.colors = nil
++      end
++      if not addonTable.Assets.BarBordersSliced[bar.border.asset] then
++        local legacy = addonTable.Assets.BarBordersLegacy[bar.border.asset]
++        if legacy then
++          local size = legacy.mode
++          bar.border.asset = legacy.tag
++          bar.border.width = 1
++          bar.border.height = size ~= 50 and size/100 or 3.8/7.5
++
++          if bar.border.asset == "blizzard-classic-level" then
++            bar.border.asset = "blizzard-classic"
++            table.insert(design.highlights, {
++              kind = "fixed",
++              asset = "100/classic-level",
++              layer = bar.layer + 1,
++              scale = bar.scale,
++              color = CopyTable(bar.border.color),
++              anchor = {"RIGHT", 84 * bar.scale, 0}
++            })
++          end
++        else
++          bar.border.asset = "slight"
++          bar.border.width = bar.border.width or 1
++          bar.border.height = bar.border.height or 1
++        end
++      end
++      if bar.kind == "cast" and bar.interruptMarker == nil then
++        bar.interruptMarker = {asset = "none"}
++      end
++      if bar.kind == "cast" and bar.interruptMarker.color == nil then
++        bar.interruptMarker.color = GetColor("FFFFFF")
++      end
++      if bar.autoColors then
++        UpdateAutoColors(bar.autoColors)
+       end
+-      text.applyDifficultyColors = nil
+-      text.colors = nil
+-    end
+-    if text.kind == "health" and text.significantFigures == nil then
+-      text.significantFigures = 0
+-    end
+-    if text.autoColors then
+-      UpdateAutoColors(text.autoColors)
+     end
+   end
+ 
+-  for _, highlight in ipairs(design.highlights) do
+-    if highlight.layer == nil then
+-      highlight.layer = 0
+-    end
+-    if highlight.color.a == nil then
+-      highlight.color.a = 1
++  for _, text in ipairs(design.texts) do
++    if type(text) == "table" then
++      if text.kind == "layer" then
++        text.kind = "level"
++      end
++      if text.kind == "target" and text.applyClassColors == nil then
++        text.applyClassColors = false
++      end
++      if (text.kind == "creatureName" or text.kind == "guild") and text.showWhenWowDoes == nil then
++        text.showWhenWowDoes = false
++      end
++      if text.shorten ~= nil then
++        local shorten = text.shorten
++        text.shorten = nil
++        if text.truncate == nil then
++          text.truncate = shorten ~= "NONE"
++        end
++      end
++      if text.kind == "creatureName" and not text.autoColors then
++        if text.applyClassColors then
++          local classColors = CopyTable(addonTable.CustomiseDialog.ColorsConfig["classColors"].default)
++          local tapped = CopyTable(addonTable.CustomiseDialog.ColorsConfig["tapped"].default)
++          if text.colors and text.colors.tapped then
++            tapped.colors.tapped = text.colors.tapped
++          end
++          local reaction = CopyTable(addonTable.CustomiseDialog.ColorsConfig["reaction"].default)
++          Mixin(reaction.colors, text.colors and text.colors.npc or {})
++          reaction.colors.tapped = nil
++          text.autoColors = {classColors, tapped, reaction}
++        else
++          text.autoColors = {}
++        end
++        text.applyClassColors = nil
++        text.colors = nil
++      end
++      if text.kind == "level" and not text.autoColors then
++        if text.applyDifficultyColors then
++          local difficulty = CopyTable(addonTable.CustomiseDialog.ColorsConfig["difficulty"].default)
++          Mixin(difficulty.colors, text.colors and text.colors.difficulty or {})
++          text.autoColors = {
++            difficulty,
++          }
++        else
++          text.autoColors = {}
++        end
++        text.applyDifficultyColors = nil
++        text.colors = nil
++      end
++      if text.kind == "health" and text.significantFigures == nil then
++        text.significantFigures = 0
++      end
++      if text.autoColors then
++        UpdateAutoColors(text.autoColors)
++      end
+     end
++  end
+ 
+-    if not addonTable.Assets.Highlights[highlight.asset] then
+-      local old = addonTable.Assets.HighlightsLegacy[highlight.asset]
+-      highlight.asset = addonTable.Assets.HighlightsLegacy[highlight.asset].tag
+-      local new = addonTable.Assets.Highlights[highlight.asset]
+-
+-      if new.mode == addonTable.Assets.RenderMode.Sliced then
+-        local baseWidth, baseHeight = 125, 15.625
+-        highlight.width = old.width / baseWidth
+-        highlight.height = old.height / baseHeight
+-      elseif new.mode == addonTable.Assets.RenderMode.Stretch then
+-        highlight.width = old.width / new.width
+-        highlight.height = old.height / new.height
+-      else
++  for _, highlight in ipairs(design.highlights) do
++    if type(highlight) == "table" then
++      if type(highlight.color) ~= "table" then
++        highlight.color = {r = 1, g = 1, b = 1}
++      end
++      if type(highlight.anchor) ~= "table" then
++        highlight.anchor = {}
++      end
++      if highlight.scale == nil then
++        highlight.scale = 1
++      end
++      if highlight.layer == nil then
++        highlight.layer = 0
++      end
++      if highlight.color.a == nil then
++        highlight.color.a = 1
++      end
++      if highlight.width == nil then
+         highlight.width = 1
++      end
++      if highlight.height == nil then
+         highlight.height = 1
+       end
++
++      local new = addonTable.Assets.Highlights[highlight.asset]
++      if not new then
++        local old = addonTable.Assets.HighlightsLegacy[highlight.asset]
++        if old and addonTable.Assets.Highlights[old.tag] then
++          highlight.asset = old.tag
++          new = addonTable.Assets.Highlights[highlight.asset]
++          if new.mode == addonTable.Assets.RenderMode.Sliced then
++            local baseWidth, baseHeight = 125, 15.625
++            highlight.width = old.width / baseWidth
++            highlight.height = old.height / baseHeight
++          elseif new.mode == addonTable.Assets.RenderMode.Stretch then
++            highlight.width = old.width / new.width
++            highlight.height = old.height / new.height
++          else
++            highlight.width = 1
++            highlight.height = 1
++          end
++        else
++          highlight.asset = "bold"
++          highlight.width = 1
++          highlight.height = 1
++        end
++      end
+     end
+   end
+ 
+   for _, bar in ipairs(design.specialBars) do
+-    if bar.layer == nil then
++    if type(bar) == "table" and bar.layer == nil then
+       bar.layer = 3
+     end
+   end
+@@ -461,8 +616,11 @@ end
+ 
+ local function UpdateRect(design)
+   local function GetRect(asset, scale, anchor)
+-    local width = asset.width * scale
+-    local height = asset.height * scale
++    local baseWidth = asset.width or asset.height or 0
++    local baseHeight = asset.height or asset.width or 0
++    local width = baseWidth * scale
++    local height = baseHeight * scale
++    anchor = anchor or {}
+     local left, bottom
+     if anchor[1] == "BOTTOMLEFT" then
+       left = anchor[2] or 0
+diff --git a/Platynator/CustomiseDialog/ImportExport.lua b/Platynator/CustomiseDialog/ImportExport.lua
+index 7de2771..d7c3333 100644
+--- a/Platynator/CustomiseDialog/ImportExport.lua
++++ b/Platynator/CustomiseDialog/ImportExport.lua
+@@ -1,6 +1,129 @@
+ ---@class addonTablePlatynator
+ local addonTable = select(2, ...)
+ 
++local function IsKnownDesign(import, name)
++  if type(name) ~= "string" or name == "" then
++    return false
++  end
++
++  if type(import.designs) == "table" and type(import.designs[name]) == "table" then
++    return true
++  end
++
++  return type(addonTable.Design) == "table"
++    and type(addonTable.Design.Defaults) == "table"
++    and addonTable.Design.Defaults[name] ~= nil
++end
++
++local function FindFirstImportedDesign(import)
++  if type(import.designs) ~= "table" then
++    return nil
++  end
++
++  local fallback
++  for key, design in pairs(import.designs) do
++    if type(key) == "string" and type(design) == "table" then
++      if not key:match("^_") then
++        return key
++      end
++      fallback = fallback or key
++    end
++  end
++
++  return fallback
++end
++
++local function SanitizeImportedProfile(import)
++  if type(import) ~= "table" then
++    return
++  end
++
++  if type(import.designs) ~= "table" then
++    import.designs = {}
++  end
++  if type(import.designs_assigned) ~= "table" then
++    import.designs_assigned = {}
++  end
++
++  local show = import.show_nameplates
++  if type(show) ~= "table" then
++    show = {}
++    import.show_nameplates = show
++  end
++  if show.enemy == nil then
++    show.enemy = true
++  end
++  if show.enemyMinion == nil then
++    show.enemyMinion = true
++  end
++  if show.enemyMinor == nil then
++    show.enemyMinor = true
++  end
++  show.friendlyNPC = false
++  show.friendlyPlayer = false
++  show.friendlyMinion = false
++  show.player = nil
++  show.npc = nil
++
++  local stacking = import.stacking_nameplates
++  if type(stacking) ~= "table" then
++    stacking = {enemy = true}
++    import.stacking_nameplates = stacking
++  elseif stacking.enemy == nil then
++    stacking.enemy = true
++  end
++  stacking.friend = false
++
++  local clickable = import.clickable_nameplates
++  if type(clickable) ~= "table" then
++    clickable = {enemy = true}
++    import.clickable_nameplates = clickable
++  elseif clickable.enemy == nil then
++    clickable.enemy = true
++  end
++  clickable.friend = false
++
++  import.enable_friendly_nameplates = false
++  import.show_friendly_in_instances_1 = "never"
++  import.show_friendly_in_instances = nil
++
++  local mapping = import.designs_assigned
++  local style = import.style
++  if not IsKnownDesign(import, style) then
++    style = nil
++  end
++  if not style and IsKnownDesign(import, mapping.enemy) then
++    style = mapping.enemy
++  end
++  if not style and IsKnownDesign(import, mapping.friend) then
++    style = mapping.friend
++  end
++  if not style then
++    style = FindFirstImportedDesign(import)
++  end
++  if not style then
++    local current = addonTable.Config.Get(addonTable.Config.Options.STYLE)
++    if IsKnownDesign(import, current) then
++      style = current
++    end
++  end
++  if style and IsKnownDesign(import, style) then
++    import.style = style
++  else
++    import.style = nil
++  end
++
++  if not IsKnownDesign(import, mapping.enemy) then
++    mapping.enemy = import.style
++  end
++  if not IsKnownDesign(import, mapping.friend) then
++    mapping.friend = mapping.enemy or import.style
++  end
++  if not IsKnownDesign(import, mapping.enemySimplified) then
++    mapping.enemySimplified = "_hare_simplified"
++  end
++end
++
+ function addonTable.CustomiseDialog.ImportData(import, name, overwrite)
+   if import.addon ~= "Platynator" then
+     return false
+@@ -24,18 +147,20 @@ function addonTable.CustomiseDialog.ImportData(import, name, overwrite)
+   elseif import.kind == "profile" then
+     import.kind = nil
+     if overwrite and PLATYNATOR_CONFIG.Profiles[name] then
+-      local oldDesigns = PLATYNATOR_CONFIG.Profiles[name].designs
++      local oldDesigns = PLATYNATOR_CONFIG.Profiles[name].designs or {}
+       local old = addonTable.Config.CurrentProfile
+       PLATYNATOR_CONFIG.Profiles[name] = import
+       local designs = PLATYNATOR_CONFIG.Profiles[name].designs
++      if type(designs) ~= "table" then
++        designs = {}
++        PLATYNATOR_CONFIG.Profiles[name].designs = designs
++      end
+       for key, design in pairs(oldDesigns) do
+         if designs[key] == nil then
+           designs[key] = design
+         end
+       end
+-      if import.style and not import.designs[import.style] then
+-        import.style = import.designs_assigned["enemy"]
+-      end
++      SanitizeImportedProfile(import)
+       addonTable.Config.ChangeProfile(name, old)
+     else
+       if PLATYNATOR_CONFIG.Profiles[name] then
+@@ -44,9 +169,7 @@ function addonTable.CustomiseDialog.ImportData(import, name, overwrite)
+       addonTable.Config.MakeProfile(name, false)
+       local old = addonTable.Config.CurrentProfile
+       PLATYNATOR_CONFIG.Profiles[PLATYNATOR_CURRENT_PROFILE] = import
+-      if import.style and not import.designs[import.style] then
+-        import.style = import.designs_assigned["enemy"]
+-      end
++      SanitizeImportedProfile(import)
+       addonTable.Config.ChangeProfile(PLATYNATOR_CURRENT_PROFILE, old)
+     end
+   end
+diff --git a/Platynator/CustomiseDialog/Main.lua b/Platynator/CustomiseDialog/Main.lua
+index b7051fd..9ca769b 100644
+--- a/Platynator/CustomiseDialog/Main.lua
++++ b/Platynator/CustomiseDialog/Main.lua
+@@ -234,39 +234,9 @@ local function SetupBehaviour(parent)
+   applyCvarsCheckbox:SetPoint("TOP")
+   table.insert(allFrames, applyCvarsCheckbox)
+ 
+-  local friendlyModuleCheckbox = addonTable.CustomiseDialog.Components.GetCheckbox(container, addonTable.Locales.ENABLE_FRIENDLY_NAMEPLATES, 28, function(value)
+-    if InCombatLockdown() then
+-      return
+-    end
+-    addonTable.Config.Set(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES, value)
+-  end)
+-  friendlyModuleCheckbox.option = addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES
+-  friendlyModuleCheckbox:SetPoint("TOP", allFrames[#allFrames], "BOTTOM", 0, 0)
+-  table.insert(allFrames, friendlyModuleCheckbox)
+-
+   local applyNameplatesDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.USE_NAMEPLATES_FOR)
+   applyNameplatesDropdown:SetPoint("TOP", allFrames[#allFrames], "BOTTOM", 0, -30)
+   do
+-    local labels
+-    local values = {
+-      "player",
+-      "npc",
+-      "enemy",
+-    }
+-    if C_CVar.GetCVarInfo("nameplateShowFriendlyPlayers") ~= nil then
+-      labels = {
+-        addonTable.Locales.FRIENDLY_PLAYERS,
+-        addonTable.Locales.FRIENDLY_NPCS,
+-        addonTable.Locales.ENEMIES,
+-      }
+-    else
+-      labels = {
+-        addonTable.Locales.PLAYERS_AND_FRIENDS,
+-        addonTable.Locales.FRIENDLY_NPCS,
+-        addonTable.Locales.ENEMIES,
+-      }
+-    end
+-
+     local function GetCheckbox(rootDescription, label, value)
+       return rootDescription:CreateCheckbox(label, function()
+         return addonTable.Config.Get(addonTable.Config.Options.SHOW_NAMEPLATES)[value]
+@@ -282,21 +252,9 @@ local function SetupBehaviour(parent)
+ 
+     applyNameplatesDropdown.DropDown:SetDefaultText(NONE)
+     applyNameplatesDropdown.DropDown:SetupMenu(function(_, rootDescription)
+-      if C_CVar.GetCVarInfo("nameplateShowFriendlyPlayers") ~= nil then
+-        local friendlyPlayer = GetCheckbox(rootDescription, addonTable.Locales.FRIENDLY_PLAYERS, "friendlyPlayer")
+-        GetCheckbox(friendlyPlayer, addonTable.Locales.MINIONS, "friendlyMinion")
+-        GetCheckbox(rootDescription, addonTable.Locales.FRIENDLY_NPCS, "friendlyNPC")
+-        local enemies = GetCheckbox(rootDescription, addonTable.Locales.ENEMIES, "enemy")
+-        GetCheckbox(enemies, addonTable.Locales.MINIONS, "enemyMinion")
+-        GetCheckbox(enemies, addonTable.Locales.MINORS, "enemyMinor")
+-      else
+-        local friendlyPlayer = GetCheckbox(rootDescription, addonTable.Locales.PLAYERS_AND_FRIENDS, "friendlyPlayer")
+-        GetCheckbox(friendlyPlayer, addonTable.Locales.FRIENDLY_NPCS, "friendlyNPC")
+-        GetCheckbox(friendlyPlayer, addonTable.Locales.MINIONS, "friendlyMinion")
+-        local enemies = GetCheckbox(rootDescription, addonTable.Locales.ENEMIES, "enemy")
+-        GetCheckbox(enemies, addonTable.Locales.MINIONS, "enemyMinion")
+-        GetCheckbox(enemies, addonTable.Locales.MINORS, "enemyMinor")
+-      end
++      local enemies = GetCheckbox(rootDescription, addonTable.Locales.ENEMIES, "enemy")
++      GetCheckbox(enemies, addonTable.Locales.MINIONS, "enemyMinion")
++      GetCheckbox(enemies, addonTable.Locales.MINORS, "enemyMinor")
+     end)
+   end
+   table.insert(allFrames, applyNameplatesDropdown)
+@@ -344,11 +302,9 @@ local function SetupBehaviour(parent)
+   local clickableNameplatesDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.CLICKABLE_NAMEPLATES)
+   clickableNameplatesDropdown:SetPoint("TOP", allFrames[#allFrames], "BOTTOM", 0, -30)
+   local values = {
+-    "friend",
+     "enemy",
+   }
+   local labels = {
+-    addonTable.Locales.FRIENDLY,
+     addonTable.Locales.ENEMY,
+   }
+   clickableNameplatesDropdown.DropDown:SetDefaultText(NONE)
+@@ -365,33 +321,6 @@ local function SetupBehaviour(parent)
+   end)
+   table.insert(allFrames, clickableNameplatesDropdown)
+ 
+-  local friendlyInInstancesDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.SHOW_FRIENDLY_IN_INSTANCES, function(value)
+-    return addonTable.Config.Get(addonTable.Config.Options.SHOW_FRIENDLY_IN_INSTANCES) == value
+-  end, function(value)
+-    addonTable.Config.Set(addonTable.Config.Options.SHOW_FRIENDLY_IN_INSTANCES, value)
+-    addonTable.CallbackRegistry:TriggerEvent("RefreshStateChange", {
+-      [addonTable.Constants.RefreshReason.ShowBehaviour] = true,
+-      --[addonTable.Constants.RefreshReason.Design] = true,
+-    })
+-  end)
+-  friendlyInInstancesDropdown:SetPoint("TOP", allFrames[#allFrames], "BOTTOM", 0, -30)
+-  do
+-    local values = {
+-      "never",
+-      "always",
+-    }
+-    local labels = {
+-      addonTable.Locales.NEVER,
+-      addonTable.Locales.ALWAYS_ALL,
+-    }
+-    if C_CVar.GetCVarInfo("nameplateShowOnlyNameForFriendlyPlayerUnits") then
+-      table.insert(values, 2, "name_only")
+-      table.insert(labels, 2, addonTable.Locales.NAME_ONLY_PLAYERS)
+-    end
+-    friendlyInInstancesDropdown:Init(labels, values)
+-  end
+-  table.insert(allFrames, friendlyInInstancesDropdown)
+-
+   local targetScaleSlider = addonTable.CustomiseDialog.Components.GetSlider(container, addonTable.Locales.ON_TARGET_SCALE, 1, 500, function(value) return ("%d%%"):format(value) end, function(value)
+     addonTable.Config.Set(addonTable.Config.Options.TARGET_SCALE, value / 100)
+   end)
+@@ -465,11 +394,9 @@ local function SetupPositioning(parent)
+   local stackingNameplatesDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.STACKING_NAMEPLATES)
+   stackingNameplatesDropdown:SetPoint("TOP")
+   local values = {
+-    "friend",
+     "enemy",
+   }
+   local labels = {
+-    addonTable.Locales.FRIENDLY,
+     addonTable.Locales.ENEMY,
+   }
+   stackingNameplatesDropdown.DropDown:SetDefaultText(NONE)
+@@ -543,22 +470,13 @@ local function SetupStyleSelect(parent)
+ 
+   local allFrames = {}
+ 
+-  local friendlyStyleDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.FRIENDLY, function(value)
+-    return addonTable.Config.Get(addonTable.Config.Options.DESIGNS_ASSIGNED)["friend"] == value
+-  end, function(value)
+-    addonTable.Config.Get(addonTable.Config.Options.DESIGNS_ASSIGNED)["friend"] = value
+-    addonTable.CallbackRegistry:TriggerEvent("RefreshStateChange", {[addonTable.Constants.RefreshReason.Design] = true})
+-  end)
+-  friendlyStyleDropdown:SetPoint("TOP")
+-  table.insert(allFrames, friendlyStyleDropdown)
+-
+   local enemyStyleDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.ENEMY, function(value)
+     return addonTable.Config.Get(addonTable.Config.Options.DESIGNS_ASSIGNED)["enemy"] == value
+   end, function(value)
+     addonTable.Config.Get(addonTable.Config.Options.DESIGNS_ASSIGNED)["enemy"] = value
+     addonTable.CallbackRegistry:TriggerEvent("RefreshStateChange", {[addonTable.Constants.RefreshReason.Design] = true})
+   end)
+-  enemyStyleDropdown:SetPoint("TOP", allFrames[#allFrames], "BOTTOM")
++  enemyStyleDropdown:SetPoint("TOP")
+   table.insert(allFrames, enemyStyleDropdown)
+ 
+   local simplifiedStyleDropdown
+@@ -593,7 +511,6 @@ local function SetupStyleSelect(parent)
+       table.insert(values, entry.value)
+     end
+ 
+-    friendlyStyleDropdown:Init(labels, values)
+     enemyStyleDropdown:Init(labels, values)
+     if simplifiedStyleDropdown then
+       simplifiedStyleDropdown:Init(labels, values)
+@@ -728,9 +645,6 @@ function addonTable.CustomiseDialog.GetStyleDropdown(parent)
+           addonTable.Dialogs.ShowConfirm(addonTable.Locales.CONFIRM_DELETE_STYLE_X:format(entry.label), YES, NO, function()
+             addonTable.Config.Get(addonTable.Config.Options.DESIGNS)[entry.value] = nil
+             local assigned = addonTable.Config.Get(addonTable.Config.Options.DESIGNS_ASSIGNED)
+-            if assigned["friend"] == entry.value then
+-              assigned["friend"] = addonTable.Constants.CustomName
+-            end
+             if assigned["enemy"] == entry.value then
+               assigned["enemy"] = addonTable.Constants.CustomName
+             end
+diff --git a/Platynator/Display/Initialize.lua b/Platynator/Display/Initialize.lua
+index 3dfa526..69d5685 100644
+--- a/Platynator/Display/Initialize.lua
++++ b/Platynator/Display/Initialize.lua
+@@ -11,11 +11,6 @@ end
+ addonTable.Display.ManagerMixin = {}
+ function addonTable.Display.ManagerMixin:OnLoad()
+   self.styleIndex = 0
+-  self.friendDisplayPool = CreateFramePool("Frame", UIParent, nil, nil, false, function(frame)
+-    Mixin(frame, addonTable.Display.NameplateMixin)
+-    frame.kind = "friend"
+-    frame:OnLoad()
+-  end)
+   self.enemyDisplayPool = CreateFramePool("Frame", UIParent, nil, nil, false, function(frame)
+     Mixin(frame, addonTable.Display.NameplateMixin)
+     frame.kind = "enemy"
+@@ -58,9 +53,8 @@ function addonTable.Display.ManagerMixin:OnLoad()
+   C_Timer.NewTicker(0.1, function() -- Used for transitioning mobs to attackable
+     for unit, display in pairs(self.nameplateDisplays) do
+       local display = self.nameplateDisplays[unit]
+-      if display and ((display.kind == "friend" and UnitCanAttack("player", unit)) or (display.kind == "enemy" and not UnitCanAttack("player", unit))) then
++      if display and not UnitCanAttack("player", unit) then
+         self:Uninstall(unit)
+-        self:Install(unit, nameplate)
+       end
+       display:UpdateAurasForPandemic()
+     end
+@@ -177,7 +171,7 @@ function addonTable.Display.ManagerMixin:OnLoad()
+     if unit == "preview" then
+       return
+     end
+-    if not addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES) and not UnitCanAttack("player", unit) then
++    if not UnitCanAttack("player", unit) then
+       return
+     end
+     local nameplate = C_NamePlate.GetNamePlateForUnit(unit, issecure())
+@@ -262,7 +256,6 @@ function addonTable.Display.ManagerMixin:OnLoad()
+         if self.lastInteract and self.lastInteract.interactUnit then
+           self.lastInteract:UpdateSoftInteract()
+         end
+-        self:UpdateFriendlyFont()
+         self:UpdateNamePlateSize()
+         self:UpdateStacking()
+         self:UpdateTargetScale()
+@@ -279,7 +272,6 @@ function addonTable.Display.ManagerMixin:OnLoad()
+           self:UpdateStackingRegion(unit)
+         end
+       end
+-      self:UpdateFriendlyFont()
+       self:UpdateNamePlateSize()
+       self:UpdateTargetScale()
+     end
+@@ -293,7 +285,6 @@ function addonTable.Display.ManagerMixin:OnLoad()
+       end
+     end
+     if state[addonTable.Constants.RefreshReason.ShowBehaviour] then
+-      self:UpdateFriendlyFont()
+       self:UpdateNamePlateSize()
+       self:UpdateShowState()
+     end
+@@ -322,10 +313,6 @@ function addonTable.Display.ManagerMixin:OnLoad()
+       end
+       self:UpdateNamePlateSize()
+       self:UpdateStacking()
+-    elseif settingName == addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES then
+-      self:UpdateFriendlyModule()
+-      self:UpdateStacking()
+-      self:UpdateClickable()
+     elseif settingName == addonTable.Config.Options.APPLY_CVARS then
+       addonTable.Display.SetCVars()
+     elseif settingName == addonTable.Config.Options.OBSCURED_ALPHA then
+@@ -339,13 +326,9 @@ function addonTable.Display.ManagerMixin:UpdateStacking()
+     self:RegisterEvent("PLAYER_REGEN_ENABLED")
+     return
+   end
+-  local friendlyEnabled = addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES)
+   if addonTable.Constants.IsMidnight then
+     local state = addonTable.Config.Get(addonTable.Config.Options.STACKING_NAMEPLATES)
+     C_CVar.SetCVarBitfield("nameplateStackingTypes", Enum.NamePlateStackType.Enemy, state.enemy)
+-    if friendlyEnabled then
+-      C_CVar.SetCVarBitfield("nameplateStackingTypes", Enum.NamePlateStackType.Friendly, state.friend)
+-    end
+   else
+     C_CVar.SetCVar("nameplateOverlapH", addonTable.StackRect.width / addonTable.Rect.width * addonTable.Config.Get(addonTable.Config.Options.STACK_REGION_SCALE_X) / addonTable.Config.Get(addonTable.Config.Options.CLICK_REGION_SCALE_X))
+     C_CVar.SetCVar("nameplateOverlapV", addonTable.StackRect.height / addonTable.Rect.height * addonTable.Config.Get(addonTable.Config.Options.STACK_REGION_SCALE_Y) / addonTable.Config.Get(addonTable.Config.Options.CLICK_REGION_SCALE_Y))
+@@ -358,7 +341,7 @@ function addonTable.Display.ManagerMixin:UpdateStacking()
+     end
+ 
+     local state = addonTable.Config.Get(addonTable.Config.Options.STACKING_NAMEPLATES)
+-    C_CVar.SetCVar("nameplateMotion", (state.enemy or (friendlyEnabled and state.friend)) and "1" or "0")
++    C_CVar.SetCVar("nameplateMotion", state.enemy and "1" or "0")
+   end
+ end
+ 
+@@ -372,25 +355,11 @@ function addonTable.Display.ManagerMixin:UpdateTargetScale()
+ end
+ 
+ local function GetCVarsForNameplates()
+-  if C_CVar.GetCVarInfo("nameplateShowFriendlyPlayers") ~= nil then
+-    return {
+-      friendlyPlayer = "nameplateShowFriendlyPlayers",
+-      friendlyNPC = "nameplateShowFriendlyNpcs",
+-      friendlyMinion = "nameplateShowFriendlyPlayerMinions",
+-      enemy = "nameplateShowEnemies",
+-      enemyMinion = "nameplateShowEnemyMinions",
+-      enemyMinor = "nameplateShowEnemyMinus",
+-    }
+-  else
+-    return {
+-      friendlyPlayer = "nameplateShowFriends",
+-      friendlyNPC = "nameplateShowFriendlyNPCs",
+-      friendlyMinion = "nameplateShowFriendlyMinions",
+-      enemy = "nameplateShowEnemies",
+-      enemyMinion = "nameplateShowEnemyMinions",
+-      enemyMinor = "nameplateShowEnemyMinus",
+-    }
+-  end
++  return {
++    enemy = "nameplateShowEnemies",
++    enemyMinion = "nameplateShowEnemyMinions",
++    enemyMinor = "nameplateShowEnemyMinus",
++  }
+ end
+ 
+ function addonTable.Display.ManagerMixin:UpdateShowState()
+@@ -399,112 +368,21 @@ function addonTable.Display.ManagerMixin:UpdateShowState()
+     return
+   end
+ 
+-  C_CVar.SetCVar("nameplateShowAll", addonTable.Config.Get(addonTable.Config.Options.SHOW_NAMEPLATES_ONLY_NEEDED) and "0" or "1")
+-
+   local currentShow = addonTable.Config.Get(addonTable.Config.Options.SHOW_NAMEPLATES)
+-  local friendlyEnabled = addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES)
+-
+   local values = GetCVarsForNameplates()
+-  if friendlyEnabled then
+-    if C_CVar.GetCVarInfo("nameplateShowOnlyNameForFriendlyPlayerUnits") then
+-      C_CVar.SetCVar("nameplateShowOnlyNameForFriendlyPlayerUnits", "0")
+-    end
+-    if C_CVar.GetCVarInfo("nameplateUseClassColorForFriendlyPlayerUnitNames") then
+-      C_CVar.SetCVar("nameplateUseClassColorForFriendlyPlayerUnitNames", "0")
+-    end
++  for _, key in ipairs({"enemy", "enemyMinion", "enemyMinor"}) do
++    local state = currentShow[key]
++    local newValue = state and "1" or "0"
++    C_CVar.SetCVar(values[key], newValue)
+   end
+-
+-  for key, state in pairs(currentShow) do
+-    if not friendlyEnabled and (key == "friendlyPlayer" or key == "friendlyNPC" or key == "friendlyMinion") then
+-      -- Do not touch friendly nameplate CVars when the friendly module is disabled.
+-    else
+-      local newValue = state and "1" or "0"
+-      C_CVar.SetCVar(values[key], newValue)
+-    end
+-  end
+-  self.toggledFriendly = false
+-
+-  self:UpdateInstanceShowState()
+ end
+ 
+ function addonTable.Display.ManagerMixin:UpdateFriendlyModule()
+-  if InCombatLockdown() then
+-    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+-    return
+-  end
+-
+-  local friendlyEnabled = addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES)
+-  if friendlyEnabled then
+-    for i = 1, 40 do
+-      local unit = "nameplate" .. i
+-      if UnitExists(unit) and not UnitCanAttack("player", unit) then
+-        self:Install(unit)
+-      end
+-    end
+-  else
+-    local units = GetKeysArray(self.nameplateDisplays)
+-    for _, unit in ipairs(units) do
+-      local display = self.nameplateDisplays[unit]
+-      if display and display.kind == "friend" then
+-        self:Uninstall(unit)
+-      end
+-    end
+-    local modifiedUnits = GetKeysArray(self.ModifiedUFs)
+-    for _, unit in ipairs(modifiedUnits) do
+-      if UnitExists(unit) and not UnitCanAttack("player", unit) then
+-        self:RestoreModifiedUF(unit)
+-      end
+-    end
+-  end
++  return
+ end
+ 
+ function addonTable.Display.ManagerMixin:UpdateInstanceShowState()
+-  if not addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES) then
+-    self.toggledFriendly = false
+-    return
+-  end
+-  local state = addonTable.Config.Get(addonTable.Config.Options.SHOW_FRIENDLY_IN_INSTANCES)
+-
+-  if InCombatLockdown() then
+-    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+-    return
+-  end
+-
+-  if state == "name_only" and C_CVar.GetCVarInfo("nameplateShowOnlyNameForFriendlyPlayerUnits") then
+-    C_CVar.SetCVar("nameplateShowOnlyNameForFriendlyPlayerUnits", "1")
+-  end
+-  if state == "name_only" and C_CVar.GetCVarInfo("nameplateUseClassColorForFriendlyPlayerUnitNames") then
+-    C_CVar.SetCVar("nameplateUseClassColorForFriendlyPlayerUnitNames", "1")
+-  end
+-
+-  local values = GetCVarsForNameplates()
+-  local currentShow = addonTable.Config.Get(addonTable.Config.Options.SHOW_NAMEPLATES)
+-
+-  if addonTable.Display.Utilities.IsInRelevantInstance() then
+-    if not self.toggledFriendly and
+-      (state == "name_only" and not currentShow.friendlyPlayer
+-      or state == "never" and (currentShow.friendlyPlayer or currentShow.friendlyNPC)
+-      or state == "name_only" and currentShow.friendlyNPC)
+-      or state == "always" and (not currentShow.friendlyPlayer or not currentShow.friendlyNPC) then
+-      C_CVar.SetCVar(values.friendlyPlayer, state == "never" and "0" or "1")
+-      if currentShow.friendlyNPC then
+-        C_CVar.SetCVar(values.friendlyNPC, state ~= "always" and "0" or "1")
+-      end
+-      self.toggledFriendly = true
+-    end
+-  elseif self.toggledFriendly then
+-    if currentShow.friendlyPlayer then
+-      C_CVar.SetCVar(values.friendlyPlayer, "1")
+-    elseif state ~= "never" then
+-      C_CVar.SetCVar(values.friendlyPlayer, "0")
+-    end
+-    if currentShow.friendlyNPC then
+-      C_CVar.SetCVar(values.friendlyNPC, "1")
+-    elseif state == "always" then
+-      C_CVar.SetCVar(values.friendlyNPC, "0")
+-    end
+-    self.toggledFriendly = false
+-  end
++  return
+ end
+ 
+ function addonTable.Display.ManagerMixin:ListenToBuffs(display, unit)
+@@ -551,7 +429,7 @@ function addonTable.Display.ManagerMixin:Install(unit, nameplate)
+   if unit == "preview" then
+     return
+   end
+-  if not addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES) and not UnitCanAttack("player", unit) then
++  if not UnitCanAttack("player", unit) then
+     return
+   end
+   local nameplate = C_NamePlate.GetNamePlateForUnit(unit, issecure())
+@@ -559,21 +437,17 @@ function addonTable.Display.ManagerMixin:Install(unit, nameplate)
+   if nameplate and unit and (addonTable.Constants.IsMidnight or not UnitIsUnit("player", unit)) then
+     local shouldSimplify = false
+     local newDisplay
+-    if not UnitCanAttack("player", unit) then
+-      newDisplay = self.friendDisplayPool:Acquire()
++    local simplifiedSettings = addonTable.Config.Get(addonTable.Config.Options.SIMPLIFIED_NAMEPLATES)
++    local classification = UnitClassification(unit)
++    shouldSimplify = C_NamePlateManager and C_NamePlateManager.SetNamePlateSimplified and (
++      simplifiedSettings.instancesNormal and classification == "normal" and addonTable.Display.Utilities.IsInRelevantInstance() or
++      simplifiedSettings.minor and classification == "minus" or
++      simplifiedSettings.minion and UnitIsMinion and UnitIsMinion(unit)
++    )
++    if shouldSimplify then
++      newDisplay = self.enemySimplifiedDisplayPool:Acquire()
+     else
+-      local simplifiedSettings = addonTable.Config.Get(addonTable.Config.Options.SIMPLIFIED_NAMEPLATES)
+-      local classification = UnitClassification(unit)
+-      shouldSimplify = C_NamePlateManager and C_NamePlateManager.SetNamePlateSimplified and (
+-        simplifiedSettings.instancesNormal and classification == "normal" and addonTable.Display.Utilities.IsInRelevantInstance() or
+-        simplifiedSettings.minor and classification == "minus" or
+-        simplifiedSettings.minion and UnitIsMinion and UnitIsMinion(unit)
+-      )
+-      if shouldSimplify then
+-        newDisplay = self.enemySimplifiedDisplayPool:Acquire()
+-      else
+-        newDisplay = self.enemyDisplayPool:Acquire()
+-      end
++      newDisplay = self.enemyDisplayPool:Acquire()
+     end
+     if C_NamePlateManager and C_NamePlateManager.SetNamePlateSimplified then
+       C_NamePlateManager.SetNamePlateSimplified(unit, shouldSimplify)
+@@ -622,9 +496,7 @@ function addonTable.Display.ManagerMixin:Uninstall(unit)
+     if display.stackRegion then
+       display.stackRegion:SetParent(display)
+     end
+-    if display.kind == "friend" then
+-      self.friendDisplayPool:Release(display)
+-    elseif display.kind == "enemySimplified" then
++    if display.kind == "enemySimplified" then
+       self.enemySimplifiedDisplayPool:Release(display)
+     else
+       self.enemyDisplayPool:Release(display)
+@@ -678,34 +550,16 @@ function addonTable.Display.ManagerMixin:UpdateNamePlateSize()
+   local globalScale = addonTable.Config.Get(addonTable.Config.Options.GLOBAL_SCALE)
+   local width = addonTable.Rect.width * globalScale
+   local height = addonTable.Rect.height * globalScale
+-  local friendlyEnabled = addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES)
+ 
+   if C_NamePlate.SetNamePlateEnemySize and not addonTable.Constants.IsMidnight then
+     width = width * addonTable.Config.Get(addonTable.Config.Options.CLICK_REGION_SCALE_X) * UIParent:GetScale()
+     height = height * addonTable.Config.Get(addonTable.Config.Options.CLICK_REGION_SCALE_Y) * UIParent:GetScale()
+     local stackState = addonTable.Config.Get(addonTable.Config.Options.STACKING_NAMEPLATES)
+-    local anyStack = stackState.enemy or (friendlyEnabled and stackState.friend)
+-    if stackState.enemy or not anyStack then
++    if stackState.enemy then
+       C_NamePlate.SetNamePlateEnemySize(width, height)
+     else
+       C_NamePlate.SetNamePlateEnemySize(1, 1)
+     end
+-    if friendlyEnabled then
+-      if stackState.friend or not anyStack then
+-        C_NamePlate.SetNamePlateFriendlySize(width, height)
+-      else
+-        C_NamePlate.SetNamePlateFriendlySize(1, 1)
+-      end
+-      if IsInInstance() then
+-        if addonTable.Display.Utilities.IsInRelevantInstance() then
+-          if addonTable.Constants.IsClassic then
+-            C_NamePlate.SetNamePlateFriendlySize(128, 16)
+-          else
+-            C_NamePlate.SetNamePlateFriendlySize(width, height)
+-          end
+-        end
+-      end
+-    end
+   elseif C_NamePlate.SetNamePlateSize then
+     width = width * addonTable.Config.Get(addonTable.Config.Options.CLICK_REGION_SCALE_X)
+     height = height * addonTable.Config.Get(addonTable.Config.Options.CLICK_REGION_SCALE_Y)
+@@ -720,7 +574,6 @@ function addonTable.Display.ManagerMixin:UpdateClickable()
+   end
+ 
+   local state = addonTable.Config.Get(addonTable.Config.Options.CLICKABLE_NAMEPLATES)
+-  local friendlyEnabled = addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES)
+   if C_NamePlateManager and C_NamePlateManager.SetNamePlateHitTestInsets then
+     local value = 10000
+ 
+@@ -730,17 +583,7 @@ function addonTable.Display.ManagerMixin:UpdateClickable()
+       C_NamePlateManager.SetNamePlateHitTestInsets(Enum.NamePlateType.Enemy, value, value, value, value)
+     end
+ 
+-    if friendlyEnabled then
+-      if state.friend then
+-        C_NamePlateManager.SetNamePlateHitTestInsets(Enum.NamePlateType.Friendly, -value, -value, -value, -value)
+-      else
+-        C_NamePlateManager.SetNamePlateHitTestInsets(Enum.NamePlateType.Friendly, value, value, value, value)
+-      end
+-    end
+   else
+-    if friendlyEnabled then
+-      C_NamePlate.SetNamePlateFriendlyClickThrough(not state.friend)
+-    end
+     C_NamePlate.SetNamePlateEnemyClickThrough(not state.enemy)
+   end
+ end
+@@ -830,45 +673,7 @@ local function ChangeFont(base, new, overrideHeight)
+ end
+ 
+ function addonTable.Display.ManagerMixin:UpdateFriendlyFont()
+-  if not addonTable.Config.Get(addonTable.Config.Options.ENABLE_FRIENDLY_NAMEPLATES) then
+-    return
+-  end
+-  if not addonTable.CurrentFont or not C_CVar.GetCVarInfo("nameplateShowOnlyNameForFriendlyPlayerUnits") then
+-    return
+-  end
+-
+-  if InCombatLockdown() then
+-    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+-    return
+-  end
+-
+-  local state = addonTable.Config.Get(addonTable.Config.Options.SHOW_FRIENDLY_IN_INSTANCES)
+-  if state == "name_only" then
+-    local design = addonTable.Core.GetDesign("friend")
+-    local scale
+-    for _, t in ipairs(design.texts) do
+-      if t.kind == "creatureName" then
+-        scale = t.scale
+-        break
+-      end
+-    end
+-    if scale then
+-      ChangeFont(SystemFont_NamePlate_Outlined, _G[addonTable.CurrentFont])
+-      ChangeFont(SystemFont_NamePlate, _G[addonTable.CurrentFont])
+-
+-      scale = scale * addonTable.Config.Get(addonTable.Config.Options.GLOBAL_SCALE) * design.scale
+-      local friendlyFontSize = _G[addonTable.CurrentFont]:GetFontHeight() * scale
+-      for index, size in ipairs(systemFontSizes) do
+-        if size >= friendlyFontSize or index == 5 then
+-          C_CVar.SetCVar("nameplateSize", tostring(index))
+-          break
+-        end
+-      end
+-    end
+-  else
+-    ChangeFont(SystemFont_NamePlate_Outlined, PlatynatorOriginalSystemFontOutlined)
+-    ChangeFont(SystemFont_NamePlate, PlatynatorOriginalSystemFont)
+-  end
++  return
+ end
+ 
+ function addonTable.Display.ManagerMixin:OnEvent(eventName, ...)
+@@ -910,16 +715,16 @@ function addonTable.Display.ManagerMixin:OnEvent(eventName, ...)
+   elseif eventName == "UNIT_FACTION" then
+     local unit = ...
+     local display = self.nameplateDisplays[unit]
+-    if display and ((display.kind == "friend" and UnitCanAttack("player", unit)) or (display.kind == "enemy" and not UnitCanAttack("player", unit))) then
++    if display and not UnitCanAttack("player", unit) then
+       self:Uninstall(unit)
+-      self:Install(unit, nameplate)
++    elseif not display and UnitCanAttack("player", unit) then
++      self:Install(unit)
+     end
+   elseif eventName == "GLOBAL_MOUSE_UP" then
+     self:UpdateForMouseover()
+     self:UnregisterEvent("GLOBAL_MOUSE_UP")
+   elseif eventName == "PLAYER_REGEN_ENABLED" then
+     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+-    self:UpdateFriendlyModule()
+     self:UpdateStacking()
+     self:UpdateShowState()
+     self:UpdateNamePlateSize()
+@@ -945,11 +750,9 @@ function addonTable.Display.ManagerMixin:OnEvent(eventName, ...)
+     end
+     self:UpdateNamePlateSize()
+   elseif eventName == "PLAYER_ENTERING_WORLD" then
+-    self:UpdateInstanceShowState()
+     self:UpdateNamePlateSize()
+     self:UpdateClickable()
+   elseif eventName == "GARRISON_UPDATE" then
+-    self:UpdateInstanceShowState()
+   elseif eventName == "PLAYER_LOGIN" then
+     local design = addonTable.Core.GetDesign("enemy")
+ 
+@@ -957,7 +760,6 @@ function addonTable.Display.ManagerMixin:OnEvent(eventName, ...)
+     CreateFont("PlatynatorNameplateCooldownFont")
+     local file, size, flags = _G[addonTable.CurrentFont]:GetFont()
+     PlatynatorNameplateCooldownFont:SetFont(file, 14, flags)
+-    self:UpdateFriendlyFont()
+   elseif eventName == "VARIABLES_LOADED" then
+     if addonTable.Constants.IsMidnight then
+       C_CVar.SetCVarBitfield(NamePlateConstants.ENEMY_NPC_AURA_DISPLAY_CVAR, Enum.NamePlateEnemyNpcAuraDisplay.Buffs, true)
+@@ -976,9 +778,6 @@ function addonTable.Display.ManagerMixin:OnEvent(eventName, ...)
+     end
+     addonTable.Display.SetCVars()
+ 
+-    self:UpdateFriendlyModule()
+-    self:UpdateInstanceShowState()
+-    self:UpdateFriendlyFont()
+     self:UpdateStacking()
+     self:UpdateShowState()
+     self:UpdateTargetScale()
+diff --git a/Platynator/Display/Widgets.lua b/Platynator/Display/Widgets.lua
+index f6c0e6e..a24e84b 100644
+--- a/Platynator/Display/Widgets.lua
++++ b/Platynator/Display/Widgets.lua
+@@ -16,21 +16,41 @@ end
+ 
+ local ApplyAnchor = addonTable.Display.ApplyAnchor
+ 
++local function GetBarBackgroundDetails(preferredAsset, secondaryAsset)
++  local backgrounds = addonTable.Assets.BarBackgrounds
++  local details = preferredAsset and backgrounds[preferredAsset]
++  if details then
++    return details
++  end
++  details = secondaryAsset and backgrounds[secondaryAsset]
++  if details then
++    return details
++  end
++  details = backgrounds["white"] or backgrounds["grey"] or backgrounds["normal/gradient-full"]
++  if details then
++    return details
++  end
++  local _, first = next(backgrounds)
++  return first
++end
++
+ local function InitBar(frame, details)
+   if frame.Strip then
+     frame:Strip()
+   end
+ 
+   local borderDetails = addonTable.Assets.BarBordersSliced[details.border.asset]
+-  local foregroundDetails = addonTable.Assets.BarBackgrounds[details.foreground.asset]
++  local foregroundDetails = GetBarBackgroundDetails(details.foreground and details.foreground.asset, details.background and details.background.asset)
++  local backgroundDetails = GetBarBackgroundDetails(details.background and details.background.asset, details.foreground and details.foreground.asset)
++  local foregroundFile = foregroundDetails and foregroundDetails.file or "Interface/AddOns/Platynator/Assets/Special/white.png"
++  local backgroundFile = backgroundDetails and backgroundDetails.file or "Interface/AddOns/Platynator/Assets/Special/white.png"
+   frame.statusBar:SetScale(1/borderDetails.lowerScale * details.scale)
+   frame.statusBar:SetMinMaxValues(0, 1)
+   frame.statusBar:SetValue(1)
+-  frame.statusBar:SetStatusBarTexture(foregroundDetails.file)
++  frame.statusBar:SetStatusBarTexture(foregroundFile)
+   frame.statusBar:GetStatusBarTexture():SetDrawLayer("ARTWORK")
+ 
+-  local backgroundDetails = addonTable.Assets.BarBackgrounds[details.background.asset]
+-  frame.background:SetTexture(backgroundDetails.file)
++  frame.background:SetTexture(backgroundFile)
+   frame.background:SetAllPoints()
+   frame.background:SetScale(1/borderDetails.lowerScale * details.scale)
+   frame.background:SetVertexColor(details.background.color.r, details.background.color.g, details.background.color.b, details.background.color.a)
+@@ -118,13 +138,16 @@ function addonTable.Display.GetHealthBar(frame, parent)
+     InitBar(frame, details)
+ 
+     local borderDetails = addonTable.Assets.BarBordersSliced[details.border.asset]
++    local absorbDetails = GetBarBackgroundDetails(details.absorb and details.absorb.asset, details.foreground and details.foreground.asset)
++    local absorbFile = absorbDetails and absorbDetails.file or "Interface/AddOns/Platynator/Assets/Special/white.png"
++    local absorbColor = (details.absorb and details.absorb.color) or {r = 1, g = 1, b = 1, a = 1}
+ 
+     frame.statusBarAbsorb:SetFrameLevel(frame:GetFrameLevel() + 1)
+     frame.statusBar:SetFrameLevel(frame:GetFrameLevel() + 2)
+     borderHolder:SetFrameLevel(frame:GetFrameLevel() + 4)
+ 
+-    frame.statusBarAbsorb:SetStatusBarTexture(addonTable.Assets.BarBackgrounds[details.absorb.asset].file)
+-    frame.statusBarAbsorb:GetStatusBarTexture():SetVertexColor(details.absorb.color.r, details.absorb.color.g, details.absorb.color.b, details.absorb.color.a)
++    frame.statusBarAbsorb:SetStatusBarTexture(absorbFile)
++    frame.statusBarAbsorb:GetStatusBarTexture():SetVertexColor(absorbColor.r or 1, absorbColor.g or 1, absorbColor.b or 1, absorbColor.a or 1)
+     frame.statusBarAbsorb:SetPoint("LEFT", frame.statusBar:GetStatusBarTexture(), "RIGHT")
+     frame.statusBarAbsorb:SetScale(1/borderDetails.lowerScale * details.scale)
+     frame.statusBarAbsorb:GetStatusBarTexture():RemoveMaskTexture(frame.mask)
+@@ -200,7 +223,8 @@ function addonTable.Display.GetCastBar(frame, parent)
+       else
+         frame.statusBar:SetFillStyle("STANDARD")
+       end
+-      self.statusBar:SetStatusBarTexture(addonTable.Assets.BarBackgrounds[frame.details.foreground.asset].file)
++      local fallback = GetBarBackgroundDetails(frame.details.foreground and frame.details.foreground.asset, frame.details.background and frame.details.background.asset)
++      self.statusBar:SetStatusBarTexture((fallback and fallback.file) or "Interface/AddOns/Platynator/Assets/Special/white.png")
+       self.reverseStatusTexture:Hide()
+ 
+       frame.marker:SetPoint("CENTER", frame.statusBar:GetStatusBarTexture(), "RIGHT")
+@@ -234,9 +258,9 @@ function addonTable.Display.GetCastBar(frame, parent)
+     frame.interruptMarker:SetFrameLevel(frame:GetFrameLevel() + 5)
+     borderHolder:SetFrameLevel(frame:GetFrameLevel() + 6)
+ 
+-    local foregroundDetails = addonTable.Assets.BarBackgrounds[details.foreground.asset]
++    local foregroundDetails = GetBarBackgroundDetails(details.foreground and details.foreground.asset, details.background and details.background.asset)
+     frame.reverseStatusTexture:Hide()
+-    frame.reverseStatusTexture:SetTexture(foregroundDetails.file)
++    frame.reverseStatusTexture:SetTexture((foregroundDetails and foregroundDetails.file) or "Interface/AddOns/Platynator/Assets/Special/white.png")
+     frame.reverseStatusTexture:SetPoint("RIGHT", frame.statusBar:GetStatusBarTexture(), "LEFT")
+     frame.reverseStatusTexture:SetHorizTile(true)
+ 
+@@ -250,8 +274,6 @@ function addonTable.Display.GetCastBar(frame, parent)
+       frame.interruptMarkerPoint:SetVertexColor(color.r, color.g, color.b)
+     end
+ 
+-    local backgroundDetails = addonTable.Assets.BarBackgrounds[details.background.asset]
+-
+     frame.reverseStatusTexture:RemoveMaskTexture(frame.mask)
+     frame.reverseStatusTexture:AddMaskTexture(frame.mask)
+     frame.interruptMarkerPoint:AddMaskTexture(frame.mask)
+@@ -351,6 +373,29 @@ function addonTable.Display.GetHighlight(frame, parent)
+ 
+   function frame:Init(details)
+     local highlightDetails = addonTable.Assets.Highlights[details.asset]
++    if not highlightDetails then
++      details.asset = "bold"
++      details.width = details.width or 1
++      details.height = details.height or 1
++      highlightDetails = addonTable.Assets.Highlights[details.asset]
++    end
++    if type(details.color) ~= "table" then
++      details.color = {r = 1, g = 1, b = 1, a = 1}
++    elseif details.color.a == nil then
++      details.color.a = 1
++    end
++    if details.scale == nil then
++      details.scale = 1
++    end
++    if type(details.anchor) ~= "table" then
++      details.anchor = {}
++    end
++    if details.width == nil then
++      details.width = 1
++    end
++    if details.height == nil then
++      details.height = 1
++    end
+     frame.details = details
+ 
+     frame.highlight:SetTexture(highlightDetails.file)
+@@ -379,7 +424,8 @@ function addonTable.Display.GetHighlight(frame, parent)
+     elseif details.kind == "fixed" then
+       Mixin(frame, addonTable.Display.FixedHighlightMixin)
+     else
+-      assert(false)
++      details.kind = "target"
++      Mixin(frame, addonTable.Display.TargetHighlightMixin)
+     end
+ 
+     frame:SetScript("OnEvent", frame.OnEvent)
+@@ -396,6 +442,10 @@ function addonTable.Display.GetHighlight(frame, parent)
+   function frame:ApplySize()
+     local details = frame.details
+     local highlightDetails = addonTable.Assets.Highlights[details.asset]
++    if not highlightDetails then
++      details.asset = "bold"
++      highlightDetails = addonTable.Assets.Highlights[details.asset]
++    end
+     if highlightDetails.mode == addonTable.Assets.RenderMode.Sliced then
+       local width, height = details.width * addonTable.Assets.BarBordersSize.width * highlightDetails.shiftModifierH, details.height * addonTable.Assets.BarBordersSize.height * highlightDetails.shiftModifierV
+       PixelUtil.SetSize(frame, width * details.scale, height * details.scale)
+@@ -423,6 +473,13 @@ function addonTable.Display.GetMarker(frame, parent)
+     frame.details = details
+ 
+     local markerDetails = addonTable.Assets.Markers[details.asset]
++    if not markerDetails then
++      details.asset = "normal/quest-blizzard"
++      markerDetails = addonTable.Assets.Markers[details.asset]
++    end
++    if details.scale == nil then
++      details.scale = 1
++    end
+ 
+     frame.marker:SetTexture(markerDetails.file)
+     if details.color then
+@@ -446,7 +503,8 @@ function addonTable.Display.GetMarker(frame, parent)
+     elseif details.kind == "pvp" then
+       Mixin(frame, addonTable.Display.PvPMarkerMixin)
+     else
+-      assert(false)
++      details.kind = "quest"
++      Mixin(frame, addonTable.Display.QuestMarkerMixin)
+     end
+ 
+     frame:SetScript("OnEvent", frame.OnEvent)
+@@ -466,6 +524,10 @@ function addonTable.Display.GetMarker(frame, parent)
+   function frame:ApplySize()
+     local details = frame.details
+     local markerDetails = addonTable.Assets.Markers[details.asset]
++    if not markerDetails then
++      details.asset = "normal/quest-blizzard"
++      markerDetails = addonTable.Assets.Markers[details.asset]
++    end
+     PixelUtil.SetSize(frame, markerDetails.width * details.scale, markerDetails.height * details.scale)
+   end
+ 
+@@ -489,6 +551,22 @@ function addonTable.Display.GetText(frame, parent)
+       frame:Strip()
+     end
+ 
++    if type(details.anchor) ~= "table" then
++      details.anchor = {"CENTER", 0, 0}
++    end
++    if type(details.color) ~= "table" then
++      details.color = {r = 1, g = 1, b = 1}
++    end
++    if details.align == nil then
++      details.align = "CENTER"
++    end
++    if details.scale == nil then
++      details.scale = 1
++    end
++    if details.truncate == nil then
++      details.truncate = false
++    end
++
+     frame.details = details
+ 
+     frame.text:SetFontObject(addonTable.CurrentFont)
+@@ -536,7 +614,8 @@ function addonTable.Display.GetText(frame, parent)
+     elseif details.kind == "castTimeLeft" then
+       Mixin(frame, addonTable.Display.CastTimeLeftTextMixin)
+     else
+-      assert(false)
++      details.kind = "creatureName"
++      Mixin(frame, addonTable.Display.CreatureTextMSPMixin or addonTable.Display.CreatureTextMixin)
+     end
+ 
+     frame:SetScript("OnEvent", frame.OnEvent)
+@@ -633,17 +712,18 @@ function addonTable.Display.GetWidgets(design, parent, isEditor)
+   end
+ 
+   for index, specialDetails in ipairs(design.specialBars) do
+-    assert(specialDetails.kind == "power")
+-    local w = pools.powers:Acquire()
+-    poolType[w] = "powers"
+-    w:SetParent(parent)
+-    w:Show()
+-    w:SetFrameStrata("MEDIUM")
+-    w:SetFrameLevel(layerStep * specialDetails.layer + index * 10)
+-    w:Init(specialDetails)
+-    w.kind = "specialBars"
+-    w.kindIndex = index
+-    table.insert(widgets, w)
++    if specialDetails.kind == "power" then
++      local w = pools.powers:Acquire()
++      poolType[w] = "powers"
++      w:SetParent(parent)
++      w:Show()
++      w:SetFrameStrata("MEDIUM")
++      w:SetFrameLevel(layerStep * specialDetails.layer + index * 10)
++      w:Init(specialDetails)
++      w.kind = "specialBars"
++      w.kindIndex = index
++      table.insert(widgets, w)
++    end
+   end
+ 
+   for index, markerDetails in ipairs(design.markers) do
