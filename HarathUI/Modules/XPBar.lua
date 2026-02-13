@@ -240,7 +240,7 @@ local function Update(forceQuest)
       bar.xpText:SetText("204931 / 311490")
       bar.pctText:SetText("65.8% (70.6%)")
       if db.xpbar.showQuestText ~= false then
-        bar.detailText:SetText("Completed Quests: |cffffa11a4.8%|r - Rested Experience: |cff5aa0ff6.4%|r")
+        bar.detailText:SetText("Completed Quests: |cffffa11a4.8%|r - Rested: |cff5aa0ff6.4%|r")
       else
         bar.detailText:SetText("")
       end
@@ -355,7 +355,7 @@ local function Update(forceQuest)
     local questPct = (questXP > 0 and max > 0) and (questXP / max * 100) or 0
     local restedPctNum = (rested and max > 0) and (rested / max * 100) or 0
     if db.xpbar.showQuestText ~= false then
-      bar.detailText:SetText(("Completed Quests: %s%.1f%%%s - Rested Experience: %s%.1f%%%s"):format(
+      bar.detailText:SetText(("Completed Quests: %s%.1f%%%s - Rested: %s%.1f%%%s"):format(
         QUEST_COLOR, questPct, COLOR_END,
         RESTED_COLOR, restedPctNum, COLOR_END
       ))
