@@ -91,6 +91,12 @@ For upstream addon updates that overwrite local compatibility changes, reapply l
 
 Patch docs are in `patches/README.md`.
 
+For a full Platynator update flow (mirror upstream folder, reapply patch, verify):
+
+```powershell
+.\scripts\update-platynator.ps1 -SourcePath "C:\path\to\Platynator"
+```
+
 ## HarathUI version metadata workflow
 
 When releasing HarathUI or after commit updates, stamp TOC metadata so in-game version status and hash diagnostics stay accurate:
