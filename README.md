@@ -9,11 +9,11 @@ A collection of World of Warcraft addons for patch 12.0.1 (Midnight).
 
 | Addon | Version | Interface | Author |
 |-------|---------|-----------|--------|
-| HarathUI | 1.4.5 | 120001 | Harath |
+| HarathUI | 1.4.6 | 120001 | Harath |
 | OPie | 7.11.3 | 120001 | foxlit |
 | Platynator | 287 | 120001 | plusmouse |
 
-### HarathUI (v1.4.5)
+### HarathUI (v1.4.6)
 Modular quality-of-life UI suite.
 
 **Features:**
@@ -90,3 +90,17 @@ For upstream addon updates that overwrite local compatibility changes, reapply l
 ```
 
 Patch docs are in `patches/README.md`.
+
+## HarathUI version metadata workflow
+
+When releasing HarathUI or after commit updates, stamp TOC metadata so in-game version status and hash diagnostics stay accurate:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata.ps1
+```
+
+Optional release bump example:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata.ps1 -Version 1.4.6 -GitVersion 1.4.6
+```

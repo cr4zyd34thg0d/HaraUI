@@ -27,21 +27,79 @@ local function GetAddonMetadataField(field)
   return nil
 end
 
+local function NormalizeCommitHash(hash)
+  if NS and NS.NormalizeCommitHash then
+    return NS.NormalizeCommitHash(hash)
+  end
+  if type(hash) ~= "string" then return nil end
+  local clean = hash:lower():match("(%x+)")
+  if not clean or clean == "" then return nil end
+  return clean
+end
+
+local function CompareCommitHashes(installed, latest)
+  if NS and NS.CompareCommitHashes then
+    return NS.CompareCommitHashes(installed, latest)
+  end
+  local a = NormalizeCommitHash(installed)
+  local b = NormalizeCommitHash(latest)
+  if not a or not b then return nil end
+  if a == b then return 0 end
+  if #a < #b and b:sub(1, #a) == a then return 0 end
+  if #b < #a and a:sub(1, #b) == b then return 0 end
+  return -1
+end
+
+local function GetVersionStatus(info)
+  if NS and NS.GetVersionStatus then
+    return NS.GetVersionStatus(info)
+  end
+  if type(info) ~= "table" then return "unknown" end
+  local cmp = info.cmp
+  if cmp ~= nil then
+    if cmp < 0 then return "out-of-date" end
+    if cmp > 0 then return "ahead" end
+  end
+  local hashCmp = info.hashCmp
+  if hashCmp == nil then
+    hashCmp = CompareCommitHashes(info.buildCommit or info.commit, info.latestCommit)
+  end
+  if hashCmp ~= nil then
+    if hashCmp == 0 then return "up-to-date" end
+    if hashCmp < 0 then return "out-of-date" end
+  end
+  if cmp == 0 then return "up-to-date" end
+  return "unknown"
+end
+
 local function GetVersionInfo()
   if NS and NS.GetVersionInfo then
     return NS.GetVersionInfo()
   end
   local installed = GetAddonMetadataField("Version")
   local latest = GetAddonMetadataField("X-GitVersion") or GetAddonMetadataField("X-Git-Version")
-  local commit = GetAddonMetadataField("X-Build-Commit") or GetAddonMetadataField("X-Git-Commit")
+  local buildCommit = GetAddonMetadataField("X-Build-Commit")
+  local latestCommit = GetAddonMetadataField("X-Git-Commit")
+  local commit = buildCommit or latestCommit
   local buildDate = GetAddonMetadataField("X-Build-Date")
   local cmp = NS and NS.CompareVersions and NS.CompareVersions(installed, latest) or nil
+  local hashCmp = CompareCommitHashes(buildCommit or commit, latestCommit)
+  local status = GetVersionStatus({
+    cmp = cmp,
+    hashCmp = hashCmp,
+    buildCommit = buildCommit or commit,
+    latestCommit = latestCommit,
+  })
   return {
     installed = installed,
     latest = latest,
     commit = commit,
+    buildCommit = buildCommit or commit,
+    latestCommit = latestCommit,
     buildDate = buildDate,
     cmp = cmp,
+    hashCmp = hashCmp,
+    status = status,
     source = "toc-metadata",
   }
 end
@@ -531,24 +589,24 @@ function NS:InitOptions()
       navGitIndicator:SetScript("OnEnter", function(self)
         if not GameTooltip then return end
         local info = GetVersionInfo()
+        local status = (info and (info.status or GetVersionStatus(info))) or "unknown"
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine("Version Status", ORANGE[1], ORANGE[2], ORANGE[3])
         GameTooltip:AddLine(("Installed: v%s"):format(tostring(info and info.installed or "unknown")), 0.95, 0.95, 0.95)
         GameTooltip:AddLine(("Latest: v%s"):format(tostring(info and info.latest or "unknown")), 0.95, 0.95, 0.95)
-        GameTooltip:AddLine(("Commit: %s"):format(tostring(info and info.commit or "unknown")), 0.85, 0.85, 0.85)
+        GameTooltip:AddLine(("Build commit: %s"):format(tostring(info and (info.buildCommit or info.commit) or "unknown")), 0.85, 0.85, 0.85)
+        GameTooltip:AddLine(("Latest commit: %s"):format(tostring(info and info.latestCommit or "unknown")), 0.85, 0.85, 0.85)
         GameTooltip:AddLine(("Build date: %s"):format(tostring(info and info.buildDate or "unknown")), 0.85, 0.85, 0.85)
-        if info and info.cmp ~= nil then
-          if info.cmp < 0 then
-            GameTooltip:AddLine("Status: Update available", 1.0, 0.35, 0.35)
-          elseif info.cmp > 0 then
-            GameTooltip:AddLine("Status: Local build is ahead", 0.95, 0.80, 0.35)
-          else
-            GameTooltip:AddLine("Status: Up to date", 0.35, 1.0, 0.45)
-          end
+        if status == "out-of-date" then
+          GameTooltip:AddLine("Status: Update available", 1.0, 0.35, 0.35)
+        elseif status == "ahead" then
+          GameTooltip:AddLine("Status: Local build is ahead", 0.95, 0.80, 0.35)
+        elseif status == "up-to-date" then
+          GameTooltip:AddLine("Status: Up to date", 0.35, 1.0, 0.45)
         else
           GameTooltip:AddLine("Status: Unknown", 0.8, 0.8, 0.8)
         end
-        GameTooltip:AddLine("Source: add-on metadata (X-GitVersion, X-Build-Commit)", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("Source: add-on metadata (X-GitVersion, X-Git-Commit, X-Build-Commit)", 0.7, 0.7, 0.7)
         GameTooltip:Show()
       end)
       navGitIndicator:SetScript("OnLeave", function()
@@ -560,20 +618,27 @@ function NS:InitOptions()
       local info = GetVersionInfo()
       local installed = info and info.installed or nil
       local latest = info and info.latest or nil
-      local cmp = info and info.cmp or nil
+      local latestCommit = info and info.latestCommit or nil
+      local status = (info and (info.status or GetVersionStatus(info))) or "unknown"
 
       navVersion:SetText("v" .. tostring(installed or "dev"))
 
-      if type(latest) ~= "string" or latest == "" then
+      local hasLatestVersion = type(latest) == "string" and latest ~= ""
+      local hasLatestCommit = type(latestCommit) == "string" and latestCommit ~= ""
+      if not hasLatestVersion and not hasLatestCommit then
         navGitIndicator:Hide()
         return
       end
 
       navGitIndicator:Show()
-      if cmp and cmp < 0 then
+      if status == "out-of-date" then
         navGitIndicator:SetTexture("Interface\\FriendsFrame\\StatusIcon-Offline")
-      else
+      elseif status == "ahead" then
+        navGitIndicator:SetTexture("Interface\\FriendsFrame\\StatusIcon-Away")
+      elseif status == "up-to-date" then
         navGitIndicator:SetTexture("Interface\\FriendsFrame\\StatusIcon-Online")
+      else
+        navGitIndicator:SetTexture("Interface\\FriendsFrame\\StatusIcon-Away")
       end
     end
 

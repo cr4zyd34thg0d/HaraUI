@@ -57,18 +57,73 @@ function NS.CompareVersions(left, right)
   return 0
 end
 
+function NS.NormalizeCommitHash(hash)
+  if type(hash) ~= "string" then return nil end
+  local clean = hash:lower():match("(%x+)")
+  if not clean or clean == "" then return nil end
+  return clean
+end
+
+function NS.CompareCommitHashes(installed, latest)
+  local a = NS.NormalizeCommitHash(installed)
+  local b = NS.NormalizeCommitHash(latest)
+  if not a or not b then return nil end
+  if a == b then return 0 end
+  -- Treat short/long forms of the same SHA as equal.
+  if #a < #b and b:sub(1, #a) == a then return 0 end
+  if #b < #a and a:sub(1, #b) == b then return 0 end
+  -- Git hashes alone cannot tell ahead/behind without graph context.
+  return -1
+end
+
+function NS.GetVersionStatus(info)
+  if type(info) ~= "table" then return "unknown" end
+
+  local cmp = info.cmp
+  if cmp ~= nil then
+    if cmp < 0 then return "out-of-date" end
+    if cmp > 0 then return "ahead" end
+  end
+
+  local hashCmp = info.hashCmp
+  if hashCmp == nil and (info.buildCommit or info.commit) and info.latestCommit then
+    hashCmp = NS.CompareCommitHashes(info.buildCommit or info.commit, info.latestCommit)
+  end
+
+  if hashCmp ~= nil then
+    if hashCmp == 0 then return "up-to-date" end
+    if hashCmp < 0 then return "out-of-date" end
+  end
+
+  if cmp == 0 then return "up-to-date" end
+  return "unknown"
+end
+
 function NS.GetVersionInfo()
   local installed = GetAddonMetadataField("Version")
   local latest = GetAddonMetadataField("X-GitVersion") or GetAddonMetadataField("X-Git-Version")
-  local commit = GetAddonMetadataField("X-Build-Commit") or GetAddonMetadataField("X-Git-Commit")
+  local buildCommit = GetAddonMetadataField("X-Build-Commit")
+  local latestCommit = GetAddonMetadataField("X-Git-Commit")
+  local commit = buildCommit or latestCommit
   local buildDate = GetAddonMetadataField("X-Build-Date")
   local cmp = NS.CompareVersions(installed, latest)
+  local hashCmp = NS.CompareCommitHashes(buildCommit or commit, latestCommit)
+  local status = NS.GetVersionStatus({
+    cmp = cmp,
+    hashCmp = hashCmp,
+    buildCommit = buildCommit or commit,
+    latestCommit = latestCommit,
+  })
   return {
     installed = installed,
     latest = latest,
     commit = commit,
+    buildCommit = buildCommit or commit,
+    latestCommit = latestCommit,
     buildDate = buildDate,
     cmp = cmp,
+    hashCmp = hashCmp,
+    status = status,
     source = "toc-metadata",
   }
 end
@@ -77,8 +132,8 @@ local function PrintOutOfDateNotice()
   local info = NS.GetVersionInfo and NS.GetVersionInfo() or nil
   local installed = info and info.installed or nil
   local latest = info and info.latest or nil
-  local cmp = info and info.cmp or nil
-  if cmp and cmp < 0 then
+  local status = info and (info.status or (NS.GetVersionStatus and NS.GetVersionStatus(info))) or "unknown"
+  if status == "out-of-date" then
     Print(("Update available: installed v%s, latest v%s."):format(tostring(installed), tostring(latest)))
   end
 end
@@ -381,23 +436,16 @@ local function HandleSlash(msg)
     end
     local installed = tostring(info.installed or "unknown")
     local latest = tostring(info.latest or "unknown")
-    local commit = tostring(info.commit or "unknown")
+    local buildCommit = tostring(info.buildCommit or info.commit or "unknown")
+    local latestCommit = tostring(info.latestCommit or "unknown")
     local buildDate = tostring(info.buildDate or "unknown")
-    local status = "unknown"
-    if info.cmp ~= nil then
-      if info.cmp < 0 then
-        status = "out-of-date"
-      elseif info.cmp > 0 then
-        status = "ahead"
-      else
-        status = "up-to-date"
-      end
-    end
-    Print(("Version status: %s (installed v%s, latest v%s; commit=%s; build=%s; source=%s)"):format(
+    local status = (info.status or (NS.GetVersionStatus and NS.GetVersionStatus(info)) or "unknown")
+    Print(("Version status: %s (installed v%s, latest v%s; buildCommit=%s; latestCommit=%s; build=%s; source=%s)"):format(
       status,
       installed,
       latest,
-      commit,
+      buildCommit,
+      latestCommit,
       buildDate,
       tostring(info.source or "unknown")
     ))

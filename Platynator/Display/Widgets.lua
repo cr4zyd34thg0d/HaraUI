@@ -373,6 +373,29 @@ function addonTable.Display.GetHighlight(frame, parent)
 
   function frame:Init(details)
     local highlightDetails = addonTable.Assets.Highlights[details.asset]
+    if not highlightDetails then
+      details.asset = "bold"
+      details.width = details.width or 1
+      details.height = details.height or 1
+      highlightDetails = addonTable.Assets.Highlights[details.asset]
+    end
+    if type(details.color) ~= "table" then
+      details.color = {r = 1, g = 1, b = 1, a = 1}
+    elseif details.color.a == nil then
+      details.color.a = 1
+    end
+    if details.scale == nil then
+      details.scale = 1
+    end
+    if type(details.anchor) ~= "table" then
+      details.anchor = {}
+    end
+    if details.width == nil then
+      details.width = 1
+    end
+    if details.height == nil then
+      details.height = 1
+    end
     frame.details = details
 
     frame.highlight:SetTexture(highlightDetails.file)
@@ -401,7 +424,8 @@ function addonTable.Display.GetHighlight(frame, parent)
     elseif details.kind == "fixed" then
       Mixin(frame, addonTable.Display.FixedHighlightMixin)
     else
-      assert(false)
+      details.kind = "target"
+      Mixin(frame, addonTable.Display.TargetHighlightMixin)
     end
 
     frame:SetScript("OnEvent", frame.OnEvent)
@@ -418,6 +442,10 @@ function addonTable.Display.GetHighlight(frame, parent)
   function frame:ApplySize()
     local details = frame.details
     local highlightDetails = addonTable.Assets.Highlights[details.asset]
+    if not highlightDetails then
+      details.asset = "bold"
+      highlightDetails = addonTable.Assets.Highlights[details.asset]
+    end
     if highlightDetails.mode == addonTable.Assets.RenderMode.Sliced then
       local width, height = details.width * addonTable.Assets.BarBordersSize.width * highlightDetails.shiftModifierH, details.height * addonTable.Assets.BarBordersSize.height * highlightDetails.shiftModifierV
       PixelUtil.SetSize(frame, width * details.scale, height * details.scale)
@@ -445,6 +473,13 @@ function addonTable.Display.GetMarker(frame, parent)
     frame.details = details
 
     local markerDetails = addonTable.Assets.Markers[details.asset]
+    if not markerDetails then
+      details.asset = "normal/quest-blizzard"
+      markerDetails = addonTable.Assets.Markers[details.asset]
+    end
+    if details.scale == nil then
+      details.scale = 1
+    end
 
     frame.marker:SetTexture(markerDetails.file)
     if details.color then
@@ -468,7 +503,8 @@ function addonTable.Display.GetMarker(frame, parent)
     elseif details.kind == "pvp" then
       Mixin(frame, addonTable.Display.PvPMarkerMixin)
     else
-      assert(false)
+      details.kind = "quest"
+      Mixin(frame, addonTable.Display.QuestMarkerMixin)
     end
 
     frame:SetScript("OnEvent", frame.OnEvent)
@@ -488,6 +524,10 @@ function addonTable.Display.GetMarker(frame, parent)
   function frame:ApplySize()
     local details = frame.details
     local markerDetails = addonTable.Assets.Markers[details.asset]
+    if not markerDetails then
+      details.asset = "normal/quest-blizzard"
+      markerDetails = addonTable.Assets.Markers[details.asset]
+    end
     PixelUtil.SetSize(frame, markerDetails.width * details.scale, markerDetails.height * details.scale)
   end
 
@@ -509,6 +549,22 @@ function addonTable.Display.GetText(frame, parent)
   function frame:Init(details)
     if frame.Strip then
       frame:Strip()
+    end
+
+    if type(details.anchor) ~= "table" then
+      details.anchor = {"CENTER", 0, 0}
+    end
+    if type(details.color) ~= "table" then
+      details.color = {r = 1, g = 1, b = 1}
+    end
+    if details.align == nil then
+      details.align = "CENTER"
+    end
+    if details.scale == nil then
+      details.scale = 1
+    end
+    if details.truncate == nil then
+      details.truncate = false
     end
 
     frame.details = details
@@ -558,7 +614,8 @@ function addonTable.Display.GetText(frame, parent)
     elseif details.kind == "castTimeLeft" then
       Mixin(frame, addonTable.Display.CastTimeLeftTextMixin)
     else
-      assert(false)
+      details.kind = "creatureName"
+      Mixin(frame, addonTable.Display.CreatureTextMSPMixin or addonTable.Display.CreatureTextMixin)
     end
 
     frame:SetScript("OnEvent", frame.OnEvent)
@@ -655,17 +712,18 @@ function addonTable.Display.GetWidgets(design, parent, isEditor)
   end
 
   for index, specialDetails in ipairs(design.specialBars) do
-    assert(specialDetails.kind == "power")
-    local w = pools.powers:Acquire()
-    poolType[w] = "powers"
-    w:SetParent(parent)
-    w:Show()
-    w:SetFrameStrata("MEDIUM")
-    w:SetFrameLevel(layerStep * specialDetails.layer + index * 10)
-    w:Init(specialDetails)
-    w.kind = "specialBars"
-    w.kindIndex = index
-    table.insert(widgets, w)
+    if specialDetails.kind == "power" then
+      local w = pools.powers:Acquire()
+      poolType[w] = "powers"
+      w:SetParent(parent)
+      w:Show()
+      w:SetFrameStrata("MEDIUM")
+      w:SetFrameLevel(layerStep * specialDetails.layer + index * 10)
+      w:Init(specialDetails)
+      w.kind = "specialBars"
+      w.kindIndex = index
+      table.insert(widgets, w)
+    end
   end
 
   for index, markerDetails in ipairs(design.markers) do

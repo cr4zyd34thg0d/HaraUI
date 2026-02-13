@@ -2,9 +2,10 @@
 ## Title: HaraUI
 ## Notes: Modular quality-of-life UI suite (XP/Rep bar, cast bar, menu scale, loot toasts).
 ## Author: Harath
-## Version: 1.4.5
-## X-GitVersion: 1.4.5
-## X-Build-Commit: 39b6d46
+## Version: 1.4.6
+## X-GitVersion: 1.4.6
+## X-Build-Commit: d6bf019
+## X-Git-Commit: d6bf019
 ## X-Build-Date: 2026-02-13
 ## SavedVariables: HarathUI_DB
 ## OptionalDeps: LibSharedMedia-3.0, LibDataBroker-1.1, LibDBIcon-1.0
