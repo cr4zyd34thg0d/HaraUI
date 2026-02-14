@@ -1104,20 +1104,75 @@ function StatTooltipBridge.HandleLeave(row)
   end
 end
 
+local function BuildContextualTitleText(rawTitle, playerName)
+  if type(rawTitle) ~= "string" or rawTitle == "" then
+    return ""
+  end
+  if type(playerName) ~= "string" then
+    playerName = ""
+  end
+
+  local function TrimText(text)
+    if type(text) ~= "string" then
+      return ""
+    end
+    return text:gsub("^%s+", ""):gsub("%s+$", "")
+  end
+
+  local replaced = rawTitle
+  local replacedAny = false
+  local count = 0
+  replaced, count = replaced:gsub("%%(%d+)%$s", playerName)
+  if count and count > 0 then
+    replacedAny = true
+  end
+  replaced, count = replaced:gsub("%%s", playerName)
+  if count and count > 0 then
+    replacedAny = true
+  end
+  if replacedAny then
+    return TrimText(replaced)
+  end
+
+  if playerName ~= "" and rawTitle:find(playerName, 1, true) then
+    return TrimText(rawTitle)
+  end
+
+  local clean = TrimText(rawTitle)
+  if clean == "" then
+    return ""
+  end
+  if playerName == "" then
+    return clean
+  end
+
+  -- WoW title data often signals prefix titles with trailing whitespace.
+  -- Example: "Brawler " => "Brawler Name"
+  if rawTitle:find("%s$") then
+    return rawTitle:gsub("%s+$", " ") .. playerName
+  end
+
+  if clean:match("^[,%.:;!%?]") then
+    return playerName .. clean
+  end
+
+  -- Default to Blizzard-style suffix when no explicit placeholder exists.
+  -- Example: "Breaker of Chains" => "Name, Breaker of Chains"
+  return playerName .. ", " .. clean
+end
+
 local function BuildKnownTitlesData()
   local rows = {}
   if not (GetNumTitles and GetTitleName and IsTitleKnown) then
     return rows
   end
+  local playerName = UnitName and UnitName("player") or ""
   local current = GetCurrentTitle and GetCurrentTitle() or 0
   local total = GetNumTitles() or 0
   for i = 1, total do
     if IsTitleKnown(i) then
       local raw = GetTitleName(i)
-      local clean = ""
-      if type(raw) == "string" and raw ~= "" then
-        clean = raw:gsub("%%s%s*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-      end
+      local clean = BuildContextualTitleText(raw, playerName)
       rows[#rows + 1] = {
         id = i,
         label = clean ~= "" and clean or ("Title " .. i),
@@ -1834,33 +1889,80 @@ local function ApplyCustomStatsFont(db)
   end
 end
 
+local function BuildContextualTitleDisplayText(playerName, nameHex, titleHex)
+  if type(playerName) ~= "string" then
+    playerName = ""
+  end
+  local coloredName = nameHex .. playerName .. "|r"
+  if playerName == "" then
+    return coloredName
+  end
+  if not (GetCurrentTitle and GetTitleName) then
+    return coloredName
+  end
+
+  local current = GetCurrentTitle()
+  if not current or current <= 0 then
+    return coloredName
+  end
+
+  local raw = GetTitleName(current)
+  if type(raw) ~= "string" or raw == "" then
+    return coloredName
+  end
+  local displayText = BuildContextualTitleText(raw, playerName)
+  if displayText == "" then
+    return coloredName
+  end
+
+  local function BuildColoredTextFromFormatted(displayText)
+    if type(displayText) ~= "string" or displayText == "" then
+      return coloredName
+    end
+    local escapedName = playerName:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+    local parts = {}
+    local cursor = 1
+    while true do
+      local startPos, endPos = displayText:find(escapedName, cursor)
+      if not startPos then
+        local tail = displayText:sub(cursor)
+        if tail ~= "" then
+          parts[#parts + 1] = titleHex .. tail .. "|r"
+        end
+        break
+      end
+      local chunk = displayText:sub(cursor, startPos - 1)
+      if chunk ~= "" then
+        parts[#parts + 1] = titleHex .. chunk .. "|r"
+      end
+      parts[#parts + 1] = coloredName
+      cursor = endPos + 1
+    end
+    if #parts == 0 then
+      return coloredName
+    end
+    return table.concat(parts)
+  end
+  return BuildColoredTextFromFormatted(displayText)
+end
+
 ApplyCoreCharacterFontAndName = function(db)
   local fontPath, size, outline = GetConfiguredFont(db)
   local headerAnchor = CharacterFrame
   local name = UnitName("player") or ""
   local _, classTag = UnitClass("player")
   local c = (classTag and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classTag]) or NORMAL_FONT_COLOR
-  local titleText = ""
-  if GetCurrentTitle and GetTitleName then
-    local current = GetCurrentTitle()
-    if current and current > 0 then
-      local raw = GetTitleName(current)
-      if type(raw) == "string" then
-        titleText = raw:gsub("%%s%s*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-      end
-    end
-  end
   local nameHex = ("|cff%02x%02x%02x"):format(
     math.floor((c.r or 1) * 255 + 0.5),
     math.floor((c.g or 1) * 255 + 0.5),
     math.floor((c.b or 1) * 255 + 0.5)
   )
   local titleHex = "|cfff5f5f5"
-  local titlePart = (titleText ~= "" and (" " .. titleHex .. titleText .. "|r")) or ""
+  local headerNameText = BuildContextualTitleDisplayText(name, nameHex, titleHex)
 
   if S.customNameText then
     if S.customNameText.SetFont then S.customNameText:SetFont(fontPath, size + 6, outline) end
-    S.customNameText:SetText(nameHex .. name .. "|r" .. titlePart)
+    S.customNameText:SetText(headerNameText)
     S.customNameText:ClearAllPoints()
     S.customNameText:SetPoint("TOP", headerAnchor, "TOP", CFG.HEADER_TEXT_X_OFFSET, -8)
     S.customNameText:Show()
@@ -6570,6 +6672,7 @@ function M:Apply()
   SafeRegisterEvent(S.moduleEventFrame, "ACTIVE_TALENT_GROUP_CHANGED")
   SafeRegisterEvent(S.moduleEventFrame, "PLAYER_LEVEL_UP")
   SafeRegisterEvent(S.moduleEventFrame, "KNOWN_TITLES_UPDATE")
+  SafeRegisterEvent(S.moduleEventFrame, "PLAYER_TITLE_CHANGED")
   SafeRegisterEvent(S.moduleEventFrame, "UPDATE_FACTION")
   SafeRegisterEvent(S.moduleEventFrame, "CURRENCY_DISPLAY_UPDATE")
   SafeRegisterEvent(S.moduleEventFrame, "CURRENCY_LIST_UPDATE")
