@@ -185,14 +185,7 @@ local function Create()
   frame.keyText:SetShadowOffset(1, -1)
   frame.keyText:SetShadowColor(0, 0, 0, 1)
   frame.keyText:SetJustifyH("RIGHT")
-  if GameFontNormalSmall and GameFontNormalSmall.GetFont then
-    local fontPath = GameFontNormalSmall:GetFont()
-    if fontPath then
-      frame.keyText:SetFont(fontPath, 15, "THICKOUTLINE")
-    end
-  elseif STANDARD_TEXT_FONT then
-    frame.keyText:SetFont(STANDARD_TEXT_FONT, 15, "THICKOUTLINE")
-  end
+  NS:ApplyDefaultFont(frame.keyText, 15)
 
   frame:Hide()
 

@@ -15,7 +15,6 @@
 --]]
 
 local ADDON, NS = ...
-local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 
 local function GetAddonMetadataField(field)
   if C_AddOns and C_AddOns.GetAddOnMetadata then
@@ -101,20 +100,18 @@ end
 -- =========================================================
 
 local function GetUIFontPath()
-  -- Settings UI font is fixed to Tahoma Bold; module-specific font selectors remain independent.
-  local fontName = "Tahoma Bold"
-  if LSM then
-    local path = LSM:Fetch("font", fontName, true)
-    if path then return path end
+  if NS and NS.GetDefaultFontPath then
+    return NS:GetDefaultFontPath()
   end
   return STANDARD_TEXT_FONT
 end
 
-local function SetUIFont(fs, size, outline, color)
+local function SetUIFont(fs, size, _, color)
   if not fs then return end
   local path = GetUIFontPath()
   if path then
-    fs:SetFont(path, size or 12, outline or "")
+    local flags = (NS and NS.GetDefaultFontFlags and NS:GetDefaultFontFlags()) or "OUTLINE"
+    fs:SetFont(path, size or 12, flags)
   end
   if color then
     fs:SetTextColor(color[1], color[2], color[3])
@@ -124,9 +121,9 @@ end
 local function ApplyUIFont(fs, size, outline, color)
   if not fs then return end
   SetUIFont(fs, size, outline, color)
-  -- Track font objects so the Settings Font dropdown can update existing UI text.
+  -- Track font objects so the options UI can re-apply font styles after theme updates.
   NS._huiFontRegistry = NS._huiFontRegistry or {}
-  NS._huiFontRegistry[fs] = { size = size, outline = outline, color = color }
+  NS._huiFontRegistry[fs] = { size = size, color = color }
   if color == ORANGE then
     RegisterTheme(function(c)
       if fs and fs.SetTextColor then
@@ -919,97 +916,6 @@ function NS:InitOptions()
       NS:ApplyAll()
     end)
 
-    -- Font settings
-    if not db.xpbar.font then db.xpbar.font = "BigNoodleTilting" end
-    if not db.xpbar.fontOutline then db.xpbar.fontOutline = "NONE" end
-
-    local xpFontLabel = pages.xp:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    xpFontLabel:SetPoint("TOPLEFT", showSession, "BOTTOMLEFT", 0, GROUP_GAP)
-    xpFontLabel:SetText("Font")
-    ApplyUIFont(xpFontLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
-
-    local xpFontDD = CreateFrame("Frame", "HarathUI_XPBarFontDropdown", pages.xp, "UIDropDownMenuTemplate")
-    xpFontDD:SetPoint("TOPLEFT", xpFontLabel, "BOTTOMLEFT", -16, -6)
-    UIDropDownMenu_SetWidth(xpFontDD, 220)
-
-    local xpFonts = {}
-    if LSM then
-      for _, name in ipairs(LSM:List("font")) do
-        xpFonts[#xpFonts + 1] = name
-      end
-      table.sort(xpFonts)
-    end
-
-    local function RefreshXPFont()
-      UIDropDownMenu_SetSelectedValue(xpFontDD, db.xpbar.font)
-      UIDropDownMenu_SetText(xpFontDD, db.xpbar.font or "Default")
-    end
-
-    UIDropDownMenu_Initialize(xpFontDD, function(self, level)
-      if not LSM then
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = "LibSharedMedia-3.0 not found"
-        info.notCheckable = true
-        UIDropDownMenu_AddButton(info, level)
-        return
-      end
-
-      for _, name in ipairs(xpFonts) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = name
-        info.checked = (db.xpbar.font == name)
-        info.func = function()
-          db.xpbar.font = name
-          RefreshXPFont()
-          NS:ApplyAll()
-        end
-        UIDropDownMenu_AddButton(info, level)
-      end
-    end)
-
-    ApplyDropdownFont(xpFontDD, 12, { 0.9, 0.9, 0.9 })
-    RightAlignDropdownText(xpFontDD)
-    RefreshXPFont()
-
-    local xpOutlineLabel = pages.xp:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    xpOutlineLabel:SetPoint("TOPLEFT", xpFontDD, "BOTTOMLEFT", 16, DROPDOWN_GAP)
-    xpOutlineLabel:SetText("Outline")
-    ApplyUIFont(xpOutlineLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
-
-    local xpOutlineDD = CreateFrame("Frame", "HarathUI_XPBarOutlineDropdown", pages.xp, "UIDropDownMenuTemplate")
-    xpOutlineDD:SetPoint("TOPLEFT", xpOutlineLabel, "BOTTOMLEFT", -16, -6)
-    UIDropDownMenu_SetWidth(xpOutlineDD, 180)
-
-    local xpOutlines = {
-      { name = "None", value = "NONE" },
-      { name = "Outline", value = "OUTLINE" },
-      { name = "Thick Outline", value = "THICKOUTLINE" },
-      { name = "Mono + Outline", value = "MONOCHROME,OUTLINE" },
-      { name = "Mono + Thick", value = "MONOCHROME,THICKOUTLINE" },
-    }
-
-    local function RefreshXPOutline()
-      UIDropDownMenu_SetSelectedValue(xpOutlineDD, db.xpbar.fontOutline)
-      UIDropDownMenu_SetText(xpOutlineDD, db.xpbar.fontOutline or "NONE")
-    end
-
-    UIDropDownMenu_Initialize(xpOutlineDD, function(self, level)
-      for _, o in ipairs(xpOutlines) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = o.name
-        info.checked = (db.xpbar.fontOutline == o.value)
-        info.func = function()
-          db.xpbar.fontOutline = o.value
-          RefreshXPOutline()
-          NS:ApplyAll()
-        end
-        UIDropDownMenu_AddButton(info, level)
-      end
-    end)
-
-    ApplyDropdownFont(xpOutlineDD, 12, { 0.9, 0.9, 0.9 })
-    RightAlignDropdownText(xpOutlineDD)
-    RefreshXPOutline()
   end
 
   -- =========================================================
@@ -1135,101 +1041,8 @@ function NS:InitOptions()
       NS:ApplyAll()
     end)
 
-    local textFontLabel = pages.cast:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    textFontLabel:SetPoint("TOPLEFT", textSize, "BOTTOMLEFT", 0, GROUP_GAP)
-    textFontLabel:SetText("Text Font")
-    ApplyUIFont(textFontLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
-
-    local textFontDD = CreateFrame("Frame", "HarathUI_CastBarTextFontDropdown", pages.cast, "UIDropDownMenuTemplate")
-    textFontDD:SetPoint("TOPLEFT", textFontLabel, "BOTTOMLEFT", -16, -6)
-    UIDropDownMenu_SetWidth(textFontDD, 220)
-
-    if not db.castbar.textFont then
-      db.castbar.textFont = "BigNoodleTilting"
-    end
-    local textFonts = {}
-    if LSM then
-      for _, name in ipairs(LSM:List("font")) do
-        textFonts[#textFonts + 1] = name
-      end
-      table.sort(textFonts)
-    end
-
-    local function RefreshTextFont()
-      UIDropDownMenu_SetSelectedValue(textFontDD, db.castbar.textFont)
-      UIDropDownMenu_SetText(textFontDD, db.castbar.textFont or "Default")
-    end
-
-    UIDropDownMenu_Initialize(textFontDD, function(self, level)
-      if not LSM then
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = "LibSharedMedia-3.0 not found"
-        info.notCheckable = true
-        UIDropDownMenu_AddButton(info, level)
-        return
-      end
-
-      for _, name in ipairs(textFonts) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = name
-        info.checked = (db.castbar.textFont == name)
-        info.func = function()
-          db.castbar.textFont = name
-          RefreshTextFont()
-          NS:ApplyAll()
-        end
-        UIDropDownMenu_AddButton(info, level)
-      end
-    end)
-
-    ApplyDropdownFont(textFontDD, 12, { 0.9, 0.9, 0.9 })
-    RefreshTextFont()
-
-    local textOutlineLabel = pages.cast:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    textOutlineLabel:SetPoint("TOPLEFT", textFontDD, "BOTTOMLEFT", 16, DROPDOWN_GAP)
-    textOutlineLabel:SetText("Text Outline")
-    ApplyUIFont(textOutlineLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
-
-    local textOutlineDD = CreateFrame("Frame", "HarathUI_CastBarTextOutlineDropdown", pages.cast, "UIDropDownMenuTemplate")
-    textOutlineDD:SetPoint("TOPLEFT", textOutlineLabel, "BOTTOMLEFT", -16, -6)
-    UIDropDownMenu_SetWidth(textOutlineDD, 180)
-
-    if not db.castbar.textOutline then
-      db.castbar.textOutline = "NONE"
-    end
-
-    local textOutlines = {
-      { name = "None", value = "NONE" },
-      { name = "Outline", value = "OUTLINE" },
-      { name = "Thick Outline", value = "THICKOUTLINE" },
-      { name = "Mono + Outline", value = "MONOCHROME,OUTLINE" },
-      { name = "Mono + Thick", value = "MONOCHROME,THICKOUTLINE" },
-    }
-
-    local function RefreshTextOutline()
-      UIDropDownMenu_SetSelectedValue(textOutlineDD, db.castbar.textOutline)
-      UIDropDownMenu_SetText(textOutlineDD, db.castbar.textOutline or "NONE")
-    end
-
-    UIDropDownMenu_Initialize(textOutlineDD, function(self, level)
-      for _, o in ipairs(textOutlines) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = o.name
-        info.checked = (db.castbar.textOutline == o.value)
-        info.func = function()
-          db.castbar.textOutline = o.value
-          RefreshTextOutline()
-          NS:ApplyAll()
-        end
-        UIDropDownMenu_AddButton(info, level)
-      end
-    end)
-
-    ApplyDropdownFont(textOutlineDD, 12, { 0.9, 0.9, 0.9 })
-    RefreshTextOutline()
-
     local texLabel = pages.cast:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    texLabel:SetPoint("TOPLEFT", textOutlineDD, "BOTTOMLEFT", 16, DROPDOWN_GAP)
+    texLabel:SetPoint("TOPLEFT", textSize, "BOTTOMLEFT", 0, GROUP_GAP)
     texLabel:SetText("Bar Texture")
     ApplyUIFont(texLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
 
@@ -1307,14 +1120,8 @@ function NS:InitOptions()
     if db.charsheet.stripeAlpha == nil then
       db.charsheet.stripeAlpha = 0.22
     end
-    if not db.charsheet.font then
-      db.charsheet.font = "BigNoodleTilting"
-    end
     if not db.charsheet.fontSize then
       db.charsheet.fontSize = 12
-    end
-    if not db.charsheet.fontOutline then
-      db.charsheet.fontOutline = "NONE"
     end
 
     local openChar = MakeButton(pages.charsheet, "Open Character", 160, 24)
@@ -1333,93 +1140,6 @@ function NS:InitOptions()
       end
     end)
 
-    local fontLabel = pages.charsheet:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    fontLabel:SetPoint("TOPLEFT", openChar, "BOTTOMLEFT", 0, GROUP_GAP)
-    fontLabel:SetText("Stat Font")
-    ApplyUIFont(fontLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
-
-    local fontDD = CreateFrame("Frame", "HarathUI_CharacterSheetFontDropdown", pages.charsheet, "UIDropDownMenuTemplate")
-    fontDD:SetPoint("TOPLEFT", fontLabel, "BOTTOMLEFT", -16, -6)
-    UIDropDownMenu_SetWidth(fontDD, 220)
-
-    local fonts = {}
-    if LSM then
-      for _, name in ipairs(LSM:List("font")) do
-        fonts[#fonts + 1] = name
-      end
-      table.sort(fonts)
-    end
-
-    local function RefreshCharFont()
-      UIDropDownMenu_SetSelectedValue(fontDD, db.charsheet.font)
-      UIDropDownMenu_SetText(fontDD, db.charsheet.font or "Default")
-    end
-
-    UIDropDownMenu_Initialize(fontDD, function(self, level)
-      if not LSM then
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = "LibSharedMedia-3.0 not found"
-        info.notCheckable = true
-        UIDropDownMenu_AddButton(info, level)
-        return
-      end
-
-      for _, name in ipairs(fonts) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = name
-        info.checked = (db.charsheet.font == name)
-        info.func = function()
-          db.charsheet.font = name
-          RefreshCharFont()
-          NS:ApplyAll()
-        end
-        UIDropDownMenu_AddButton(info, level)
-      end
-    end)
-
-    ApplyDropdownFont(fontDD, 12, { 0.9, 0.9, 0.9 })
-    RightAlignDropdownText(fontDD)
-    RefreshCharFont()
-
-    local outlineLabel = pages.charsheet:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    outlineLabel:SetPoint("TOPLEFT", fontDD, "BOTTOMLEFT", 16, DROPDOWN_GAP)
-    outlineLabel:SetText("Stat Outline")
-    ApplyUIFont(outlineLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
-
-    local outlineDD = CreateFrame("Frame", "HarathUI_CharacterSheetOutlineDropdown", pages.charsheet, "UIDropDownMenuTemplate")
-    outlineDD:SetPoint("TOPLEFT", outlineLabel, "BOTTOMLEFT", -16, -6)
-    UIDropDownMenu_SetWidth(outlineDD, 180)
-
-    local outlines = {
-      { name = "None", value = "NONE" },
-      { name = "Outline", value = "OUTLINE" },
-      { name = "Thick Outline", value = "THICKOUTLINE" },
-      { name = "Mono + Outline", value = "MONOCHROME,OUTLINE" },
-      { name = "Mono + Thick", value = "MONOCHROME,THICKOUTLINE" },
-    }
-
-    local function RefreshCharOutline()
-      UIDropDownMenu_SetSelectedValue(outlineDD, db.charsheet.fontOutline)
-      UIDropDownMenu_SetText(outlineDD, db.charsheet.fontOutline or "NONE")
-    end
-
-    UIDropDownMenu_Initialize(outlineDD, function(self, level)
-      for _, o in ipairs(outlines) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = o.name
-        info.checked = (db.charsheet.fontOutline == o.value)
-        info.func = function()
-          db.charsheet.fontOutline = o.value
-          RefreshCharOutline()
-          NS:ApplyAll()
-        end
-        UIDropDownMenu_AddButton(info, level)
-      end
-    end)
-
-    ApplyDropdownFont(outlineDD, 12, { 0.9, 0.9, 0.9 })
-    RightAlignDropdownText(outlineDD)
-    RefreshCharOutline()
   end
 
   -- =========================================================
@@ -1459,95 +1179,6 @@ function NS:InitOptions()
       NS:ApplyAll()
     end)
 
-    -- Font settings
-    if not db.loot.font then db.loot.font = "BigNoodleTilting" end
-    if not db.loot.fontOutline then db.loot.fontOutline = "NONE" end
-
-    local lootFontLabel = pages.loot:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    lootFontLabel:SetPoint("TOPLEFT", duration, "BOTTOMLEFT", 0, GROUP_GAP)
-    lootFontLabel:SetText("Text Font")
-    ApplyUIFont(lootFontLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
-
-    local lootFontDD = CreateFrame("Frame", "HarathUI_LootToastsFontDropdown", pages.loot, "UIDropDownMenuTemplate")
-    lootFontDD:SetPoint("TOPLEFT", lootFontLabel, "BOTTOMLEFT", -16, -6)
-    UIDropDownMenu_SetWidth(lootFontDD, 220)
-
-    local lootFonts = {}
-    if LSM then
-      for _, name in ipairs(LSM:List("font")) do
-        lootFonts[#lootFonts + 1] = name
-      end
-      table.sort(lootFonts)
-    end
-
-    local function RefreshLootFont()
-      UIDropDownMenu_SetSelectedValue(lootFontDD, db.loot.font)
-      UIDropDownMenu_SetText(lootFontDD, db.loot.font or "Default")
-    end
-
-    UIDropDownMenu_Initialize(lootFontDD, function(self, level)
-      if not LSM then
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = "LibSharedMedia-3.0 not found"
-        info.notCheckable = true
-        UIDropDownMenu_AddButton(info, level)
-        return
-      end
-
-      for _, name in ipairs(lootFonts) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = name
-        info.checked = (db.loot.font == name)
-        info.func = function()
-          db.loot.font = name
-          RefreshLootFont()
-          NS:ApplyAll()
-        end
-        UIDropDownMenu_AddButton(info, level)
-      end
-    end)
-
-    ApplyDropdownFont(lootFontDD, 12, { 0.9, 0.9, 0.9 })
-    RefreshLootFont()
-
-    local lootOutlineLabel = pages.loot:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    lootOutlineLabel:SetPoint("TOPLEFT", lootFontDD, "BOTTOMLEFT", 16, DROPDOWN_GAP)
-    lootOutlineLabel:SetText("Text Outline")
-    ApplyUIFont(lootOutlineLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
-
-    local lootOutlineDD = CreateFrame("Frame", "HarathUI_LootToastsOutlineDropdown", pages.loot, "UIDropDownMenuTemplate")
-    lootOutlineDD:SetPoint("TOPLEFT", lootOutlineLabel, "BOTTOMLEFT", -16, -6)
-    UIDropDownMenu_SetWidth(lootOutlineDD, 180)
-
-    local lootOutlines = {
-      { name = "None", value = "NONE" },
-      { name = "Outline", value = "OUTLINE" },
-      { name = "Thick Outline", value = "THICKOUTLINE" },
-      { name = "Mono + Outline", value = "MONOCHROME,OUTLINE" },
-      { name = "Mono + Thick", value = "MONOCHROME,THICKOUTLINE" },
-    }
-
-    local function RefreshLootOutline()
-      UIDropDownMenu_SetSelectedValue(lootOutlineDD, db.loot.fontOutline)
-      UIDropDownMenu_SetText(lootOutlineDD, db.loot.fontOutline or "NONE")
-    end
-
-    UIDropDownMenu_Initialize(lootOutlineDD, function(self, level)
-      for _, o in ipairs(lootOutlines) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = o.name
-        info.checked = (db.loot.fontOutline == o.value)
-        info.func = function()
-          db.loot.fontOutline = o.value
-          RefreshLootOutline()
-          NS:ApplyAll()
-        end
-        UIDropDownMenu_AddButton(info, level)
-      end
-    end)
-
-    ApplyDropdownFont(lootOutlineDD, 12, { 0.9, 0.9, 0.9 })
-    RefreshLootOutline()
   end
 
   -- =========================================================
@@ -1560,17 +1191,11 @@ function NS:InitOptions()
     if not db.friendlyplates.nameColor then
       db.friendlyplates.nameColor = { r = 1, g = 1, b = 1 }
     end
-    if not db.friendlyplates.font then
-      db.friendlyplates.font = "BigNoodleTilting"
-    end
     if db.friendlyplates.classColor == nil then
       db.friendlyplates.classColor = false
     end
     if not db.friendlyplates.fontSize then
       db.friendlyplates.fontSize = 12
-    end
-    if not db.friendlyplates.fontOutline then
-      db.friendlyplates.fontOutline = "NONE"
     end
     if not db.friendlyplates.yOffset then
       db.friendlyplates.yOffset = 0
@@ -1629,99 +1254,6 @@ function NS:InitOptions()
         NS.Modules.friendlyplates:Refresh()
       end
     end)
-
-    local fontLabel = pages.friendly:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    fontLabel:SetPoint("TOPLEFT", offset, "BOTTOMLEFT", 0, GROUP_GAP)
-    fontLabel:SetText("Font")
-    ApplyUIFont(fontLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
-
-    local fontDD = CreateFrame("Frame", "HarathUI_FriendlyNameplateFontDropdown", pages.friendly, "UIDropDownMenuTemplate")
-    fontDD:SetPoint("TOPLEFT", fontLabel, "BOTTOMLEFT", -16, -6)
-    UIDropDownMenu_SetWidth(fontDD, 220)
-
-    local fonts = {}
-    if LSM then
-      for _, name in ipairs(LSM:List("font")) do
-        fonts[#fonts + 1] = name
-      end
-      table.sort(fonts)
-    end
-
-    local function RefreshFont()
-      UIDropDownMenu_SetSelectedValue(fontDD, db.friendlyplates.font)
-      UIDropDownMenu_SetText(fontDD, db.friendlyplates.font or "Default")
-    end
-
-    UIDropDownMenu_Initialize(fontDD, function(self, level)
-      if not LSM then
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = "LibSharedMedia-3.0 not found"
-        info.notCheckable = true
-        UIDropDownMenu_AddButton(info, level)
-        return
-      end
-
-      for _, name in ipairs(fonts) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = name
-        info.checked = (db.friendlyplates.font == name)
-        info.func = function()
-          db.friendlyplates.font = name
-          RefreshFont()
-          NS:ApplyAll()
-          if NS.Modules and NS.Modules.friendlyplates and NS.Modules.friendlyplates.Refresh then
-            NS.Modules.friendlyplates:Refresh()
-          end
-        end
-        UIDropDownMenu_AddButton(info, level)
-      end
-    end)
-
-    ApplyDropdownFont(fontDD, 12, { 0.9, 0.9, 0.9 })
-    RefreshFont()
-
-    local outlineLabel = pages.friendly:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    outlineLabel:SetPoint("TOPLEFT", fontDD, "BOTTOMLEFT", 16, DROPDOWN_GAP)
-    outlineLabel:SetText("Outline")
-    ApplyUIFont(outlineLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
-
-    local outlineDD = CreateFrame("Frame", "HarathUI_FriendlyNameplateFontOutlineDropdown", pages.friendly, "UIDropDownMenuTemplate")
-    outlineDD:SetPoint("TOPLEFT", outlineLabel, "BOTTOMLEFT", -16, -6)
-    UIDropDownMenu_SetWidth(outlineDD, 180)
-
-    local outlines = {
-      { name = "None", value = "NONE" },
-      { name = "Outline", value = "OUTLINE" },
-      { name = "Thick Outline", value = "THICKOUTLINE" },
-      { name = "Mono + Outline", value = "MONOCHROME,OUTLINE" },
-      { name = "Mono + Thick", value = "MONOCHROME,THICKOUTLINE" },
-    }
-
-    local function RefreshOutline()
-      UIDropDownMenu_SetSelectedValue(outlineDD, db.friendlyplates.fontOutline)
-      local label = db.friendlyplates.fontOutline or "NONE"
-      UIDropDownMenu_SetText(outlineDD, label)
-    end
-
-    UIDropDownMenu_Initialize(outlineDD, function(self, level)
-      for _, o in ipairs(outlines) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = o.name
-        info.checked = (db.friendlyplates.fontOutline == o.value)
-        info.func = function()
-          db.friendlyplates.fontOutline = o.value
-          RefreshOutline()
-          NS:ApplyAll()
-          if NS.Modules and NS.Modules.friendlyplates and NS.Modules.friendlyplates.Refresh then
-            NS.Modules.friendlyplates:Refresh()
-          end
-        end
-        UIDropDownMenu_AddButton(info, level)
-      end
-    end)
-
-    ApplyDropdownFont(outlineDD, 12, { 0.9, 0.9, 0.9 })
-    RefreshOutline()
 
   end
 
@@ -2185,7 +1717,7 @@ function NS:InitOptions()
     if not NS._huiFontRegistry then return end
     for fs, meta in pairs(NS._huiFontRegistry) do
       if fs and fs.SetFont then
-        SetUIFont(fs, meta.size, meta.outline, meta.color)
+        SetUIFont(fs, meta.size, nil, meta.color)
       end
     end
   end

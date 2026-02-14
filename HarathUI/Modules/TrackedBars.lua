@@ -4,7 +4,6 @@ NS:RegisterModule("trackedbars", M)
 
 M.active = false
 
-local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 local FLAT_TEXTURE = "Interface/TargetingFrame/UI-StatusBar"
 local UPDATE_INTERVAL = 0.4
 
@@ -42,13 +41,7 @@ end
 local function ApplyTextFont(fs, db)
   if not fs or not fs.SetFont then return end
   local size = db.castbar and db.castbar.textSize or 11
-  local outline = db.castbar and db.castbar.textOutline
-  if outline == "NONE" then outline = nil end
-  local fontPath
-  if LSM and db.castbar and db.castbar.textFont then
-    fontPath = LSM:Fetch("font", db.castbar.textFont, true)
-  end
-  fs:SetFont(fontPath or STANDARD_TEXT_FONT, size or 11, outline)
+  NS:ApplyDefaultFont(fs, size or 11)
 end
 
 local function ApplyTextColor(fs, db)

@@ -32,4 +32,26 @@ NS.TEXTURES = {
 }
 
 -- Default font
-NS.DEFAULT_FONT = "BigNoodleTilting"
+NS.DEFAULT_FONT = "Tahoma Bold"
+NS.DEFAULT_FONT_OUTLINE = "OUTLINE"
+NS.DEFAULT_FONT_PATH = "Interface\\AddOns\\HarathUI\\Media\\Fonts\\TahomaBold.ttf"
+
+function NS:GetDefaultFontPath()
+  local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+  if LSM then
+    local path = LSM:Fetch("font", NS.DEFAULT_FONT, true)
+    if path then
+      return path
+    end
+  end
+  return NS.DEFAULT_FONT_PATH or STANDARD_TEXT_FONT
+end
+
+function NS:GetDefaultFontFlags()
+  return NS.DEFAULT_FONT_OUTLINE
+end
+
+function NS:ApplyDefaultFont(fs, size, flags)
+  if not fs or not fs.SetFont then return end
+  fs:SetFont(NS:GetDefaultFontPath(), size or 12, flags or NS.DEFAULT_FONT_OUTLINE)
+end

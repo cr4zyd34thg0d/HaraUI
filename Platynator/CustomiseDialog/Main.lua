@@ -237,6 +237,10 @@ local function SetupBehaviour(parent)
   local applyNameplatesDropdown = addonTable.CustomiseDialog.Components.GetBasicDropdown(container, addonTable.Locales.USE_NAMEPLATES_FOR)
   applyNameplatesDropdown:SetPoint("TOP", allFrames[#allFrames], "BOTTOM", 0, -30)
   do
+    local values = {
+      "enemy",
+    }
+
     local function GetCheckbox(rootDescription, label, value)
       return rootDescription:CreateCheckbox(label, function()
         return addonTable.Config.Get(addonTable.Config.Options.SHOW_NAMEPLATES)[value]

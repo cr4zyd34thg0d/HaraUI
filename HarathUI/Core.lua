@@ -649,6 +649,7 @@ function NS:MakeMovable(frame, moduleKey, label)
 
   handle.label = handle:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   handle.label:SetPoint("CENTER")
+  NS:ApplyDefaultFont(handle.label, 11)
   handle.label:SetText(label or "Drag to move")
   handle.label:SetTextColor(ar, ag, ab, 1)
   handle.label:SetShadowColor(0, 0, 0, 1)

@@ -19,8 +19,6 @@ local M = {}
 NS:RegisterModule("castbar", M)
 M.active = false
 
-local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
-
 local f
 local state = {
   active = false,
@@ -57,23 +55,9 @@ end
 
 local function ApplyTextAppearance(db)
   if not f or not db then return end
-  if not db.castbar.textFont then
-    db.castbar.textFont = "BigNoodleTilting"
-  end
   local size = db.castbar.textSize or 11
-  local outline = db.castbar.textOutline
-  if outline == "NONE" then outline = nil end
-  local fontPath
-  if LSM and db.castbar.textFont then
-    fontPath = LSM:Fetch("font", db.castbar.textFont, true)
-  end
-  if not fontPath then
-    fontPath = STANDARD_TEXT_FONT
-  end
-  if fontPath then
-    f.text:SetFont(fontPath, size, outline)
-    f.time:SetFont(fontPath, size, outline)
-  end
+  NS:ApplyDefaultFont(f.text, size)
+  NS:ApplyDefaultFont(f.time, size)
   local c = db.castbar.textColor or { r = 1, g = 1, b = 1 }
   f.text:SetTextColor(c.r or 1, c.g or 1, c.b or 1, 1)
   f.time:SetTextColor(c.r or 1, c.g or 1, c.b or 1, 1)

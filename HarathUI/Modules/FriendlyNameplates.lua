@@ -2,8 +2,6 @@ local ADDON, NS = ...
 local M = {}
 NS:RegisterModule("friendlyplates", M)
 
-local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
-
 local eventFrame
 local friendlyCVarBackup
 local onlyNameCVar
@@ -21,10 +19,8 @@ local function EnsureFriendlyDB(db)
   local d = db.friendlyplates
   if d.enabled == nil then d.enabled = true end
   if not d.nameColor then d.nameColor = { r = 1, g = 1, b = 1 } end
-  if not d.font then d.font = "BigNoodleTilting" end
   if d.classColor == nil then d.classColor = false end
   if not d.fontSize then d.fontSize = 12 end
-  if not d.fontOutline then d.fontOutline = "NONE" end
   if not d.yOffset then d.yOffset = 0 end
   return d
 end
@@ -217,31 +213,10 @@ local function GetClassColor(unit)
   return nil
 end
 
-local function FetchFontPath(name)
-  if not LSM or not name then return nil end
-  local path = LSM:Fetch("font", name, true)
-  if path then return path end
-  local lower = string.lower(name)
-  for _, n in ipairs(LSM:List("font")) do
-    if string.lower(n) == lower then
-      return LSM:Fetch("font", n, true)
-    end
-  end
-  return nil
-end
-
 local function ApplyFont(fs, db)
   if not fs or not db then return end
   local size = db.friendlyplates.fontSize or 12
-  local outline = db.friendlyplates.fontOutline
-  if outline == "NONE" then outline = nil end
-
-  local path = FetchFontPath(db.friendlyplates.font)
-  if path then
-    fs:SetFont(path, size, outline)
-  elseif STANDARD_TEXT_FONT then
-    fs:SetFont(STANDARD_TEXT_FONT, size, outline)
-  end
+  NS:ApplyDefaultFont(fs, size)
 
   -- Ensure pixel-perfect rendering after font change
   if fs.SetSnapToPixelGrid then
@@ -333,16 +308,8 @@ local function CreatePlateOverlay(plate)
   end
 
   -- Set initial font
-  if GameFontNormalSmall and GameFontNormalSmall.GetFont then
-    local font, _, flags = GameFontNormalSmall:GetFont()
-    if font then
-      f.name:SetFont(font, 12, flags)
-      f.nameBold:SetFont(font, 12, flags)
-    end
-  elseif STANDARD_TEXT_FONT then
-    f.name:SetFont(STANDARD_TEXT_FONT, 12, "")
-    f.nameBold:SetFont(STANDARD_TEXT_FONT, 12, "")
-  end
+  NS:ApplyDefaultFont(f.name, 12)
+  NS:ApplyDefaultFont(f.nameBold, 12)
 
   return f
 end

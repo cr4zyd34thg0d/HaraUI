@@ -65,16 +65,7 @@ end
 
 local function ApplyToastFont(fontString, size)
   if not fontString then return end
-  local db = NS:GetDB()
-  local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
-  local fontName = (db and db.loot and db.loot.font) or NS.DEFAULT_FONT
-  local outline = (db and db.loot and db.loot.fontOutline) or "NONE"
-  if outline == "NONE" then outline = "" end
-
-  local path = LSM and LSM:Fetch("font", fontName, true) or STANDARD_TEXT_FONT
-  if path then
-    fontString:SetFont(path, size or 12, outline)
-  end
+  NS:ApplyDefaultFont(fontString, size)
 end
 
 local function ApplyToastLayout(t, db)

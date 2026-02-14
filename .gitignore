@@ -1,27 +1,32 @@
-*
-!.gitignore
-!README.md
-!HarathUI/
-!HarathUI/**
-!OPie/
-!OPie/**
-!Platynator/
-!Platynator/**
-!patches/
-!patches/**
-!scripts/
-!scripts/**
+# Ignore everything in repo root by default.
+/*
+
+# Keep repository metadata/docs.
+!/.gitignore
+!/README.md
+
+# Only include tracked project roots.
+!/HarathUI/
+!/HarathUI/**
+!/OPie/
+!/OPie/**
+!/Platynator/
+!/Platynator/**
+!/patches/
+!/patches/**
+!/scripts/
+!/scripts/**
 
 # Never track nested repo metadata if present inside addon folder.
-HarathUI/.git/
-HarathUI/.claude/
-HarathUI/.vscode/
-HarathUI/docs/
-HarathUI/AGENTS.md
-HarathUI/.luacheckrc
-HarathUI/.luarc.json
-HarathUI/.stylua.toml
+/HarathUI/.git/
+/HarathUI/.claude/
+/HarathUI/.vscode/
+/HarathUI/docs/
+/HarathUI/AGENTS.md
+/HarathUI/.luacheckrc
+/HarathUI/.luarc.json
+/HarathUI/.stylua.toml
 
 # Upstream Platynator source-only artifacts (not needed in addon bundle).
-Platynator/AssetsRaw/
-Platynator/.pkgmeta
+/Platynator/AssetsRaw/
+/Platynator/.pkgmeta

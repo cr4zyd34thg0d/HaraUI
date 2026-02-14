@@ -8,8 +8,6 @@ M._mirroringNativeSubframeSwitch = false
 M._deferredNativeModeMirror = nil
 M._deferredNativeModeRefreshQueued = false
 
-local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
-
 local S = {
   hiddenRegions = {},
   styledFonts = {},
@@ -55,6 +53,7 @@ local S = {
     runs = nil,
   },
   pendingSecureUpdate = false,
+  pendingRightPanelHide = false,
 }
 
 local DATA_REFRESH_INTERVAL = 2.0
@@ -750,18 +749,9 @@ local function EnsurePanelSkin(key, parent)
 end
 
 local function GetConfiguredFont(db)
-  local fontPath
-  if LSM and db and db.charsheet and db.charsheet.font then
-    fontPath = LSM:Fetch("font", db.charsheet.font, true)
-  end
-  if not fontPath then
-    fontPath = STANDARD_TEXT_FONT
-  end
+  local fontPath = NS:GetDefaultFontPath()
   local size = (db and db.charsheet and db.charsheet.fontSize) or 12
-  local outline = db and db.charsheet and db.charsheet.fontOutline
-  if outline == "NONE" then
-    outline = nil
-  end
+  local outline = NS:GetDefaultFontFlags()
   return fontPath, size, outline
 end
 
@@ -1595,8 +1585,25 @@ local function EnsureCustomStatsFrame()
         pcall(C_EquipmentSet.UseEquipmentSet, selected)
       end
     elseif action == "save" then
-      if selected and C_EquipmentSet.ModifyEquipmentSet then
-        pcall(C_EquipmentSet.ModifyEquipmentSet, selected)
+      if selected then
+        local saved = false
+        if C_EquipmentSet.SaveEquipmentSet then
+          local icon = nil
+          if C_EquipmentSet.GetEquipmentSetInfo then
+            local _, existingIcon = C_EquipmentSet.GetEquipmentSetInfo(selected)
+            if existingIcon ~= nil then
+              icon = existingIcon
+            end
+          end
+          saved = pcall(C_EquipmentSet.SaveEquipmentSet, selected, icon)
+        end
+        if not saved and C_EquipmentSet.ModifyEquipmentSet and C_EquipmentSet.GetEquipmentSetInfo then
+          -- Fallback for clients where SaveEquipmentSet is unavailable.
+          local existingName, existingIcon = C_EquipmentSet.GetEquipmentSetInfo(selected)
+          if type(existingName) == "string" and existingName ~= "" then
+            pcall(C_EquipmentSet.ModifyEquipmentSet, selected, existingName, existingIcon)
+          end
+        end
       end
     elseif action == "new" then
       if C_EquipmentSet.CreateEquipmentSet and C_EquipmentSet.GetEquipmentSetIDs then
@@ -2992,6 +2999,23 @@ SyncCustomModeToNativePanel = function()
   end
 end
 
+local function HideRightPanel(force)
+  if not S.rightPanel then return end
+  if not force and InCombatLockdown and InCombatLockdown() then
+    -- Right panel includes secure action buttons; defer hide until combat ends.
+    S.pendingRightPanelHide = true
+    return
+  end
+  S.rightPanel:Hide()
+  S.pendingRightPanelHide = false
+end
+
+local function FlushPendingRightPanelHide()
+  if not S.pendingRightPanelHide then return end
+  if InCombatLockdown and InCombatLockdown() then return end
+  HideRightPanel(true)
+end
+
 UpdateCustomStatsFrame = function(db)
   local frame = EnsureCustomStatsFrame()
   if not frame then return end
@@ -3083,7 +3107,7 @@ UpdateCustomStatsFrame = function(db)
 
   if mode == 2 then
     if S.rightPanel and S.rightPanel:IsShown() then
-      S.rightPanel:Hide()
+      HideRightPanel()
     end
     if S.customGearFrame then
       S.customGearFrame:Hide()
@@ -3122,7 +3146,7 @@ UpdateCustomStatsFrame = function(db)
       return
     end
     if S.rightPanel and S.rightPanel:IsShown() then
-      S.rightPanel:Hide()
+      HideRightPanel()
     end
     if S.customGearFrame then
       S.customGearFrame:Hide()
@@ -5025,10 +5049,17 @@ local function StyleCorePanels()
 end
 
 local function EnsureRightPanel(db)
-  if S.rightPanel then return S.rightPanel end
+  if S.rightPanel then
+    if CharacterFrame and S.rightPanel.GetParent and S.rightPanel:GetParent() ~= CharacterFrame then
+      if not (InCombatLockdown and InCombatLockdown()) then
+        S.rightPanel:SetParent(CharacterFrame)
+      end
+    end
+    return S.rightPanel
+  end
   if not CharacterFrame then return nil end
 
-  S.rightPanel = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+  S.rightPanel = CreateFrame("Frame", nil, CharacterFrame, "BackdropTemplate")
   S.rightPanel:SetSize(640, 620)
   S.rightPanel:SetBackdrop({
     bgFile = "Interface/Buttons/WHITE8x8",
@@ -6300,6 +6331,57 @@ function RP.GatherMythicRuns()
   return runs
 end
 
+function RP.GetSeasonDungeonMapIDs()
+  local ids = {}
+  if not (C_ChallengeMode and C_ChallengeMode.GetMapTable) then
+    return ids
+  end
+
+  local ok, mapTable = pcall(C_ChallengeMode.GetMapTable)
+  if not ok or type(mapTable) ~= "table" then
+    return ids
+  end
+
+  local seen = {}
+  for _, mapID in ipairs(mapTable) do
+    if type(mapID) == "number" and mapID > 0 and not seen[mapID] then
+      seen[mapID] = true
+      ids[#ids + 1] = mapID
+    end
+  end
+  return ids
+end
+
+function RP.BuildDisplayRuns(runs)
+  local copiedRuns = RP.CopyRuns(runs) or {}
+  local seasonMapIDs = RP.GetSeasonDungeonMapIDs()
+  if #seasonMapIDs == 0 then
+    return copiedRuns
+  end
+
+  local byMap = {}
+  for _, run in ipairs(copiedRuns) do
+    if type(run) == "table" then
+      local mapID = run.mapChallengeModeID or run.mapID
+      if type(mapID) == "number" and mapID > 0 and not byMap[mapID] then
+        byMap[mapID] = run
+      end
+    end
+  end
+
+  local out = {}
+  for idx, mapID in ipairs(seasonMapIDs) do
+    local run = byMap[mapID]
+    if run then
+      run._seasonIndex = idx
+      out[#out + 1] = run
+    else
+      out[#out + 1] = { mapChallengeModeID = mapID, _seasonIndex = idx }
+    end
+  end
+  return out
+end
+
 function RP.FilterAndNormalizeRuns(runs, rating)
   if #runs > 0 and (rating or 0) <= 0 then
     local hasPositiveRun = false
@@ -6350,17 +6432,27 @@ function RP.RenderRunRows(runs)
     return
   end
 
-  table.sort(runs, function(a, b)
+  local displayRuns = RP.BuildDisplayRuns(runs)
+
+  table.sort(displayRuns, function(a, b)
+    local ai = a and a._seasonIndex or math.huge
+    local bi = b and b._seasonIndex or math.huge
+    if ai ~= bi then return ai < bi end
+
     local al = a and (a.level or a.bestLevel or a.keystoneLevel or 0) or 0
     local bl = b and (b.level or b.bestLevel or b.keystoneLevel or 0) or 0
     if al ~= bl then return al > bl end
     local as = a and (a.score or a.rating or 0) or 0
     local bs = b and (b.score or b.rating or 0) or 0
-    return as > bs
+    if as ~= bs then return as > bs end
+
+    local am = a and (a.mapChallengeModeID or a.mapID or 0) or 0
+    local bm = b and (b.mapChallengeModeID or b.mapID or 0) or 0
+    return am < bm
   end)
 
   for i, row in ipairs(S.rightPanel.rowContainer.rows) do
-    local run = runs[i]
+    local run = displayRuns[i]
     if run then
       local mapID = run.mapChallengeModeID or run.mapID
       local name = (C_ChallengeMode and C_ChallengeMode.GetMapUIInfo and mapID) and C_ChallengeMode.GetMapUIInfo(mapID) or ("Dungeon " .. i)
@@ -6702,13 +6794,14 @@ function M:Refresh()
     local panel = EnsureRightPanel(db)
     if panel then
       PositionRightPanel(db)
+      S.pendingRightPanelHide = false
       panel:Show()
       ApplyRightPanelFont(db)
       RP.RefreshRightPanelData()
       self:SetLocked(db.general and db.general.framesLocked ~= false)
     end
   elseif S.rightPanel then
-    S.rightPanel:Hide()
+    HideRightPanel()
   end
 
   SyncBottomModeButtonsVisibility(db)
@@ -6771,7 +6864,7 @@ function M:Apply()
   if CharacterFrame and not S.hookedShow then
     CharacterFrame:HookScript("OnShow", function()
       if S.rightPanel then
-        S.rightPanel:Hide()
+        HideRightPanel()
       end
       if M.active then
         local liveDB = NS and NS.GetDB and NS:GetDB() or nil
@@ -6804,7 +6897,7 @@ function M:Apply()
     CharacterFrame:HookScript("OnHide", function()
       if S.slotEnforcer then S.slotEnforcer:Hide() end
       if S.rightPanel then
-        S.rightPanel:Hide()
+        HideRightPanel()
       end
       LeaveReputationPaneMode()
       LeaveCurrencyPaneMode()
@@ -6929,8 +7022,9 @@ function M:Apply()
       end
       return
     end
+    FlushPendingRightPanelHide()
     if not (CharacterFrame and CharacterFrame:IsShown()) and S.rightPanel and S.rightPanel:IsShown() then
-      S.rightPanel:Hide()
+      HideRightPanel()
     end
     S.elapsedSinceData = S.elapsedSinceData + (elapsed or 0)
     if S.elapsedSinceData >= DATA_REFRESH_INTERVAL then
@@ -6984,6 +7078,7 @@ function M:Apply()
   SafeRegisterEvent(S.moduleEventFrame, "PLAYER_SPECIALIZATION_CHANGED")
   SafeRegisterEvent(S.moduleEventFrame, "PLAYER_LOOT_SPEC_UPDATED")
   SafeRegisterEvent(S.moduleEventFrame, "ACTIVE_TALENT_GROUP_CHANGED")
+  SafeRegisterEvent(S.moduleEventFrame, "PLAYER_REGEN_ENABLED")
   SafeRegisterEvent(S.moduleEventFrame, "PLAYER_LEVEL_UP")
   SafeRegisterEvent(S.moduleEventFrame, "KNOWN_TITLES_UPDATE")
   SafeRegisterEvent(S.moduleEventFrame, "PLAYER_TITLE_CHANGED")
@@ -6996,6 +7091,9 @@ function M:Apply()
   SafeRegisterUnitEvent(S.moduleEventFrame, "UNIT_STATS", "player")
   S.moduleEventFrame:SetScript("OnEvent", function(_, event, unitOrSlot)
     if not M.active then return end
+    if event == "PLAYER_REGEN_ENABLED" then
+      FlushPendingRightPanelHide()
+    end
     if event == "UNIT_MAXHEALTH" or event == "UNIT_MAXPOWER" or event == "UNIT_STATS" or event == "UNIT_NAME_UPDATE" then
       if unitOrSlot and unitOrSlot ~= "player" then return end
     end
@@ -7061,7 +7159,7 @@ function M:Disable()
     end
   end
   if S.rightPanel then
-    S.rightPanel:Hide()
+    HideRightPanel()
   end
   if S.customStatsFrame then
     S.customStatsFrame:Hide()
