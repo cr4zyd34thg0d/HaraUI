@@ -68,6 +68,8 @@ local RestorePaperDollSidebarButtons
 local ApplyCustomCharacterLayout
 local ShowNativeCharacterMode
 local SyncCustomModeToNativePanel
+local HasAccountCurrencyTransferSupport
+local ResolveNativeCharacterMode
 
 local CFG = {
   CUSTOM_CHAR_HEIGHT = 675,
@@ -413,27 +415,241 @@ local function RestoreFonts()
   wipe(S.styledFonts)
 end
 
-RestorePaperDollSidebarButtons = function()
-  if not CharacterFrame then return end
+local function IsFrameForbidden(frame)
+  if not frame or type(frame) ~= "table" or not frame.IsForbidden then
+    return false
+  end
+  local ok, forbidden = pcall(frame.IsForbidden, frame)
+  return ok and forbidden == true
+end
 
-  local function GetSidebarButton(index)
-    local names = {
-      ("PaperDollSidebarTab%d"):format(index),
-      ("PaperDollSidebarButton%d"):format(index),
-      ("CharacterFrameSidebarTab%d"):format(index),
-      ("CharacterSidebarTab%d"):format(index),
-    }
-    for _, name in ipairs(names) do
-      local btn = _G[name]
-      if btn then
-        return btn
-      end
+local function IsFrameProtected(frame)
+  if not frame or type(frame) ~= "table" or not frame.IsProtected then
+    return false
+  end
+  local ok, protected = pcall(frame.IsProtected, frame)
+  return ok and protected == true
+end
+
+local function GetFrameNameSafe(frame)
+  if not frame or not frame.GetName then
+    return nil
+  end
+  local ok, name = pcall(frame.GetName, frame)
+  if not ok or type(name) ~= "string" or name == "" then
+    return nil
+  end
+  return name
+end
+
+local function IsDescendantOf(frame, ancestor)
+  if not frame or not ancestor or not frame.GetParent then
+    return false
+  end
+  local cursor = frame
+  while cursor and cursor.GetParent do
+    local ok, parent = pcall(cursor.GetParent, cursor)
+    if not ok then
+      return false
     end
+    if parent == ancestor then
+      return true
+    end
+    cursor = parent
+  end
+  return false
+end
+
+local function IsCurrencyTransferAuxFrame(frame)
+  if not frame then return false end
+  if frame == _G.CurrencyTransferMenu or frame == _G.CurrencyTransferLog or frame == _G.TokenFramePopup then
+    return true
+  end
+  local name = GetFrameNameSafe(frame)
+  if not name then return false end
+  local lower = string.lower(name)
+  if lower:find("currencytransfer", 1, true) then return true end
+  if lower:find("transfermenu", 1, true) then return true end
+  if lower:find("tokenframepopup", 1, true) then return true end
+  return false
+end
+
+local function IsLikelyCharacterCurrencyPane(frame, expectedName)
+  if not frame then return false end
+  if IsFrameForbidden(frame) then return false end
+  if IsCurrencyTransferAuxFrame(frame) then return false end
+  if not (frame.SetPoint and frame.ClearAllPoints) then return false end
+
+  local name = GetFrameNameSafe(frame)
+  if expectedName and name ~= expectedName then
+    local expectedIsToken = expectedName == "TokenFrame"
+    local tokenAliasMatch = expectedIsToken and name and name:find("TokenFrame", 1, true)
+    if not tokenAliasMatch then
+      return false
+    end
+  end
+
+  if name and (name:find("Transfer", 1, true) or name:find("Popup", 1, true)) then
+    return false
+  end
+
+  if CharacterFrame and IsDescendantOf(frame, CharacterFrame) then
+    return true
+  end
+
+  if not name then
+    return false
+  end
+
+  if name == "CharacterFrameTokenFrame" or name == "CurrencyFrame" then
+    return true
+  end
+
+  return name:find("TokenFrame", 1, true) ~= nil
+end
+
+local function EnsureNativePaneDecor(frame)
+  if not frame or not CharacterFrame then return nil end
+  S.nativePaneDecor = S.nativePaneDecor or setmetatable({}, { __mode = "k" })
+  local decor = S.nativePaneDecor[frame]
+  if decor then
+    return decor
+  end
+
+  local header = CreateFrame("Frame", nil, CharacterFrame)
+  header:SetFrameStrata("DIALOG")
+  header:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 260)
+  header:EnableMouse(false)
+
+  local title = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  decor = {
+    header = header,
+    title = title,
+  }
+  S.nativePaneDecor[frame] = decor
+  return decor
+end
+
+local function HideNativePaneDecor(frame)
+  if not frame or not S.nativePaneDecor then return end
+  local decor = S.nativePaneDecor[frame]
+  if not decor then return end
+  if decor.header and decor.header.Hide then
+    decor.header:Hide()
+  end
+  if decor.title and decor.title.Hide then
+    decor.title:Hide()
+  end
+end
+
+local function GetSidebarTabButton(index)
+  local i = tonumber(index)
+  if i ~= 1 and i ~= 2 and i ~= 3 and i ~= 4 and i ~= 5 and i ~= 6 and i ~= 7 and i ~= 8 then
+    return nil
+  end
+  local names = {
+    ("PaperDollSidebarTab%d"):format(i),
+    ("PaperDollSidebarButton%d"):format(i),
+    ("CharacterFrameSidebarTab%d"):format(i),
+    ("CharacterSidebarTab%d"):format(i),
+  }
+  for _, name in ipairs(names) do
+    local btn = _G[name]
+    if btn then
+      return btn
+    end
+  end
+  return nil
+end
+
+local function GetCharacterModeTabButton(index)
+  local i = tonumber(index)
+  if i ~= 1 and i ~= 2 and i ~= 3 then
     return nil
   end
 
+  local names = {
+    ("CharacterFrameTab%d"):format(i),
+    ("PaperDollFrameTab%d"):format(i),
+  }
+  for _, name in ipairs(names) do
+    local btn = _G[name]
+    if btn then
+      return btn
+    end
+  end
+
+  local tabs = CharacterFrame and CharacterFrame.Tabs
+  if tabs and tabs[i] then
+    return tabs[i]
+  end
+  return nil
+end
+
+local function TryClickNativeSidebarMode(mode)
+  local idx = tonumber(mode)
+  if idx ~= 1 and idx ~= 2 and idx ~= 3 then
+    return false
+  end
+  local btn = GetCharacterModeTabButton(idx)
+  if not (btn and btn.Click) then
+    return false
+  end
+  S.suppressSubFrameRefresh = true
+  local ok = pcall(btn.Click, btn)
+  S.suppressSubFrameRefresh = false
+  return ok == true
+end
+
+local function BindBottomModeButtonToNativeTab(btn, index)
+  if not (btn and btn.SetAttribute) then
+    return false
+  end
+  local idx = tonumber(index)
+  if idx ~= 1 and idx ~= 2 and idx ~= 3 then
+    return false
+  end
+  if InCombatLockdown and InCombatLockdown() then
+    return false
+  end
+
+  local nativeTab = GetCharacterModeTabButton(idx)
+  local nativeTabName = nativeTab and nativeTab.GetName and nativeTab:GetName() or nil
+  if type(nativeTabName) == "string" and nativeTabName ~= "" then
+    btn._nativeTabName = nativeTabName
+    btn:RegisterForClicks("LeftButtonUp")
+    btn:SetAttribute("useOnKeyDown", false)
+    btn:SetAttribute("type", "macro")
+    btn:SetAttribute("macrotext", "/click " .. nativeTabName)
+    btn:SetAttribute("type1", "macro")
+    btn:SetAttribute("macrotext1", "/click " .. nativeTabName)
+    return true
+  end
+
+  btn._nativeTabName = nil
+  btn:SetAttribute("type", nil)
+  btn:SetAttribute("macrotext", nil)
+  btn:SetAttribute("type1", nil)
+  btn:SetAttribute("macrotext1", nil)
+  return false
+end
+
+local function RefreshBottomModeButtonSecureBindings(frame)
+  if not (frame and frame.modeButtons) then
+    return
+  end
+  for idx, btn in ipairs(frame.modeButtons) do
+    if idx == 1 or idx == 2 or idx == 3 then
+      BindBottomModeButtonToNativeTab(btn, idx)
+    end
+  end
+end
+
+RestorePaperDollSidebarButtons = function()
+  if not CharacterFrame then return end
+
   for i = 1, 8 do
-    local btn = GetSidebarButton(i)
+    local btn = GetSidebarTabButton(i)
     if btn then
       if btn.SetAlpha then btn:SetAlpha(1) end
       if btn.Show then btn:Show() end
@@ -478,19 +694,10 @@ end
 local function SetPaperDollSidebarButtonsMouseEnabled(enabled)
   local shouldEnable = enabled == true
   for i = 1, 8 do
-    local names = {
-      ("PaperDollSidebarTab%d"):format(i),
-      ("PaperDollSidebarButton%d"):format(i),
-      ("CharacterFrameSidebarTab%d"):format(i),
-      ("CharacterSidebarTab%d"):format(i),
-    }
-    for _, name in ipairs(names) do
-      local btn = _G[name]
-      if btn then
-        if btn.EnableMouse then
-          btn:EnableMouse(shouldEnable)
-        end
-        break
+    local btn = GetSidebarTabButton(i)
+    if btn then
+      if btn.EnableMouse then
+        btn:EnableMouse(shouldEnable)
       end
     end
   end
@@ -1320,22 +1527,6 @@ local function EnsureCustomStatsFrame()
   )
   S.customStatsFrame.sidebarButtons = {}
 
-  local function GetSidebarTabButton(index)
-    local candidates = {
-      ("PaperDollSidebarTab%d"):format(index),
-      ("PaperDollSidebarButton%d"):format(index),
-      ("CharacterFrameSidebarTab%d"):format(index),
-      ("CharacterSidebarTab%d"):format(index),
-    }
-    for _, name in ipairs(candidates) do
-      local btn = _G[name]
-      if btn then
-        return btn
-      end
-    end
-    return nil
-  end
-
   local function ResolveModeIcon(index)
     if index == 2 then
       return "Interface\\Icons\\Achievement_Reputation_01"
@@ -1560,7 +1751,11 @@ local function EnsureCustomStatsFrame()
   end
 
   for i = 1, 3 do
-    local btn = CreateFrame("Button", nil, S.customStatsFrame.modeBar, "BackdropTemplate")
+    local buttonTemplate = "BackdropTemplate"
+    if i == 1 or i == 2 or i == 3 then
+      buttonTemplate = "SecureActionButtonTemplate,BackdropTemplate"
+    end
+    local btn = CreateFrame("Button", nil, S.customStatsFrame.modeBar, buttonTemplate)
     btn:SetSize(CFG.STATS_MODE_BUTTON_WIDTH, CFG.STATS_MODE_BUTTON_HEIGHT)
     btn:SetPoint("LEFT", S.customStatsFrame.modeBar, "LEFT", (i - 1) * (CFG.STATS_MODE_BUTTON_WIDTH + CFG.STATS_MODE_BUTTON_GAP), 0)
     btn:SetBackdrop({
@@ -1594,14 +1789,46 @@ local function EnsureCustomStatsFrame()
       btn.label:SetText("Currency")
     end
 
-    btn:SetScript("OnClick", function(self)
+    if i == 1 or i == 2 or i == 3 then
+      BindBottomModeButtonToNativeTab(btn, i)
+    end
+
+    btn:HookScript("OnClick", function(self)
       local idx = self.modeIndex or 1
+      if idx == 1 or idx == 2 or idx == 3 then
+        local function VerifyAndMirrorNativeMode()
+          if not M.active then return end
+          if not (CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()) then return end
+          local nativeMode = ResolveNativeCharacterMode()
+          if nativeMode == idx then
+            M._deferredNativeModeMirror = idx
+            if M._QueueDeferredNativeModeMirror then
+              M._QueueDeferredNativeModeMirror()
+            end
+          else
+            M._pendingNativeMode = nil
+            if M and M.Refresh then
+              M:Refresh()
+            end
+          end
+        end
+
+        -- For modes 1/2/3, the secure macro attribute executes first and drives the native switch.
+        -- We only mirror after the native panel state confirms the switch.
+        if C_Timer and C_Timer.After then
+          C_Timer.After(0, VerifyAndMirrorNativeMode)
+        else
+          VerifyAndMirrorNativeMode()
+        end
+        return
+      end
       M.SwitchMode(idx, "tab")
       UpdateModeButtonVisuals(S.customStatsFrame)
     end)
 
     S.customStatsFrame.modeButtons[i] = btn
   end
+  RefreshBottomModeButtonSecureBindings(S.customStatsFrame)
   UpdateModeButtonVisuals(S.customStatsFrame)
 
   for i = 1, CFG.STATS_SIDEBAR_BUTTON_COUNT do
@@ -2177,12 +2404,15 @@ local function ApplyReputationPaneMode(db)
   if _G.TokenFrame and _G.TokenFrame.Hide then _G.TokenFrame:Hide() end
   rep:Show()
 
-  rep:ClearAllPoints()
-  rep:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 8, -58)
-  rep:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -8, 44)
+  local canEditRepLayout = not IsFrameForbidden(rep) and not IsFrameProtected(rep)
+  if canEditRepLayout then
+    rep:ClearAllPoints()
+    rep:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 8, -58)
+    rep:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -8, 44)
+  end
   rep:SetAlpha(1)
   if rep.EnableMouse then rep:EnableMouse(true) end
-  if rep.ScrollBox and rep.ScrollBox.ClearAllPoints and rep.ScrollBox.SetPoint then
+  if canEditRepLayout and rep.ScrollBox and rep.ScrollBox.ClearAllPoints and rep.ScrollBox.SetPoint then
     rep.ScrollBox:ClearAllPoints()
     rep.ScrollBox:SetPoint("TOPLEFT", rep, "TOPLEFT", 4, -34)
     rep.ScrollBox:SetPoint("BOTTOMRIGHT", rep, "BOTTOMRIGHT", -30, 0)
@@ -2222,35 +2452,26 @@ local function ApplyReputationPaneMode(db)
     title:Hide()
   end
 
-  if not rep._haraHeader then
-    rep._haraHeader = CreateFrame("Frame", nil, CharacterFrame)
-    rep._haraHeader:SetFrameStrata("DIALOG")
-    rep._haraHeader:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 260)
-    rep._haraHeader:EnableMouse(false)
+  local repDecor = EnsureNativePaneDecor(rep)
+  if repDecor and repDecor.header then
+    repDecor.header:ClearAllPoints()
+    repDecor.header:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 0, 0)
+    repDecor.header:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, 0)
+    repDecor.header:SetHeight(52)
+    repDecor.header:Show()
   end
-  rep._haraHeader:ClearAllPoints()
-  rep._haraHeader:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 0, 0)
-  rep._haraHeader:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, 0)
-  rep._haraHeader:SetHeight(52)
-  rep._haraHeader:Show()
-
-  if not rep._haraTitle then
-    rep._haraTitle = rep._haraHeader:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  elseif rep._haraTitle.GetParent and rep._haraTitle:GetParent() ~= rep._haraHeader then
-    rep._haraTitle:SetParent(rep._haraHeader)
-  end
-  if rep._haraTitle and rep._haraTitle.SetFont then
-    rep._haraTitle:SetFont(fontPath, size + 5, outline)
-    rep._haraTitle:SetTextColor(1.0, 0.88, 0.25, 1)
-    rep._haraTitle:SetText("Reputation")
-    rep._haraTitle:SetJustifyH("CENTER")
-    rep._haraTitle:ClearAllPoints()
-    rep._haraTitle:SetPoint("TOP", rep._haraHeader, "TOP", 0, -18)
-    rep._haraTitle:SetDrawLayer("OVERLAY", 7)
-    rep._haraTitle:SetShadowOffset(1, -1)
-    rep._haraTitle:SetShadowColor(0, 0, 0, 1)
-    rep._haraTitle:SetAlpha(1)
-    rep._haraTitle:Show()
+  if repDecor and repDecor.title and repDecor.title.SetFont then
+    repDecor.title:SetFont(fontPath, size + 5, outline)
+    repDecor.title:SetTextColor(1.0, 0.88, 0.25, 1)
+    repDecor.title:SetText("Reputation")
+    repDecor.title:SetJustifyH("CENTER")
+    repDecor.title:ClearAllPoints()
+    repDecor.title:SetPoint("TOP", repDecor.header, "TOP", 0, -18)
+    repDecor.title:SetDrawLayer("OVERLAY", 7)
+    repDecor.title:SetShadowOffset(1, -1)
+    repDecor.title:SetShadowColor(0, 0, 0, 1)
+    repDecor.title:SetAlpha(1)
+    repDecor.title:Show()
   end
 
   local repFilters = {
@@ -2265,7 +2486,8 @@ local function ApplyReputationPaneMode(db)
   }
   for _, repFilter in ipairs(repFilters) do
     if repFilter then
-      if repFilter.ClearAllPoints and repFilter.SetPoint then
+      local canEditLayout = not IsFrameForbidden(repFilter) and not IsFrameProtected(repFilter)
+      if canEditLayout and repFilter.ClearAllPoints and repFilter.SetPoint then
         repFilter:ClearAllPoints()
         repFilter:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -38, -30)
       end
@@ -2283,12 +2505,7 @@ local function LeaveReputationPaneMode()
     CloseDropDownMenus()
   end
   if _G.ReputationFrame then
-    if _G.ReputationFrame._haraHeader and _G.ReputationFrame._haraHeader.Hide then
-      _G.ReputationFrame._haraHeader:Hide()
-    end
-    if _G.ReputationFrame._haraTitle and _G.ReputationFrame._haraTitle.Hide then
-      _G.ReputationFrame._haraTitle:Hide()
-    end
+    HideNativePaneDecor(_G.ReputationFrame)
     local repFilter = _G.ReputationFrame.filterDropdown
       or _G.ReputationFrame.FilterDropdown
       or _G.ReputationFrame.filterDropDown
@@ -2306,22 +2523,59 @@ local function LeaveReputationPaneMode()
 end
 
 local function GetCurrencyPaneFrame()
-  local candidates = {
-    _G.TokenFrame,
-    _G.CurrencyFrame,
-    _G.CharacterFrameTokenFrame,
-  }
-  for _, frame in ipairs(candidates) do
-    if frame and frame.SetPoint and frame.ClearAllPoints then
-      return frame
-    end
+  local token = _G.TokenFrame
+  if IsLikelyCharacterCurrencyPane(token, "TokenFrame") then
+    return token
   end
+
+  local tokenAlias = _G.TokenFrameTokenFrame
+  if IsLikelyCharacterCurrencyPane(tokenAlias, "TokenFrameTokenFrame") then
+    return tokenAlias
+  end
+
+  local characterToken = _G.CharacterFrameTokenFrame
+  if IsLikelyCharacterCurrencyPane(characterToken, "CharacterFrameTokenFrame") then
+    return characterToken
+  end
+
+  local currency = _G.CurrencyFrame
+  if IsLikelyCharacterCurrencyPane(currency, "CurrencyFrame") then
+    return currency
+  end
+
   return nil
+end
+
+HasAccountCurrencyTransferSupport = function()
+  return C_CurrencyInfo
+    and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
+    and type(C_CurrencyInfo.FetchCurrencyDataFromAccountCharacters) == "function"
 end
 
 local function ApplyCurrencyPaneMode(db)
   local token = GetCurrencyPaneFrame()
   if not token or not CharacterFrame then return false end
+
+  local function ShowAccountCurrencyBackdrop()
+    local backdrop = EnsurePanelSkin("currency_account_backdrop", CharacterFrame)
+    if not backdrop then
+      return
+    end
+    backdrop:ClearAllPoints()
+    backdrop:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 8, -58)
+    backdrop:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -8, 44)
+    backdrop:SetBackdropColor(0.06, 0.02, 0.10, 0.92)
+    backdrop:SetBackdropBorderColor(0, 0, 0, 0)
+    local tokenLevel = token.GetFrameLevel and token:GetFrameLevel() or ((CharacterFrame:GetFrameLevel() or 1) + 30)
+    SafeFrameLevel(backdrop, tokenLevel - 1)
+    backdrop:Show()
+  end
+  local function HideAccountCurrencyBackdrop()
+    local backdrop = S.panelSkins and S.panelSkins["currency_account_backdrop"] or nil
+    if backdrop and backdrop.Hide then
+      backdrop:Hide()
+    end
+  end
 
   if _G.PaperDollFrame and _G.PaperDollFrame.Hide then _G.PaperDollFrame:Hide() end
   if _G.ReputationFrame and _G.ReputationFrame.Hide then _G.ReputationFrame:Hide() end
@@ -2334,11 +2588,51 @@ local function ApplyCurrencyPaneMode(db)
   if repFilter and repFilter.Hide then
     repFilter:Hide()
   end
+
+  if HasAccountCurrencyTransferSupport() then
+    -- In account-transfer builds, mutating TokenFrame internals taints transfer calls.
+    -- Keep Blizzard's currency frame untouched and style around it with addon-owned UI.
+    ShowAccountCurrencyBackdrop()
+    local tokenSkin = S.panelSkins and S.panelSkins["currency_full"] or nil
+    if tokenSkin and tokenSkin.Hide then
+      tokenSkin:Hide()
+    end
+
+    local fontPath, size, outline = GetConfiguredFont(db)
+    local tokenDecor = EnsureNativePaneDecor(token)
+    if tokenDecor and tokenDecor.header then
+      tokenDecor.header:ClearAllPoints()
+      tokenDecor.header:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 0, 0)
+      tokenDecor.header:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, 0)
+      tokenDecor.header:SetHeight(52)
+      tokenDecor.header:Show()
+    end
+    if tokenDecor and tokenDecor.title and tokenDecor.title.SetFont then
+      tokenDecor.title:SetFont(fontPath, size + 5, outline)
+      tokenDecor.title:SetTextColor(1.0, 0.88, 0.25, 1)
+      tokenDecor.title:SetText("Currency")
+      tokenDecor.title:SetJustifyH("CENTER")
+      tokenDecor.title:ClearAllPoints()
+      tokenDecor.title:SetPoint("TOP", tokenDecor.header, "TOP", 0, -18)
+      tokenDecor.title:SetDrawLayer("OVERLAY", 7)
+      tokenDecor.title:SetShadowOffset(1, -1)
+      tokenDecor.title:SetShadowColor(0, 0, 0, 1)
+      tokenDecor.title:SetAlpha(1)
+      tokenDecor.title:Show()
+    end
+
+    return true
+  end
+
+  HideAccountCurrencyBackdrop()
   token:Show()
+  if token.SetAlpha then token:SetAlpha(1) end
+  if token.EnableMouse then token:EnableMouse(true) end
 
   local function AlignCurrencyFrame(frame)
     if not frame then return end
-    if frame.ClearAllPoints and frame.SetPoint then
+    local canEditLayout = not IsFrameForbidden(frame) and not IsFrameProtected(frame)
+    if canEditLayout and frame.ClearAllPoints and frame.SetPoint then
       frame:ClearAllPoints()
       frame:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 8, -58)
       frame:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -8, 44)
@@ -2349,7 +2643,7 @@ local function ApplyCurrencyPaneMode(db)
     if frame.EnableMouse then
       frame:EnableMouse(true)
     end
-    if frame.ScrollBox and frame.ScrollBox.ClearAllPoints and frame.ScrollBox.SetPoint then
+    if canEditLayout and frame.ScrollBox and frame.ScrollBox.ClearAllPoints and frame.ScrollBox.SetPoint then
       frame.ScrollBox:ClearAllPoints()
       frame.ScrollBox:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -34)
       frame.ScrollBox:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 26)
@@ -2357,12 +2651,6 @@ local function ApplyCurrencyPaneMode(db)
   end
 
   AlignCurrencyFrame(token)
-  if _G.TokenFrame and _G.TokenFrame ~= token then
-    AlignCurrencyFrame(_G.TokenFrame)
-  end
-  if _G.CurrencyFrame and _G.CurrencyFrame ~= token and _G.CurrencyFrame ~= _G.TokenFrame then
-    AlignCurrencyFrame(_G.CurrencyFrame)
-  end
 
   local tokenSkin = EnsurePanelSkin("currency_full", token)
   if tokenSkin then
@@ -2390,35 +2678,26 @@ local function ApplyCurrencyPaneMode(db)
     title:Hide()
   end
 
-  if not token._haraHeader then
-    token._haraHeader = CreateFrame("Frame", nil, CharacterFrame)
-    token._haraHeader:SetFrameStrata("DIALOG")
-    token._haraHeader:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 260)
-    token._haraHeader:EnableMouse(false)
+  local tokenDecor = EnsureNativePaneDecor(token)
+  if tokenDecor and tokenDecor.header then
+    tokenDecor.header:ClearAllPoints()
+    tokenDecor.header:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 0, 0)
+    tokenDecor.header:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, 0)
+    tokenDecor.header:SetHeight(52)
+    tokenDecor.header:Show()
   end
-  token._haraHeader:ClearAllPoints()
-  token._haraHeader:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 0, 0)
-  token._haraHeader:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, 0)
-  token._haraHeader:SetHeight(52)
-  token._haraHeader:Show()
-
-  if not token._haraTitle then
-    token._haraTitle = token._haraHeader:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  elseif token._haraTitle.GetParent and token._haraTitle:GetParent() ~= token._haraHeader then
-    token._haraTitle:SetParent(token._haraHeader)
-  end
-  if token._haraTitle and token._haraTitle.SetFont then
-    token._haraTitle:SetFont(fontPath, size + 5, outline)
-    token._haraTitle:SetTextColor(1.0, 0.88, 0.25, 1)
-    token._haraTitle:SetText("Currency")
-    token._haraTitle:SetJustifyH("CENTER")
-    token._haraTitle:ClearAllPoints()
-    token._haraTitle:SetPoint("TOP", token._haraHeader, "TOP", 0, -18)
-    token._haraTitle:SetDrawLayer("OVERLAY", 7)
-    token._haraTitle:SetShadowOffset(1, -1)
-    token._haraTitle:SetShadowColor(0, 0, 0, 1)
-    token._haraTitle:SetAlpha(1)
-    token._haraTitle:Show()
+  if tokenDecor and tokenDecor.title and tokenDecor.title.SetFont then
+    tokenDecor.title:SetFont(fontPath, size + 5, outline)
+    tokenDecor.title:SetTextColor(1.0, 0.88, 0.25, 1)
+    tokenDecor.title:SetText("Currency")
+    tokenDecor.title:SetJustifyH("CENTER")
+    tokenDecor.title:ClearAllPoints()
+    tokenDecor.title:SetPoint("TOP", tokenDecor.header, "TOP", 0, -18)
+    tokenDecor.title:SetDrawLayer("OVERLAY", 7)
+    tokenDecor.title:SetShadowOffset(1, -1)
+    tokenDecor.title:SetShadowColor(0, 0, 0, 1)
+    tokenDecor.title:SetAlpha(1)
+    tokenDecor.title:Show()
   end
 
   local tokenFilters = {
@@ -2428,16 +2707,11 @@ local function ApplyCurrencyPaneMode(db)
     token.FilterDropDown,
     _G.TokenFrameFilterDropdown,
     _G.TokenFrameFilterDropDown,
-    _G.CurrencyFrameFilterDropdown,
-    _G.CurrencyFrameFilterDropDown,
-    _G.TokenFrameDropdown,
-    _G.TokenFrameDropDown,
-    _G.CurrencyFrameDropdown,
-    _G.CurrencyFrameDropDown,
   }
   for _, tokenFilter in ipairs(tokenFilters) do
     if tokenFilter then
-      if tokenFilter.ClearAllPoints and tokenFilter.SetPoint then
+      local canEditLayout = not IsFrameForbidden(tokenFilter) and not IsFrameProtected(tokenFilter)
+      if canEditLayout and tokenFilter.ClearAllPoints and tokenFilter.SetPoint then
         tokenFilter:ClearAllPoints()
         tokenFilter:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -38, -30)
       end
@@ -2454,7 +2728,14 @@ local function LeaveCurrencyPaneMode()
   if CloseDropDownMenus then
     CloseDropDownMenus()
   end
-  local frames = { GetCurrencyPaneFrame(), _G.TokenFrame, _G.CurrencyFrame }
+  local accountBackdrop = S.panelSkins and S.panelSkins["currency_account_backdrop"] or nil
+  if accountBackdrop and accountBackdrop.Hide then
+    accountBackdrop:Hide()
+  end
+  local frames = { GetCurrencyPaneFrame(), _G.TokenFrame, _G.TokenFrameTokenFrame, _G.CharacterFrameTokenFrame }
+  if IsLikelyCharacterCurrencyPane(_G.CurrencyFrame, "CurrencyFrame") then
+    frames[#frames + 1] = _G.CurrencyFrame
+  end
   local seen = {}
   for _, token in ipairs(frames) do
     if token and not seen[token] then
@@ -2462,20 +2743,13 @@ local function LeaveCurrencyPaneMode()
       if _G.TokenFramePopup and _G.TokenFramePopup.Hide then
         _G.TokenFramePopup:Hide()
       end
-      if token._haraHeader and token._haraHeader.Hide then
-        token._haraHeader:Hide()
-      end
-      if token._haraTitle and token._haraTitle.Hide then
-        token._haraTitle:Hide()
-      end
+      HideNativePaneDecor(token)
       local tokenFilter = token.filterDropdown
         or token.FilterDropdown
         or token.filterDropDown
         or token.FilterDropDown
         or _G.TokenFrameFilterDropdown
         or _G.TokenFrameFilterDropDown
-        or _G.CurrencyFrameFilterDropdown
-        or _G.CurrencyFrameFilterDropDown
       if tokenFilter then
         if tokenFilter.SetAlpha then tokenFilter:SetAlpha(1) end
         if tokenFilter.EnableMouse then tokenFilter:EnableMouse(true) end
@@ -2501,7 +2775,7 @@ local function SyncBottomModeButtonsVisibility(db)
   end
 end
 
-local function ResolveNativeCharacterMode()
+ResolveNativeCharacterMode = function()
   local token = GetCurrencyPaneFrame and GetCurrencyPaneFrame() or _G.TokenFrame
   if _G.ReputationFrame and _G.ReputationFrame.IsShown and _G.ReputationFrame:IsShown() then
     return 2
@@ -2547,8 +2821,14 @@ M._ResolveModeFromSubFrameToken = function(subFrameToken)
   if name == "ReputationFrame" then
     return 2
   end
-  if name == "TokenFrame" or name == "CurrencyFrame" or name == "CharacterFrameTokenFrame" then
+  if name == "TokenFrame" or name == "CurrencyFrame" or name == "CharacterFrameTokenFrame" or name == "TokenFrameTokenFrame" then
     return 3
+  end
+  if name == "TokenFramePopup" or name == "CurrencyTransferMenu" or name == "CurrencyTransferLog" then
+    return nil
+  end
+  if name:find("Transfer", 1, true) or name:find("Popup", 1, true) then
+    return nil
   end
   if name:find("PaperDoll", 1, true) then
     return 1
@@ -2556,7 +2836,7 @@ M._ResolveModeFromSubFrameToken = function(subFrameToken)
   if name:find("Reputation", 1, true) then
     return 2
   end
-  if name:find("Token", 1, true) or name:find("Currency", 1, true) then
+  if name:find("TokenFrame", 1, true) or name:find("CurrencyFrame", 1, true) then
     return 3
   end
   return ResolveNativeCharacterMode()
@@ -2654,6 +2934,9 @@ ShowNativeCharacterMode = function(mode)
     S.suppressSubFrameRefresh = false
     return ok
   end
+  if TryClickNativeSidebarMode(mode) then
+    return true
+  end
   if mode == 1 then
     SafeShowSubFrame("PaperDollFrame")
     return true
@@ -2661,7 +2944,19 @@ ShowNativeCharacterMode = function(mode)
     SafeShowSubFrame("ReputationFrame")
     return true
   elseif mode == 3 then
-    local token = GetCurrencyPaneFrame and GetCurrencyPaneFrame() or _G.TokenFrame or _G.CurrencyFrame
+    if _G.TokenFrame then
+      SafeShowSubFrame("TokenFrame")
+      return true
+    end
+    if _G.CharacterFrameTokenFrame then
+      SafeShowSubFrame("CharacterFrameTokenFrame")
+      return true
+    end
+    if _G.CurrencyFrame then
+      SafeShowSubFrame("CurrencyFrame")
+      return true
+    end
+    local token = GetCurrencyPaneFrame and GetCurrencyPaneFrame() or nil
     if token and token.GetName then
       local n = token:GetName()
       if n and n ~= "" then
@@ -2736,6 +3031,7 @@ UpdateCustomStatsFrame = function(db)
     frame.modeBar:ClearAllPoints()
     frame.modeBar:SetPoint("TOPLEFT", CharacterFrame, "BOTTOMLEFT", 22, -1)
     frame.modeBar:Show()
+    RefreshBottomModeButtonSecureBindings(frame)
     for i, btn in ipairs(frame.modeButtons or {}) do
       if btn and btn.icon and btn.icon.SetTexture then
         local iconTex = btn.icon:GetTexture()
@@ -2818,6 +3114,13 @@ UpdateCustomStatsFrame = function(db)
     frame:Hide()
     return
   elseif mode == 3 then
+    if ResolveNativeCharacterMode() ~= 3 then
+      M._pendingNativeMode = nil
+      if frame.modeBar then frame.modeBar:Show() end
+      if frame.sidebarBar then frame.sidebarBar:Hide() end
+      frame:Hide()
+      return
+    end
     if S.rightPanel and S.rightPanel:IsShown() then
       S.rightPanel:Hide()
     end
@@ -4160,26 +4463,35 @@ ApplyCustomCharacterLayout = function()
     if closeBtn.GetHighlightTexture then ClearButtonTexture(closeBtn:GetHighlightTexture()) end
     if closeBtn.GetDisabledTexture then ClearButtonTexture(closeBtn:GetDisabledTexture()) end
 
-    if not closeBtn._haraX then
-      closeBtn._haraX = closeBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-      closeBtn._haraX:SetPoint("CENTER", closeBtn, "CENTER", 0, 0)
-      closeBtn._haraX:SetText("X")
-      closeBtn._haraX:SetShadowOffset(0, 0)
+    S.closeButtonGlyphs = S.closeButtonGlyphs or setmetatable({}, { __mode = "k" })
+    S.closeButtonGlyphHooks = S.closeButtonGlyphHooks or setmetatable({}, { __mode = "k" })
+    local closeGlyph = S.closeButtonGlyphs[closeBtn]
+    if not closeGlyph then
+      closeGlyph = closeBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+      closeGlyph:SetPoint("CENTER", closeBtn, "CENTER", 0, 0)
+      closeGlyph:SetText("X")
+      closeGlyph:SetShadowOffset(0, 0)
+      S.closeButtonGlyphs[closeBtn] = closeGlyph
+    end
+    if not S.closeButtonGlyphHooks[closeBtn] then
       closeBtn:HookScript("OnEnter", function(self)
-        if self._haraX then
-          self._haraX:SetTextColor(1.0, 0.60, 0.16, 1)
+        local glyph = S.closeButtonGlyphs and S.closeButtonGlyphs[self]
+        if glyph then
+          glyph:SetTextColor(1.0, 0.60, 0.16, 1)
         end
       end)
       closeBtn:HookScript("OnLeave", function(self)
-        if self._haraX then
-          self._haraX:SetTextColor(0.949, 0.431, 0.031, 1)
+        local glyph = S.closeButtonGlyphs and S.closeButtonGlyphs[self]
+        if glyph then
+          glyph:SetTextColor(0.949, 0.431, 0.031, 1)
         end
       end)
+      S.closeButtonGlyphHooks[closeBtn] = true
     end
 
-    closeBtn._haraX:SetTextColor(0.949, 0.431, 0.031, 1)
-    closeBtn._haraX:SetAlpha(1)
-    closeBtn._haraX:Show()
+    closeGlyph:SetTextColor(0.949, 0.431, 0.031, 1)
+    closeGlyph:SetAlpha(1)
+    closeGlyph:Show()
   end
 
   local panel = EnsureCustomCharacterFrame()
@@ -6550,19 +6862,21 @@ function M:Apply()
     end)
     M._hookedToggleCharacter = true
   end
-  local repFrame = _G.ReputationFrame
-  if repFrame and repFrame.HookScript and not repFrame._haraModeHooked then
-    repFrame:HookScript("OnShow", function(self)
+  S.nativeModeShowHooks = S.nativeModeShowHooks or setmetatable({}, { __mode = "k" })
+  local function HookNativeModeFrame(frame)
+    if not frame or not frame.HookScript then return end
+    if IsCurrencyTransferAuxFrame(frame) then return end
+    if S.nativeModeShowHooks[frame] then return end
+    frame:HookScript("OnShow", function(self)
       RefreshForNativeSubframeSwitch(self)
     end)
-    repFrame._haraModeHooked = true
+    S.nativeModeShowHooks[frame] = true
   end
-  local tokenFrame = GetCurrencyPaneFrame and GetCurrencyPaneFrame() or _G.TokenFrame or _G.CurrencyFrame
-  if tokenFrame and tokenFrame.HookScript and not tokenFrame._haraModeHooked then
-    tokenFrame:HookScript("OnShow", function(self)
-      RefreshForNativeSubframeSwitch(self)
-    end)
-    tokenFrame._haraModeHooked = true
+  local repFrame = _G.ReputationFrame
+  HookNativeModeFrame(repFrame)
+  local tokenFrame = GetCurrencyPaneFrame and GetCurrencyPaneFrame() or nil
+  if not HasAccountCurrencyTransferSupport() then
+    HookNativeModeFrame(tokenFrame)
   end
 
   local function QueueLiveUpdate(includeRightPanel)

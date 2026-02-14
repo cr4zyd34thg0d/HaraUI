@@ -2,18 +2,18 @@
 
 A collection of World of Warcraft addons for patch 12.0.1 (Midnight).
 
-**Bundle Version:** 1.2.0
+**Bundle Version:** 1.2.1
 **Target WoW Patch:** 12.0.1 (Interface: 120001)
 
 ## Included Addons
 
 | Addon | Version | Interface | Author |
 |-------|---------|-----------|--------|
-| HarathUI | 1.5.1 | 120001 | Harath |
+| HarathUI | 1.5.8 | 120001 | Harath |
 | OPie | 7.11.3 | 120001 | foxlit |
 | Platynator | 314 | 120001 | plusmouse |
 
-### HarathUI (v1.5.1)
+### HarathUI (v1.5.8)
 Modular quality-of-life UI suite.
 
 **Features:**
@@ -65,6 +65,11 @@ World of Warcraft/_retail_/Interface/AddOns/
 
 ## Changelog
 
+### v1.2.1 (2026-02-14)
+- Updated HarathUI to v1.5.8
+- Resolved Currency tab account-transfer taint path by routing bottom Character/Rep/Currency buttons through native CharacterFrame tabs
+- Fixed bottom tab routing mismatch where Rep/Currency could open Blizzard Titles/Equipment panes
+
 ### v1.2.0 (2026-02-11)
 - Updated HarathUI to v1.4.1 for significant module additions
 - Added HaraChonk character/player frame replacement (Character Sheet module)
@@ -102,7 +107,7 @@ For a full Platynator update flow (mirror upstream folder, reapply patch, verify
 When releasing HarathUI, stamp TOC metadata from a specific git ref so build diagnostics match what you package:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\release-harathui.ps1 -Version 1.5.1 -GitVersion 1.5.1 -CommitRef HEAD
+powershell -ExecutionPolicy Bypass -File .\scripts\release-harathui.ps1 -Version 1.5.8 -GitVersion 1.5.8 -CommitRef HEAD
 ```
 
 By default this also refreshes `HarathUI/Generated/HostedVersion.lua` from GitHub (`cr4zyd34thg0d/HaraUI`) so the in-game version light can compare against hosted release/tag data.
@@ -116,7 +121,7 @@ Optional flags:
 Direct low-level stamp example (advanced):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata.ps1 -Version 1.5.1 -GitVersion 1.5.1 -BuildCommit 56a5bb9 -LatestCommit 56a5bb9
+powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata.ps1 -Version 1.5.8 -GitVersion 1.5.8 -BuildCommit 56a5bb9 -LatestCommit 56a5bb9
 ```
 
 Notes:
