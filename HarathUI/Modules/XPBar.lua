@@ -47,7 +47,6 @@ local GetXPExhaustion = GetXPExhaustion
 local math_min = math.min
 local math_max = math.max
 local math_floor = math.floor
-local AbbreviateNumber = AbbreviateLargeNumbers or BreakUpLargeNumbers or tostring
 
 local function ApplyBarFont(fontString, size)
   if not fontString then return end
@@ -404,34 +403,25 @@ local function Update(forceQuest)
       bar.detailText:SetText("")
     end
     if xpbar.showSessionTime then
-      local now = GetTime()
-      if state.sessionStart == nil then
-        state.sessionStart = now
-      end
-      local elapsed = now - state.sessionStart
+      local elapsed = GetTime() - (state.sessionStart or GetTime())
       bar.sessionText:SetText(("Session: %s"):format(FormatTime(elapsed)))
     else
       bar.sessionText:SetText("")
     end
     if xpbar.showRateText then
-      local now = GetTime()
-      if state.sessionStart == nil then
-        state.sessionStart = now
-      end
-      local elapsed = now - state.sessionStart
+      local elapsed = GetTime() - (state.sessionStart or GetTime())
       if state.sessionStartXP == nil then
         state.sessionStartXP = cur
       end
       if cur < state.sessionStartXP then
         state.sessionStartXP = cur
-        state.sessionStart = now
-        elapsed = 0
+        state.sessionStart = GetTime()
       end
       local xpGained = math_max(0, cur - state.sessionStartXP)
       local rate = (elapsed > 0) and (xpGained / elapsed) * 3600 or 0
       local remaining = max - cur
       local eta = (rate > 0) and (remaining / rate) or 0
-      bar.rateText:SetText(("ETA %s - %s/hr"):format(FormatTime(eta), AbbreviateNumber(math_floor(rate + 0.5))))
+      bar.rateText:SetText(("ETA %s - %s/hr"):format(FormatTime(eta), AbbreviateLargeNumbers(math_floor(rate + 0.5))))
     else
       bar.rateText:SetText("")
     end
