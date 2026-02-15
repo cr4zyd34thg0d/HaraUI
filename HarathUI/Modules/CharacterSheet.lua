@@ -59,6 +59,7 @@ local S = {
   pendingSecureUpdate = false,
   pendingRightPanelHide = false,
   modeSwitchGuardDepth = 0,
+  openToken = 0,
 }
 
 local DATA_REFRESH_INTERVAL = 2.0
@@ -7230,33 +7231,36 @@ function M:Apply()
         QueueDeferredRefreshAfterNativeVisSwitch()
         return
       end
+      S.openToken = (S.openToken or 0) + 1
+      local myToken = S.openToken
       if S.rightPanel then
         HideRightPanel()
-      end
-      if M.active then
-        local liveDB = NS and NS.GetDB and NS:GetDB() or nil
-        if liveDB and liveDB.charsheet and liveDB.charsheet.styleStats then
-          M._pendingNativeMode = nil
-        end
-        SyncCustomModeToNativePanel()
-        M:Refresh()
-        if C_Timer and C_Timer.After then
-          C_Timer.After(0, function()
-            if not (M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
-            local liveDB = NS and NS.GetDB and NS:GetDB() or nil
-            if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then return end
-            ApplyCustomCharacterLayout()
-          end)
-        end
-        -- Start the slot enforcer to overwrite any late Blizzard re-anchors.
-        StartSlotEnforcer()
-        if M._deferredNativeModeMirror ~= nil then
-          M._QueueDeferredNativeModeMirror()
-        end
       end
       if UpdateTickerState then
         UpdateTickerState(true)
       end
+      if not (C_Timer and C_Timer.After) then return end
+      RunWithNativeVisGuard(function()
+        C_Timer.After(0, function()
+          if S.openToken ~= myToken then return end
+          if IN_NATIVE_VIS_SWITCH > 0 then
+            QueueDeferredRefreshAfterNativeVisSwitch()
+            return
+          end
+          if not (M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
+          local liveDB = NS and NS.GetDB and NS:GetDB() or nil
+          if liveDB and liveDB.charsheet and liveDB.charsheet.styleStats then
+            M._pendingNativeMode = nil
+          end
+          SyncCustomModeToNativePanel()
+          M:Refresh()
+          ApplyCustomCharacterLayout()
+          StartSlotEnforcer()
+          if M._deferredNativeModeMirror ~= nil then
+            M._QueueDeferredNativeModeMirror()
+          end
+        end)
+      end)
     end)
     S.hookedShow = true
   end
@@ -7304,12 +7308,26 @@ function M:Apply()
         return
       end
 
-      ApplyCustomCharacterLayout()
-      ApplyChonkySlotLayout()
-      ApplyChonkyModelLayout()
-      UpdateCustomStatsFrame(liveDB)
-      UpdateCustomGearFrame(liveDB)
-      StartSlotEnforcer()
+      if not (C_Timer and C_Timer.After) then return end
+      local myToken = S.openToken
+      RunWithNativeVisGuard(function()
+        C_Timer.After(0, function()
+          if S.openToken ~= myToken then return end
+          if IN_NATIVE_VIS_SWITCH > 0 then
+            QueueDeferredRefreshAfterNativeVisSwitch()
+            return
+          end
+          if not (M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
+          local freshDB = NS and NS.GetDB and NS:GetDB() or nil
+          if not (freshDB and freshDB.charsheet and freshDB.charsheet.styleStats) then return end
+          ApplyCustomCharacterLayout()
+          ApplyChonkySlotLayout()
+          ApplyChonkyModelLayout()
+          UpdateCustomStatsFrame(freshDB)
+          UpdateCustomGearFrame(freshDB)
+          StartSlotEnforcer()
+        end)
+      end)
     end)
     S.hookedSizeChanged = true
   end
