@@ -47,6 +47,8 @@ local S = {
   refreshInProgress = false,
   refreshQueuedAfterCurrent = false,
   lastRefreshFrame = nil,
+  lastStatsUpdateFrame = nil,
+  deferredNativeVisRefreshQueued = false,
   elapsedSinceData = 0,
   portalSpellCache = {},
   lastMPlusSnapshot = {
@@ -84,6 +86,25 @@ local function RunWithNativeVisGuard(fn)
     error(r1, 0)
   end
   return r1, r2, r3, r4, r5
+end
+
+local function QueueDeferredRefreshAfterNativeVisSwitch()
+  if S.deferredNativeVisRefreshQueued then return end
+  if not (C_Timer and C_Timer.After) then return end
+  S.deferredNativeVisRefreshQueued = true
+  C_Timer.After(0, function()
+    S.deferredNativeVisRefreshQueued = false
+    if IN_NATIVE_VIS_SWITCH > 0 then
+      QueueDeferredRefreshAfterNativeVisSwitch()
+      return
+    end
+    if not (M and M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
+    if M and M.Refresh then
+      M:Refresh()
+    elseif UpdateCustomStatsFrame and NS and NS.GetDB then
+      UpdateCustomStatsFrame(NS:GetDB())
+    end
+  end)
 end
 
 local function IsModeSwitchGuardActive()
@@ -1849,6 +1870,10 @@ local function EnsureCustomStatsFrame()
       if idx == 1 or idx == 2 or idx == 3 then
         local function VerifyAndMirrorNativeMode()
           if not M.active then return end
+          if IN_NATIVE_VIS_SWITCH > 0 then
+            QueueDeferredRefreshAfterNativeVisSwitch()
+            return
+          end
           if not (CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()) then return end
           local nativeMode = ResolveNativeCharacterMode()
           if nativeMode == idx then
@@ -2575,7 +2600,11 @@ local function LeaveReputationPaneMode()
     end)
   end
   RunWithNativeVisGuard(function()
-    if _G.PaperDollFrame and _G.PaperDollFrame.Show then _G.PaperDollFrame:Show() end
+    if _G.PaperDollFrame and _G.PaperDollFrame.Show then
+      if not (_G.PaperDollFrame.IsShown and _G.PaperDollFrame:IsShown()) then
+        _G.PaperDollFrame:Show()
+      end
+    end
   end)
 end
 
@@ -2826,7 +2855,23 @@ local function LeaveCurrencyPaneMode()
     end
   end
   RunWithNativeVisGuard(function()
-    if _G.PaperDollFrame and _G.PaperDollFrame.Show then _G.PaperDollFrame:Show() end
+    if _G.PaperDollFrame and _G.PaperDollFrame.Show then
+      if not (_G.PaperDollFrame.IsShown and _G.PaperDollFrame:IsShown()) then
+        _G.PaperDollFrame:Show()
+      end
+    end
+  end)
+end
+
+local function ApplyCharacterPaneMode()
+  RunWithNativeVisGuard(function()
+    LeaveReputationPaneMode()
+    LeaveCurrencyPaneMode()
+    if _G.PaperDollFrame and _G.PaperDollFrame.Show then
+      if not (_G.PaperDollFrame.IsShown and _G.PaperDollFrame:IsShown()) then
+        _G.PaperDollFrame:Show()
+      end
+    end
   end)
 end
 
@@ -2943,7 +2988,10 @@ M.SwitchMode = function(mode, source, opts)
 
     if C_Timer and C_Timer.After then
       C_Timer.After(0, function()
-        if IN_NATIVE_VIS_SWITCH > 0 then return end
+        if IN_NATIVE_VIS_SWITCH > 0 then
+          QueueDeferredRefreshAfterNativeVisSwitch()
+          return
+        end
         if not (M and M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
         if M and M.Refresh then
           M:Refresh()
@@ -2970,7 +3018,10 @@ end
 M._RunDeferredNativeModeMirror = function()
   M._deferredNativeModeRefreshQueued = false
   if not M.active then return end
-  if IN_NATIVE_VIS_SWITCH > 0 then return end
+  if IN_NATIVE_VIS_SWITCH > 0 then
+    QueueDeferredRefreshAfterNativeVisSwitch()
+    return
+  end
   if S.suppressSubFrameRefresh or M._mirroringNativeSubframeSwitch then return end
   local liveDB = NS and NS.GetDB and NS:GetDB() or nil
   if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then
@@ -2993,7 +3044,10 @@ M._RunDeferredNativeModeMirror = function()
   end
   M._pendingNativeMode = nil
   SyncCustomModeToNativePanel()
-  if IN_NATIVE_VIS_SWITCH > 0 then return end
+  if IN_NATIVE_VIS_SWITCH > 0 then
+    QueueDeferredRefreshAfterNativeVisSwitch()
+    return
+  end
   M:Refresh()
 end
 
@@ -3095,7 +3149,15 @@ local function FlushPendingRightPanelHide()
 end
 
 UpdateCustomStatsFrame = function(db)
-  if IN_NATIVE_VIS_SWITCH > 0 then return end
+  if IN_NATIVE_VIS_SWITCH > 0 then
+    QueueDeferredRefreshAfterNativeVisSwitch()
+    return
+  end
+  local statsUpdateFrame = GetFrameCount and GetFrameCount() or nil
+  if statsUpdateFrame and S.lastStatsUpdateFrame == statsUpdateFrame then
+    return
+  end
+  S.lastStatsUpdateFrame = statsUpdateFrame
   local frame = EnsureCustomStatsFrame()
   if not frame then return end
   if not CharacterFrame then return end
@@ -3258,8 +3320,7 @@ UpdateCustomStatsFrame = function(db)
     return
   else
     SetCharacterSlotButtonsVisible(true)
-    LeaveReputationPaneMode()
-    LeaveCurrencyPaneMode()
+    ApplyCharacterPaneMode()
     -- Re-assert final custom size/anchors when returning from native subpanes.
     ApplyCustomCharacterLayout()
   end
@@ -6974,7 +7035,10 @@ end
 
 function M:Refresh()
   if not M.active then return end
-  if IN_NATIVE_VIS_SWITCH > 0 then return end
+  if IN_NATIVE_VIS_SWITCH > 0 then
+    QueueDeferredRefreshAfterNativeVisSwitch()
+    return
+  end
   local db = NS:GetDB()
   if not db then return end
   if not CharacterFrame then return end
@@ -7162,7 +7226,10 @@ function M:Apply()
 
   if CharacterFrame and not S.hookedShow then
     CharacterFrame:HookScript("OnShow", function()
-      if IN_NATIVE_VIS_SWITCH > 0 then return end
+      if IN_NATIVE_VIS_SWITCH > 0 then
+        QueueDeferredRefreshAfterNativeVisSwitch()
+        return
+      end
       if S.rightPanel then
         HideRightPanel()
       end
@@ -7219,7 +7286,10 @@ function M:Apply()
   if CharacterFrame and not S.hookedSizeChanged then
     CharacterFrame:HookScript("OnSizeChanged", function(_, w, h)
       if not M.active then return end
-      if IN_NATIVE_VIS_SWITCH > 0 then return end
+      if IN_NATIVE_VIS_SWITCH > 0 then
+        QueueDeferredRefreshAfterNativeVisSwitch()
+        return
+      end
       if IsModeSwitchGuardActive() then return end
       local liveDB = NS and NS.GetDB and NS:GetDB() or nil
       if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then return end
@@ -7245,7 +7315,10 @@ function M:Apply()
   end
   local function RefreshForNativeSubframeSwitch(subFrameToken)
     if not M.active then return end
-    if IN_NATIVE_VIS_SWITCH > 0 then return end
+    if IN_NATIVE_VIS_SWITCH > 0 then
+      QueueDeferredRefreshAfterNativeVisSwitch()
+      return
+    end
     if IsModeSwitchGuardActive() then return end
     if S.suppressSubFrameRefresh or M._mirroringNativeSubframeSwitch then return end
     local liveDB = NS and NS.GetDB and NS:GetDB() or nil
@@ -7272,7 +7345,10 @@ function M:Apply()
     SyncCustomModeToNativePanel()
     if C_Timer and C_Timer.After then
       C_Timer.After(0, function()
-        if IN_NATIVE_VIS_SWITCH > 0 then return end
+        if IN_NATIVE_VIS_SWITCH > 0 then
+          QueueDeferredRefreshAfterNativeVisSwitch()
+          return
+        end
         if not (M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
         M:Refresh()
         StartSlotEnforcer()
