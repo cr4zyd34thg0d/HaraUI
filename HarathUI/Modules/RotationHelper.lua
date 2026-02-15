@@ -22,12 +22,29 @@ local frame
 local previewActive = false
 local previewKey = "1"
 local previewIcon = "Interface\\Icons\\INV_Sword_04"
+local keybindEventFrame
+local lastSpellID
 local lastSpellTex
 local lastSpellKey
+local lastKeybindCacheVersion
 local K = M.Keybinds
 local function IsEnabled()
   local db = NS:GetDB()
   return db and db.rotationhelper and db.rotationhelper.enabled
+end
+
+local function EnsureKeybindCacheEvents()
+  if keybindEventFrame then return end
+  keybindEventFrame = CreateFrame("Frame")
+  keybindEventFrame:RegisterEvent("UPDATE_BINDINGS")
+  keybindEventFrame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
+  keybindEventFrame:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
+  keybindEventFrame:RegisterEvent("SPELLS_CHANGED")
+  keybindEventFrame:SetScript("OnEvent", function()
+    if K.InvalidateCache then
+      K.InvalidateCache()
+    end
+  end)
 end
 
 local function IsFramesUnlocked()
@@ -88,8 +105,13 @@ local function UpdateFromAssist()
   frame.icon:SetTexture(tex)
   frame.icon:SetVertexColor(1, 1, 1, 1)
   lastSpellTex = tex
-  lastSpellKey = K.GetKeyBindForSpellID(spellID) or ""
-  frame.keyText:SetText(lastSpellKey)
+  local keybindCacheVersion = K.GetCacheVersion and K.GetCacheVersion() or 0
+  if spellID ~= lastSpellID or keybindCacheVersion ~= lastKeybindCacheVersion then
+    lastSpellKey = K.GetKeyBindForSpellID(spellID) or ""
+    lastSpellID = spellID
+    lastKeybindCacheVersion = keybindCacheVersion
+  end
+  frame.keyText:SetText(lastSpellKey or "")
   frame:Show()
 end
 
@@ -167,6 +189,7 @@ function M:Apply()
 
   if not frame then Create() end
 
+  EnsureKeybindCacheEvents()
   K.BuildActionSlotMap()
 
   frame:SetSize(db.rotationhelper.width, db.rotationhelper.height)
@@ -200,6 +223,7 @@ end
 function M:Disable()
   M.active = false
   previewActive = false
+  lastSpellID = nil
   if frame then frame:Hide() end
   if frame then
     frame._huiUnlockPlaceholder = nil

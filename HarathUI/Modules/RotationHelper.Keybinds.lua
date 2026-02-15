@@ -7,6 +7,8 @@ local K = M.Keybinds or {}
 M.Keybinds = K
 
 local LookupActionBySlot = {}
+local KeybindBySpellID = {}
+local CacheVersion = 0
 
 local DefaultActionSlotMap = {
   { actionPrefix = "ACTIONBUTTON",          start = 1,  last = 12 },
@@ -49,16 +51,36 @@ local function GetBindingForAction(action)
   return GetBindingText(key, "KEY_")
 end
 
+local function InvalidateCache()
+  wipe(KeybindBySpellID)
+  CacheVersion = CacheVersion + 1
+end
+
+local function GetCacheVersion()
+  return CacheVersion
+end
+
 local function GetKeyBindForSpellID(spellID)
   if not (C_ActionBar and C_ActionBar.FindSpellActionButtons and spellID) then return nil end
+  local cached = KeybindBySpellID[spellID]
+  if cached ~= nil then
+    return cached or nil
+  end
   BuildActionSlotMap()
   local slots = C_ActionBar.FindSpellActionButtons(spellID)
-  if not slots then return nil end
+  if not slots then
+    KeybindBySpellID[spellID] = false
+    return nil
+  end
   for _, slot in ipairs(slots) do
     local action = LookupActionBySlot[slot]
     local text = GetBindingForAction(action)
-    if text then return text end
+    if text then
+      KeybindBySpellID[spellID] = text
+      return text
+    end
   end
+  KeybindBySpellID[spellID] = false
   return nil
 end
 
@@ -66,3 +88,5 @@ K.GetButtonKeybind = GetButtonKeybind
 K.BuildActionSlotMap = BuildActionSlotMap
 K.GetBindingForAction = GetBindingForAction
 K.GetKeyBindForSpellID = GetKeyBindForSpellID
+K.InvalidateCache = InvalidateCache
+K.GetCacheVersion = GetCacheVersion
