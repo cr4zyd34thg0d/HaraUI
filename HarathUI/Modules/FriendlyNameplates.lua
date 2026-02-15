@@ -520,6 +520,110 @@ local function IsWatchedCVar(name)
     or (onlyNameEnemyCVar and name == onlyNameEnemyCVar)
 end
 
+local function HandlePlayerEnteringWorld(db)
+  ApplyFriendlyCVars()
+  UpdateDungeonSystemNameplateFont(db)
+  UpdateAllDeferred(db)
+  -- Reapply CVars after a short delay to override Blizzard's instance settings
+  C_Timer.After(0.5, function()
+    if M.active then
+      ApplyFriendlyCVars()
+    end
+  end)
+  C_Timer.After(1.5, function()
+    if M.active then
+      ApplyFriendlyCVars()
+    end
+  end)
+end
+
+local function HandleZoneChangedOrBattleground(db)
+  -- Reapply CVars when entering instances (dungeons, raids, battlegrounds)
+  -- Blizzard may reset CVars to instance-specific defaults
+  ApplyFriendlyCVars()
+  UpdateDungeonSystemNameplateFont(db)
+  UpdateAllDeferred(db)
+  C_Timer.After(0.5, function()
+    if M.active then
+      ApplyFriendlyCVars()
+      UpdateAllDeferred(db)
+    end
+  end)
+end
+
+local function HandlePlayerRegenEnabled(db)
+  if pendingCVarApply then
+    pendingCVarApply = false
+    ApplyFriendlyCVars()
+    UpdateAllDeferred(db)
+  end
+  UpdateDungeonSystemNameplateFont(db)
+end
+
+local function HandleCVarUpdate(arg1, db)
+  if not IsWatchedCVar(arg1) then return end
+  ApplyFriendlyCVars()
+  UpdateDungeonSystemNameplateFont(db)
+  UpdateAllDeferred(db)
+end
+
+local function HandleNamePlateUnitAdded(unit, db)
+  local plate = C_NamePlate.GetNamePlateForUnit(unit)
+  if plate then
+    UpdatePlate(plate, unit, db)
+  end
+end
+
+local function HandleNamePlateUnitRemoved(unit)
+  local plate = C_NamePlate.GetNamePlateForUnit(unit)
+  if plate then
+    RemovePlate(plate)
+  end
+end
+
+local function HandleUnitNameUpdate(unit, db)
+  if not (unit and unit:match("^nameplate")) then return end
+  local plate = C_NamePlate.GetNamePlateForUnit(unit)
+  if plate then
+    UpdatePlate(plate, unit, db)
+  end
+end
+
+local function HandleEvent(event, arg1)
+  if not M.active then return end
+  local db = NS:GetDB()
+  local fp = EnsureFriendlyDB(db)
+  if not db or not fp or not fp.enabled then return end
+
+  if event == "PLAYER_ENTERING_WORLD" then
+    HandlePlayerEnteringWorld(db)
+    return
+  end
+  if event == "ZONE_CHANGED_NEW_AREA" or event == "PLAYER_ENTERING_BATTLEGROUND" then
+    HandleZoneChangedOrBattleground(db)
+    return
+  end
+  if event == "PLAYER_REGEN_ENABLED" then
+    HandlePlayerRegenEnabled(db)
+    return
+  end
+  if event == "CVAR_UPDATE" then
+    HandleCVarUpdate(arg1, db)
+    return
+  end
+  if event == "NAME_PLATE_UNIT_ADDED" then
+    HandleNamePlateUnitAdded(arg1, db)
+    return
+  end
+  if event == "NAME_PLATE_UNIT_REMOVED" then
+    HandleNamePlateUnitRemoved(arg1)
+    return
+  end
+  if event == "UNIT_NAME_UPDATE" then
+    HandleUnitNameUpdate(arg1, db)
+  end
+end
+
 function M:Refresh()
   local db = NS:GetDB()
   local fp = EnsureFriendlyDB(db)
@@ -560,77 +664,7 @@ function M:Apply()
   eventFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
   eventFrame:RegisterEvent("UNIT_NAME_UPDATE")
   eventFrame:SetScript("OnEvent", function(_, event, arg1)
-    if not M.active then return end
-    local db = NS:GetDB()
-    local fp = EnsureFriendlyDB(db)
-    if not db or not fp or not fp.enabled then return end
-
-    if event == "PLAYER_ENTERING_WORLD" then
-      ApplyFriendlyCVars()
-      UpdateDungeonSystemNameplateFont(db)
-      UpdateAllDeferred(db)
-      -- Reapply CVars after a short delay to override Blizzard's instance settings
-      C_Timer.After(0.5, function()
-        if M.active then
-          ApplyFriendlyCVars()
-        end
-      end)
-      C_Timer.After(1.5, function()
-        if M.active then
-          ApplyFriendlyCVars()
-        end
-      end)
-      return
-    end
-    if event == "ZONE_CHANGED_NEW_AREA" or event == "PLAYER_ENTERING_BATTLEGROUND" then
-      -- Reapply CVars when entering instances (dungeons, raids, battlegrounds)
-      -- Blizzard may reset CVars to instance-specific defaults
-      ApplyFriendlyCVars()
-      UpdateDungeonSystemNameplateFont(db)
-      UpdateAllDeferred(db)
-      C_Timer.After(0.5, function()
-        if M.active then
-          ApplyFriendlyCVars()
-          UpdateAllDeferred(db)
-        end
-      end)
-      return
-    end
-    if event == "PLAYER_REGEN_ENABLED" then
-      if pendingCVarApply then
-        pendingCVarApply = false
-        ApplyFriendlyCVars()
-        UpdateAllDeferred(db)
-      end
-      UpdateDungeonSystemNameplateFont(db)
-      return
-    end
-    if event == "CVAR_UPDATE" and IsWatchedCVar(arg1) then
-      ApplyFriendlyCVars()
-      UpdateDungeonSystemNameplateFont(db)
-      UpdateAllDeferred(db)
-      return
-    end
-    if event == "NAME_PLATE_UNIT_ADDED" then
-      local plate = C_NamePlate.GetNamePlateForUnit(arg1)
-      if plate then
-        UpdatePlate(plate, arg1, db)
-      end
-      return
-    end
-    if event == "NAME_PLATE_UNIT_REMOVED" then
-      local plate = C_NamePlate.GetNamePlateForUnit(arg1)
-      if plate then
-        RemovePlate(plate)
-      end
-      return
-    end
-    if event == "UNIT_NAME_UPDATE" and arg1 and arg1:match("^nameplate") then
-      local plate = C_NamePlate.GetNamePlateForUnit(arg1)
-      if plate then
-        UpdatePlate(plate, arg1, db)
-      end
-    end
+    HandleEvent(event, arg1)
   end)
 
   UpdateAllDeferred(db)
