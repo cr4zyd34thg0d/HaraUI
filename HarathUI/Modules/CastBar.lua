@@ -23,6 +23,13 @@ local f
 local state = {
   active = false,
   channel = false,
+  empower = false,
+  empowerStages = 0,
+  empowerStageDurations = {},
+  empowerStageTotalMS = 0,
+  empowerHoldMS = 0,
+  empowerStage = 0,
+  spellName = nil,
   startMS = 0,
   endMS = 0,
   preview = false,
@@ -43,6 +50,8 @@ local UnitChannelInfo = UnitChannelInfo
 local string_format = string.format
 local math_max = math.max
 local math_min = math.min
+local GetUnitEmpowerStageDuration = GetUnitEmpowerStageDuration
+local GetUnitEmpowerHoldAtMaxTime = GetUnitEmpowerHoldAtMaxTime
 
 local function IsEditModeActive()
   if EditModeManagerFrame and EditModeManagerFrame.IsEditModeActive then
@@ -130,10 +139,180 @@ local function Create()
   f.spark:SetColorTexture(1, 1, 1, 0.8)
   f.spark:Hide()
 
+  f.empowerOverlay = f.bar:CreateTexture(nil, "ARTWORK")
+  f.empowerOverlay:SetColorTexture(1, 1, 1, 0.08)
+  f.empowerOverlay:Hide()
+
+  f.empowerPips = {}
+  for i = 1, 4 do
+    local pip = f.bar:CreateTexture(nil, "OVERLAY")
+    pip:SetWidth(1)
+    pip:SetColorTexture(1, 1, 1, 0.35)
+    pip:Hide()
+    f.empowerPips[i] = pip
+  end
+
   f:SetPoint("CENTER", UIParent, "CENTER", 0, -160)
   f:Hide()
 
   NS:MakeMovable(f, "castbar", "Cast Bar (drag)")
+end
+
+local function ClearEmpowerVisuals()
+  if not f then return end
+  if f.empowerOverlay then
+    f.empowerOverlay:Hide()
+  end
+  if f.empowerPips then
+    for i = 1, #f.empowerPips do
+      f.empowerPips[i]:Hide()
+    end
+  end
+end
+
+local function ConfigureEmpowerStages()
+  wipe(state.empowerStageDurations)
+  state.empowerStageTotalMS = 0
+
+  if not state.empower then
+    state.empowerStages = 0
+    return
+  end
+
+  local desiredStages = state.empowerStages
+  if desiredStages <= 0 then
+    desiredStages = 4
+  end
+  desiredStages = math_min(desiredStages, 4)
+
+  local useZeroBased = false
+  if GetUnitEmpowerStageDuration then
+    local probe = GetUnitEmpowerStageDuration("player", 0)
+    if probe and probe > 0 then
+      useZeroBased = true
+    end
+  end
+
+  local foundStages = 0
+  for i = 1, desiredStages do
+    local duration = nil
+    if GetUnitEmpowerStageDuration then
+      local index = useZeroBased and (i - 1) or i
+      duration = GetUnitEmpowerStageDuration("player", index)
+      if not duration or duration <= 0 then
+        local altIndex = useZeroBased and i or (i - 1)
+        if altIndex >= 0 then
+          duration = GetUnitEmpowerStageDuration("player", altIndex)
+        end
+      end
+    end
+    if duration and duration > 0 then
+      foundStages = foundStages + 1
+      state.empowerStageDurations[foundStages] = duration
+      state.empowerStageTotalMS = state.empowerStageTotalMS + duration
+    else
+      break
+    end
+  end
+
+  if foundStages == 0 and desiredStages > 0 then
+    local chargeDuration = math_max(0, (state.endMS - state.startMS) - (state.empowerHoldMS or 0))
+    local perStage = chargeDuration / desiredStages
+    for i = 1, desiredStages do
+      state.empowerStageDurations[i] = perStage
+    end
+    state.empowerStageTotalMS = chargeDuration
+    foundStages = desiredStages
+  end
+
+  if foundStages <= 0 then
+    state.empowerStages = 0
+  else
+    state.empowerStages = foundStages
+  end
+end
+
+local function GetEmpowerStageAtTime(elapsedMS)
+  local stages = state.empowerStages or 0
+  if stages <= 0 then return 0 end
+
+  local cumulative = 0
+  for i = 1, stages do
+    cumulative = cumulative + (state.empowerStageDurations[i] or 0)
+    if elapsedMS <= cumulative then
+      return i
+    end
+  end
+  return stages
+end
+
+local function UpdateEmpowerVisuals(nowMS, durationMS)
+  if not f or not state.empower then
+    ClearEmpowerVisuals()
+    return
+  end
+  local stages = state.empowerStages or 0
+  if stages <= 0 or durationMS <= 0 then
+    ClearEmpowerVisuals()
+    return
+  end
+
+  local elapsedMS = math_max(0, nowMS - state.startMS)
+  local currentStage = GetEmpowerStageAtTime(elapsedMS)
+  state.empowerStage = currentStage
+
+  local total = durationMS
+  local prevBoundary = 0
+  local cumulative = 0
+  local stageStart = 0
+  local stageEnd = total
+  for i = 1, stages do
+    cumulative = cumulative + (state.empowerStageDurations[i] or 0)
+    if i == currentStage then
+      stageStart = prevBoundary
+      stageEnd = cumulative
+      break
+    end
+    prevBoundary = cumulative
+  end
+  if elapsedMS > state.empowerStageTotalMS then
+    stageStart = state.empowerStageTotalMS
+    stageEnd = total
+  end
+
+  local startPct = math_max(0, math_min(1, stageStart / total))
+  local endPct = math_max(0, math_min(1, stageEnd / total))
+  local width = f.bar:GetWidth()
+  local left = width * startPct
+  local right = width * endPct
+
+  if f.empowerOverlay then
+    f.empowerOverlay:ClearAllPoints()
+    f.empowerOverlay:SetPoint("TOPLEFT", f.bar, "TOPLEFT", left, 0)
+    f.empowerOverlay:SetPoint("BOTTOMRIGHT", f.bar, "BOTTOMLEFT", right, 0)
+    f.empowerOverlay:Show()
+  end
+
+  if f.empowerPips then
+    local boundary = 0
+    for i = 1, #f.empowerPips do
+      local pip = f.empowerPips[i]
+      if i < stages then
+        boundary = boundary + (state.empowerStageDurations[i] or 0)
+        local pct = math_max(0, math_min(1, boundary / total))
+        pip:ClearAllPoints()
+        pip:SetPoint("TOP", f.bar, "TOPLEFT", width * pct, 0)
+        pip:SetPoint("BOTTOM", f.bar, "BOTTOMLEFT", width * pct, 0)
+        pip:Show()
+      else
+        pip:Hide()
+      end
+    end
+  end
+
+  if state.spellName and f.text then
+    f.text:SetText(string_format("%s L%d/%d", state.spellName, currentStage, stages))
+  end
 end
 
 local function IsFramesUnlocked()
@@ -151,6 +330,11 @@ local function ShowUnlockPlaceholder()
   f.time:SetText("")
   f.bar:SetMinMaxValues(0, 1)
   f.bar:SetValue(0)
+  state.empower = false
+  state.empowerStages = 0
+  state.empowerStage = 0
+  state.spellName = nil
+  ClearEmpowerVisuals()
   if f.spark then f.spark:Hide() end
   if f.shield then f.shield:Hide() end
   f:Show()
@@ -166,9 +350,11 @@ end
 local function StartCast(preview, manualPreview)
   local name, _, texture, startMS, endMS, _, _, notInterruptible = UnitCastingInfo("player")
   local channel = false
+  local isEmpowered = false
+  local numEmpowerStages = 0
 
   if not name then
-    name, _, texture, startMS, endMS, _, notInterruptible = UnitChannelInfo("player")
+    name, _, texture, startMS, endMS, _, notInterruptible, _, isEmpowered, numEmpowerStages = UnitChannelInfo("player")
     channel = true
   end
 
@@ -188,9 +374,25 @@ local function StartCast(preview, manualPreview)
   state.manualPreview = (preview and manualPreview) and true or false
   state.unlockPlaceholder = false
   state.channel = channel
+  state.empower = (not preview) and ((isEmpowered and true) or ((numEmpowerStages or 0) > 0)) or false
+  state.empowerStages = state.empower and math_min(numEmpowerStages or 0, 4) or 0
+  state.empowerHoldMS = 0
+  state.empowerStage = 0
+  state.spellName = name
   state.startMS = startMS
   state.endMS = endMS
   state.notInterruptible = notInterruptible and true or false
+
+  if state.empower then
+    state.empowerHoldMS = (GetUnitEmpowerHoldAtMaxTime and GetUnitEmpowerHoldAtMaxTime("player")) or 0
+    state.endMS = state.endMS + state.empowerHoldMS
+    ConfigureEmpowerStages()
+  else
+    state.empowerStages = 0
+    wipe(state.empowerStageDurations)
+    state.empowerStageTotalMS = 0
+    ClearEmpowerVisuals()
+  end
 
   f.icon:SetTexture(texture)
   f.text:SetText(name)
@@ -201,6 +403,14 @@ local function Stop()
   state.active = false
   state.preview = false
   state.manualPreview = false
+  state.empower = false
+  state.empowerStages = 0
+  state.empowerStage = 0
+  state.empowerStageTotalMS = 0
+  state.empowerHoldMS = 0
+  state.spellName = nil
+  wipe(state.empowerStageDurations)
+  ClearEmpowerVisuals()
   state.notInterruptible = false
   if IsFramesUnlocked() then
     ShowUnlockPlaceholder()
@@ -222,7 +432,9 @@ local function OnUpdate()
   if duration <= 0 then return end
 
   local progress
-  if state.channel then
+  if state.empower then
+    progress = (now - state.startMS) / duration
+  elseif state.channel then
     progress = (state.endMS - now) / duration
   else
     progress = (now - state.startMS) / duration
@@ -230,6 +442,11 @@ local function OnUpdate()
 
   progress = math_max(0, math_min(1, progress))
   f.bar:SetValue(progress)
+  if state.empower then
+    UpdateEmpowerVisuals(now, duration)
+  else
+    ClearEmpowerVisuals()
+  end
 
   local remain = math_max(0, (state.endMS - now) / 1000)
   f.time:SetText(string_format("%.1f", remain))
@@ -324,11 +541,14 @@ function M:Apply()
     state.events:RegisterEvent("UNIT_SPELLCAST_START")
     state.events:RegisterEvent("UNIT_SPELLCAST_STOP")
     state.events:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+    state.events:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
+    state.events:RegisterEvent("UNIT_SPELLCAST_EMPOWER_UPDATE")
     state.events:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+    state.events:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
     state.events:SetScript("OnEvent", function(_, event, unit)
       if not M.active then return end
       if unit ~= "player" then return end
-      if event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+      if event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
         Stop()
       else
         StartCast(false)
