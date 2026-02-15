@@ -24,10 +24,16 @@ local DB_MIGRATION_VERSION = 1
 local function RunDBMigrations(dbRoot)
   if type(dbRoot) ~= "table" then return end
 
-  local state = dbRoot._huiMigrationState
+  local profile = dbRoot.profile
+  if type(profile) ~= "table" then
+    profile = {}
+    dbRoot.profile = profile
+  end
+
+  local state = profile._huiMigrationState
   if type(state) ~= "table" then
     state = {}
-    dbRoot._huiMigrationState = state
+    profile._huiMigrationState = state
   end
 
   local currentVersion = tonumber(state.version) or 0
@@ -37,11 +43,6 @@ local function RunDBMigrations(dbRoot)
 
   -- Rule 1: ensure legacy/non-table profile containers are upgraded to tables.
   -- Additive only: existing keys are preserved as-is.
-  local profile = dbRoot.profile
-  if type(profile) ~= "table" then
-    profile = {}
-    dbRoot.profile = profile
-  end
   local general = profile.general
   if type(general) ~= "table" then
     general = {}
