@@ -24,6 +24,7 @@ Options/Theme.lua
 Options/Widgets.lua
 Options/Window.lua
 Options/Pages/General.lua
+Options/Pages/XP.lua
 Options.lua
 Core/Slash.lua
 Core/GlobalsShim.lua
