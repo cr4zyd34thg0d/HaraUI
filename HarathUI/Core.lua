@@ -38,73 +38,6 @@ local function Print(msg)
 end
 NS.Print = Print
 
-local function GetAddonMetadataField(field)
-  if C_AddOns and C_AddOns.GetAddOnMetadata then
-    return C_AddOns.GetAddOnMetadata(ADDON, field)
-  end
-  if GetAddOnMetadata then
-    return GetAddOnMetadata(ADDON, field)
-  end
-  return nil
-end
-
-local function RegisterAddonMessagePrefixCompat(prefix)
-  local function IsRegistered()
-    if C_ChatInfo and C_ChatInfo.IsAddonMessagePrefixRegistered then
-      local ok = C_ChatInfo.IsAddonMessagePrefixRegistered(prefix)
-      if ok == true or ok == 1 then
-        return true
-      end
-    end
-    if IsAddonMessagePrefixRegistered then
-      local ok = IsAddonMessagePrefixRegistered(prefix)
-      if ok == true or ok == 1 then
-        return true
-      end
-    end
-    return false
-  end
-
-  if type(prefix) ~= "string" or prefix == "" then
-    return false
-  end
-
-  if IsRegistered() then
-    return true
-  end
-
-  if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
-    local ok = C_ChatInfo.RegisterAddonMessagePrefix(prefix)
-    if ok == true or ok == 1 or IsRegistered() then
-      return true
-    end
-  end
-  if RegisterAddonMessagePrefix then
-    local ok = RegisterAddonMessagePrefix(prefix)
-    if ok == true or ok == 1 or IsRegistered() then
-      return true
-    end
-  end
-  return IsRegistered()
-end
-
-local function SendAddonMessageCompat(prefix, message, channel, target)
-  if C_ChatInfo and C_ChatInfo.SendAddonMessage then
-    return C_ChatInfo.SendAddonMessage(prefix, message, channel, target)
-  end
-  if SendAddonMessage then
-    return SendAddonMessage(prefix, message, channel, target)
-  end
-  return false
-end
-
-local function IsChatMessagingLocked()
-  if C_ChatInfo and C_ChatInfo.InChatMessagingLockdown then
-    return C_ChatInfo.InChatMessagingLockdown()
-  end
-  return false
-end
-
 local function GetSelfShortName()
   local me = UnitName and UnitName("player") or nil
   if type(me) ~= "string" or me == "" then
@@ -165,7 +98,7 @@ local function GetVersionBroadcastChannels()
 end
 
 local function GetLocalBuildInfo()
-  local installed = GetAddonMetadataField("Version")
+  local installed = NS.GetAddonMetadataField("Version")
   return {
     installed = installed,
   }
@@ -339,10 +272,10 @@ end
 local function SendVersionCommMessage(payload)
   if type(payload) ~= "string" or payload == "" then return end
   if not versionTracker.prefixRegistered then return end
-  if IsChatMessagingLocked() then return end
+  if NS.IsChatMessagingLocked() then return end
   local channels = GetVersionBroadcastChannels()
   for _, channel in ipairs(channels) do
-    pcall(SendAddonMessageCompat, VERSION_COMM_PREFIX, payload, channel)
+    pcall(NS.SendAddonMessageCompat, VERSION_COMM_PREFIX, payload, channel)
   end
 end
 
@@ -413,7 +346,7 @@ end
 
 local function InitializeVersionTracker()
   if versionTracker.prefixRegistered then return end
-  versionTracker.prefixRegistered = RegisterAddonMessagePrefixCompat(VERSION_COMM_PREFIX)
+  versionTracker.prefixRegistered = NS.RegisterAddonMessagePrefixCompat(VERSION_COMM_PREFIX)
   if not versionTracker.prefixRegistered then
     if not versionTracker.prefixRegistrationWarned then
       NS:Debug("Version comm prefix registration failed:", VERSION_COMM_PREFIX)

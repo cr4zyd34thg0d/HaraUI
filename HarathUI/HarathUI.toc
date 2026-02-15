@@ -15,6 +15,7 @@ Libs/LibSharedMedia-3.0/LibSharedMedia-3.0.lua
 SavedVariables.lua
 Constants.lua
 Core.lua
+Core/Compat.lua
 Options.lua
 Core/GlobalsShim.lua
 
