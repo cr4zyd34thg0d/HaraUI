@@ -165,7 +165,7 @@ function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildSt
     texLabel:SetText("Bar Texture")
     ApplyUIFont(texLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
 
-    local texDD = CreateFrame("Frame", "HarathUI_CastBarTextureDropdown", cards.visuals.content, "UIDropDownMenuTemplate")
+    local texDD = CreateFrame("Frame", "HaraUI_CastBarTextureDropdown", cards.visuals.content, "UIDropDownMenuTemplate")
     texDD:ClearAllPoints()
     texDD:SetPoint("TOPLEFT", texLabel, "BOTTOMLEFT", -16, -2)
     UIDropDownMenu_SetWidth(texDD, 186)

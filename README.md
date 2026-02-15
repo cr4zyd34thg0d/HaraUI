@@ -3,7 +3,7 @@
 :sparkles: A curated World of Warcraft UI bundle focused on clean gameplay UX, practical QoL modules, and battle-tested nameplate behavior.
 
 ![WoW Interface](https://img.shields.io/badge/WoW-12.0.1-1f6feb?style=for-the-badge)
-![HarathUI](https://img.shields.io/badge/HarathUI-2.0-f97316?style=for-the-badge)
+![HaraUI](https://img.shields.io/badge/HaraUI-2.0-f97316?style=for-the-badge)
 ![Platynator](https://img.shields.io/badge/Platynator-319-22c55e?style=for-the-badge)
 ![OPie](https://img.shields.io/badge/OPie-7.11.3-a855f7?style=for-the-badge)
 
@@ -17,11 +17,11 @@
 
 | Addon | Version | Interface | Author | Purpose |
 |-------|---------|-----------|--------|---------|
-| HarathUI | 2.0 | 120001 | Harath | Modular UI/QoL suite |
+| HaraUI | 2.0 | 120001 | Harath | Modular UI/QoL suite |
 | Platynator | 319 | 120001 | plusmouse | Highly customizable nameplates |
 | OPie | 7.11.3 | 120001 | foxlit | Radial action rings |
 
-## :jigsaw: HarathUI Feature Highlights
+## :jigsaw: HaraUI Feature Highlights
 
 ### :gear: Core UI Modules
 - :orange_circle: **XP/Rep Bar** with session text, rate text, and max-level behavior options
@@ -46,7 +46,7 @@
 
 ## :keyboard: Slash Commands
 
-### HarathUI
+### HaraUI
 - `/hui` -> open options
 - `/hui lock` -> toggle Move Mode
 - `/hui xp | cast | loot | summon` -> toggle module quickly
@@ -85,13 +85,13 @@ Patch docs: `patches/README.md`
 .\scripts\update-platynator.ps1 -SourcePath "C:\path\to\Platynator"
 ```
 
-### Stamp HarathUI release metadata
+### Stamp HaraUI release metadata
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\release-harathui.ps1 -Version 2.0 -GitVersion 2.0 -CommitRef HEAD
+powershell -ExecutionPolicy Bypass -File .\scripts\release-haraui.ps1 -Version 2.0 -GitVersion 2.0 -CommitRef HEAD
 ```
 
-This also updates `HarathUI/Generated/HostedVersion.lua` by default, using GitHub release/tag data for hosted version checks.
+This also updates `HaraUI/Generated/HostedVersion.lua` by default, using GitHub release/tag data for hosted version checks.
 
 Optional flags:
 - `-SkipGitHubHostedSync`
@@ -102,7 +102,7 @@ Optional flags:
 Low-level stamp example:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata.ps1 -Version 2.0 -GitVersion 2.0 -BuildCommit 56a5bb9 -LatestCommit 56a5bb9
+powershell -ExecutionPolicy Bypass -File .\HaraUI\tools\stamp-version-metadata.ps1 -Version 2.0 -GitVersion 2.0 -BuildCommit 56a5bb9 -LatestCommit 56a5bb9
 ```
 
 ## :spiral_notepad: Changelog
@@ -114,12 +114,12 @@ powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata
 - Switched game menu scaling to a resolution-aware model
 
 ### v1.2.1 (2026-02-14)
-- Updated HarathUI to `v2.0`
+- Updated HaraUI to `v2.0`
 - Resolved Currency tab account-transfer taint path by routing bottom Character/Rep/Currency buttons through native CharacterFrame tabs
 - Fixed bottom tab routing mismatch where Rep/Currency could open Blizzard Titles/Equipment panes
 
 ### v1.2.0 (2026-02-11)
-- Updated HarathUI to `v1.4.1` for significant module additions
+- Updated HaraUI to `v1.4.1` for significant module additions
 - Added HaraChonk character/player frame replacement (Character Sheet module)
 - Added Tracked Bars skinning module
 - Added Auto Accept Summons module

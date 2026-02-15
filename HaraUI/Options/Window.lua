@@ -81,9 +81,9 @@ function NS:BuildOptionsWindow(BuildFullUI, db)
     if s == "round" then
       self:SetSize(30, 30)
       self.bg:SetColorTexture(0.08, 0.08, 0.09, 0.95)
-      self.border:SetTexture("Interface\\AddOns\\HarathUI\\Media\\thin_round_border.tga")
+      self.border:SetTexture("Interface\\AddOns\\HaraUI\\Media\\thin_round_border.tga")
       self.border:SetVertexColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.9)
-      self.glow:SetTexture("Interface\\AddOns\\HarathUI\\Media\\thin_round_border.tga")
+      self.glow:SetTexture("Interface\\AddOns\\HaraUI\\Media\\thin_round_border.tga")
       self.glow:SetVertexColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.4)
       self.x:SetTextColor(ORANGE[1], ORANGE[2], ORANGE[3])
     elseif s == "angled" then
@@ -110,9 +110,9 @@ function NS:BuildOptionsWindow(BuildFullUI, db)
     elseif s == "double" then
       self:SetSize(30, 30)
       self.bg:SetColorTexture(0.07, 0.07, 0.08, 0.95)
-      self.border:SetTexture("Interface\\AddOns\\HarathUI\\Media\\thin_round_border.tga")
+      self.border:SetTexture("Interface\\AddOns\\HaraUI\\Media\\thin_round_border.tga")
       self.border:SetVertexColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.9)
-      self.glow:SetTexture("Interface\\AddOns\\HarathUI\\Media\\thin_round_border.tga")
+      self.glow:SetTexture("Interface\\AddOns\\HaraUI\\Media\\thin_round_border.tga")
       self.glow:SetVertexColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.65)
       self.x:SetTextColor(ORANGE[1], ORANGE[2], ORANGE[3])
     elseif s == "pill" then

@@ -16,7 +16,7 @@ $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
-$stampScript = Join-Path $repoDir "HarathUI\tools\stamp-version-metadata.ps1"
+$stampScript = Join-Path $repoDir "HaraUI\tools\stamp-version-metadata.ps1"
 $hostedScript = Join-Path $repoDir "scripts\update-hosted-version-from-github.ps1"
 
 if (-not (Test-Path -Path $stampScript)) {
@@ -50,7 +50,7 @@ if ($TocPath -and $TocPath.Trim() -ne "") {
   $args += @("-TocPath", $TocPath)
 }
 
-Write-Host ("Stamping HarathUI metadata from ref '{0}' ({1})..." -f $CommitRef, $buildCommit)
+Write-Host ("Stamping HaraUI metadata from ref '{0}' ({1})..." -f $CommitRef, $buildCommit)
 & powershell @args
 
 if (-not $SkipGitHubHostedSync) {

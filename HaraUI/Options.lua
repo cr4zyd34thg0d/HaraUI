@@ -1,5 +1,5 @@
 --[[
-  HarathUI Options Panel
+  HaraUI Options Panel
 
   Structure:
     - Theme System & UI Helpers (lines 16-364)
@@ -282,7 +282,7 @@ function NS:InitOptions()
     local rightLogo = content:CreateTexture(nil, "OVERLAY")
     rightLogo:SetSize(170, 56)
     rightLogo:SetTexCoord(0, 1, 0, 1)
-    rightLogo:SetTexture("Interface\\AddOns\\HarathUI\\Media\\logo.tga")
+    rightLogo:SetTexture("Interface\\AddOns\\HaraUI\\Media\\logo.tga")
     rightLogo:SetVertexColor(ORANGE[1], ORANGE[2], ORANGE[3], 1)
     rightLogo:SetPoint("TOPRIGHT", content, "TOPRIGHT", -46, -20)
     RegisterTheme(function(c)
@@ -295,7 +295,7 @@ function NS:InitOptions()
     rightLogoCaps:SetPoint("TOPLEFT", rightLogo, "TOPLEFT", 0, 0)
     rightLogoCaps:SetPoint("BOTTOMRIGHT", rightLogo, "BOTTOMRIGHT", 0, 0)
     rightLogoCaps:SetTexCoord(0, 1, 0, 1)
-    rightLogoCaps:SetTexture("Interface\\AddOns\\HarathUI\\Media\\logoCaps.tga")
+    rightLogoCaps:SetTexture("Interface\\AddOns\\HaraUI\\Media\\logoCaps.tga")
 
     -- Version text under logo, right-aligned.
     navVersion:SetParent(content)
@@ -614,7 +614,7 @@ function NS:InitOptions()
       b.icon:SetPoint("TOPLEFT", 1, -1)
       b.icon:SetPoint("BOTTOMRIGHT", -1, 1)
       if it.media then
-        b.icon:SetTexture("Interface\\AddOns\\HarathUI\\Media\\" .. it.media)
+        b.icon:SetTexture("Interface\\AddOns\\HaraUI\\Media\\" .. it.media)
       else
         b.icon:SetTexture("Interface/Buttons/WHITE8x8")
         b.icon:SetColorTexture(0, 0, 0, 0.18)

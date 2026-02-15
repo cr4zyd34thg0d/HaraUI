@@ -4,7 +4,7 @@
 
 When you push a git tag matching `v*`, the workflow at `.github/workflows/release.yml` runs automatically:
 
-1. **Package** — BigWigsMods/packager builds a distributable `.zip` from the repo, guided by `.pkgmeta`. The `@project-version@` token in `HarathUI/HarathUI.toc` is replaced with the tag name (e.g. `v2.0.3`).
+1. **Package** — BigWigsMods/packager builds a distributable `.zip` from the repo, guided by `.pkgmeta`. The `@project-version@` token in `HaraUI/HaraUI.toc` is replaced with the tag name (e.g. `v2.0.3`).
 2. **GitHub Release** — A release is created for the tag with auto-generated notes and the zip attached.
 3. **CurseForge Upload** — The same zip is uploaded to CurseForge with the correct release type.
 
@@ -111,7 +111,7 @@ Log into the CurseForge author dashboard → navigate to the file → delete it 
 ## Version Stamping
 
 - **Source of truth:** The git tag. No version is hardcoded in the source tree.
-- **Mechanism:** `HarathUI/HarathUI.toc` contains `## Version: @project-version@`. The BigWigsMods packager replaces this token with the tag name at build time.
+- **Mechanism:** `HaraUI/HaraUI.toc` contains `## Version: @project-version@`. The BigWigsMods packager replaces this token with the tag name at build time.
 - **Local development:** When running the addon directly from the repo (not packaged), the version line reads literally `@project-version@`. This is normal — WoW treats it as a string. The in-addon version tracker (`Core/VersionTracker.lua`) handles version comparison separately.
 
 ---
@@ -122,5 +122,5 @@ Log into the CurseForge author dashboard → navigate to the file → delete it 
 |-----------------------------------|---------------------------------------------------|
 | `.pkgmeta`                        | Packager config: folder mapping, ignore rules     |
 | `.github/workflows/release.yml`   | Tag-triggered CI: package → release → upload      |
-| `HarathUI/HarathUI.toc`          | Addon manifest (contains `@project-version@` token)|
-| `scripts/release-harathui.ps1`    | Legacy local release script (pre-CI)              |
+| `HaraUI/HaraUI.toc`          | Addon manifest (contains `@project-version@` token)|
+| `scripts/release-haraui.ps1`      | Legacy local release script (pre-CI)              |

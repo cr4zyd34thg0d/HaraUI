@@ -22,7 +22,7 @@ local function EnsureMinimapButton()
     NS._huiLDBObject = LDB:NewDataObject("HaraUI", {
       type = "launcher",
       text = "HaraUI",
-      icon = "Interface\\AddOns\\HarathUI\\Media\\mmicon.tga",
+      icon = "Interface\\AddOns\\HaraUI\\Media\\mmicon.tga",
       OnClick = function(_, button)
         if button == "LeftButton" or button == "RightButton" then
           if NS.OpenOptions then NS:OpenOptions() end

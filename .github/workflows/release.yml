@@ -82,7 +82,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          name: HarathUI ${{ steps.meta.outputs.tag }}
+          name: HaraUI ${{ steps.meta.outputs.tag }}
           body: ${{ steps.changelog.outputs.body }}
           prerelease: ${{ steps.meta.outputs.release_type != 'release' }}
           files: ${{ steps.zip.outputs.path }}
@@ -94,7 +94,7 @@ jobs:
           project_id: ${{ env.CURSEFORGE_PROJECT_ID }}
           game_endpoint: wow
           file_path: ${{ steps.zip.outputs.path }}
-          display_name: HarathUI ${{ steps.meta.outputs.version }}
+          display_name: HaraUI ${{ steps.meta.outputs.version }}
           release_type: ${{ steps.meta.outputs.release_type }}
           changelog: ${{ steps.changelog.outputs.body }}
           changelog_type: markdown

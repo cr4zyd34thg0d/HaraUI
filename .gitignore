@@ -11,8 +11,8 @@
 !/.github/**
 
 # Only include tracked project roots.
-!/HarathUI/
-!/HarathUI/**
+!/HaraUI/
+!/HaraUI/**
 !/OPie/
 !/OPie/**
 !/Platynator/
@@ -23,14 +23,14 @@
 !/scripts/**
 
 # Never track nested repo metadata if present inside addon folder.
-/HarathUI/.git/
-/HarathUI/.claude/
-/HarathUI/.vscode/
-/HarathUI/docs/
-/HarathUI/AGENTS.md
-/HarathUI/.luacheckrc
-/HarathUI/.luarc.json
-/HarathUI/.stylua.toml
+/HaraUI/.git/
+/HaraUI/.claude/
+/HaraUI/.vscode/
+/HaraUI/docs/
+/HaraUI/AGENTS.md
+/HaraUI/.luacheckrc
+/HaraUI/.luarc.json
+/HaraUI/.stylua.toml
 
 # Upstream Platynator source-only artifacts (not needed in addon bundle).
 /Platynator/AssetsRaw/

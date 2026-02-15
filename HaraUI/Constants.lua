@@ -34,7 +34,7 @@ NS.TEXTURES = {
 -- Default font
 NS.DEFAULT_FONT = "Tahoma Bold"
 NS.DEFAULT_FONT_OUTLINE = "OUTLINE"
-NS.DEFAULT_FONT_PATH = "Interface\\AddOns\\HarathUI\\Media\\Fonts\\TahomaBold.ttf"
+NS.DEFAULT_FONT_PATH = "Interface\\AddOns\\HaraUI\\Media\\Fonts\\TahomaBold.ttf"
 
 function NS:GetDefaultFontPath()
   local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)

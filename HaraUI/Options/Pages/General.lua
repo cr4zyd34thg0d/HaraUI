@@ -41,7 +41,7 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(db, ORANGE, MakeCheckbox, N
     local leftX = 6
     local rightX = 330
 
-    local enable = MakeCheckbox(cards.general.content, "Enable HarathUI", "Toggle the whole UI suite on/off.")
+    local enable = MakeCheckbox(cards.general.content, "Enable HaraUI", "Toggle the whole UI suite on/off.")
     enable:SetPoint("TOPLEFT", leftX, -4)
     enable:SetChecked(db.general.enabled)
     enable:SetScript("OnClick", function()
@@ -69,7 +69,7 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(db, ORANGE, MakeCheckbox, N
     end)
     ApplyToggleSkin(moveOptions)
 
-    local minimapBtn = MakeCheckbox(cards.general.content, "Minimap Button", "Show or hide the HarathUI minimap button.")
+    local minimapBtn = MakeCheckbox(cards.general.content, "Minimap Button", "Show or hide the HaraUI minimap button.")
     minimapBtn:SetPoint("TOPLEFT", rightX, -40)
     minimapBtn:SetChecked(not (db.general.minimapButton and db.general.minimapButton.hide))
     minimapBtn:SetScript("OnClick", function()

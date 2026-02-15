@@ -45,7 +45,7 @@ function To-LuaStringOrNil {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
 if (-not $OutputPath -or $OutputPath.Trim() -eq "") {
-  $OutputPath = Join-Path $repoDir "HarathUI\Generated\HostedVersion.lua"
+  $OutputPath = Join-Path $repoDir "HaraUI\Generated\HostedVersion.lua"
 }
 
 $repoInfo = Invoke-GitHubJson -Url ("https://api.github.com/repos/{0}/{1}" -f $Owner, $Repo) -AuthToken $Token
@@ -141,7 +141,7 @@ if ((-not $version -or $version.Trim() -eq "") -or (-not $commit -or $commit.Tri
 
 if (-not $version -or $version.Trim() -eq "") {
   try {
-    $tocUrl = "https://raw.githubusercontent.com/{0}/{1}/{2}/HarathUI/HarathUI.toc" -f $Owner, $Repo, $defaultBranch
+    $tocUrl = "https://raw.githubusercontent.com/{0}/{1}/{2}/HaraUI/HaraUI.toc" -f $Owner, $Repo, $defaultBranch
     $tocText = (Invoke-WebRequest -UseBasicParsing -Uri $tocUrl -TimeoutSec 30).Content
     $m = [regex]::Match($tocText, "(?im)^##\s*Version\s*:\s*(.+)$")
     if ($m.Success) {

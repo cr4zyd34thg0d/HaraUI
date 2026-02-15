@@ -39,8 +39,8 @@ HaraUI is a ~15,000-line WoW Retail addon with 12 feature modules, a custom opti
 | **Summons** | Auto-accept behavior, combat lockdown deferral |
 | **CopyBattleTag** | Context menu integration |
 | **Options UI** | All pages, all controls, nav bar, theme color picker, version indicator, preview buttons |
-| **SavedVariables** | `HarathUI_DB` structure, all existing keys, migration compatibility |
-| **Slash Commands** | `/hui`, `/harathui` |
+| **SavedVariables** | `HaraUI_DB` structure, all existing keys, migration compatibility |
+| **Slash Commands** | `/hui`, `/haraui` |
 | **Fonts/Media** | All 19 registered fonts, all textures, logo |
 | **Frame Positions** | All saved anchor/x/y positions per module |
 
@@ -57,7 +57,7 @@ HaraUI is a ~15,000-line WoW Retail addon with 12 feature modules, a custom opti
 **Files Impacted:**
 - `Shared/UIHelpers.lua` (expand)
 - NEW: `Shared/Frames.lua`
-- `HarathUI.toc` (add new file to load order, after UIHelpers.lua)
+- `HaraUI.toc` (add new file to load order, after UIHelpers.lua)
 
 **Tasks:**
 1. Add to `UIHelpers.lua`:
@@ -90,7 +90,7 @@ HaraUI is a ~15,000-line WoW Retail addon with 12 feature modules, a custom opti
 
 **Files Impacted:**
 - NEW: `Core/ModuleBase.lua`
-- `HarathUI.toc` (add after Core.lua, before Compat.lua)
+- `HaraUI.toc` (add after Core.lua, before Compat.lua)
 
 **Tasks:**
 1. Create `Core/ModuleBase.lua`:
@@ -269,7 +269,7 @@ HaraUI is a ~15,000-line WoW Retail addon with 12 feature modules, a custom opti
 **Files Impacted:**
 - NEW: `Modules/CharacterSheet/Guards.lua`
 - `Modules/CharacterSheet.lua` (replace inline guard code with requires)
-- `HarathUI.toc` (add new file before CharacterSheet.lua)
+- `HaraUI.toc` (add new file before CharacterSheet.lua)
 
 **Tasks:**
 1. Create `Modules/CharacterSheet/` directory.
@@ -303,7 +303,7 @@ HaraUI is a ~15,000-line WoW Retail addon with 12 feature modules, a custom opti
 **Files Impacted:**
 - NEW: `Modules/CharacterSheet/RightPanel.lua`
 - `Modules/CharacterSheet.lua` (remove right panel code, call into RightPanel)
-- `HarathUI.toc`
+- `HaraUI.toc`
 
 **Tasks:**
 1. Identify all functions and state related to the right panel (likely prefixed `RP.` or containing "RightPanel", "Vault", "MPlus", "Affix").
@@ -334,7 +334,7 @@ HaraUI is a ~15,000-line WoW Retail addon with 12 feature modules, a custom opti
 **Files Impacted:**
 - NEW: `Modules/CharacterSheet/GearDisplay.lua`
 - `Modules/CharacterSheet.lua`
-- `HarathUI.toc`
+- `HaraUI.toc`
 
 **Tasks:**
 1. Extract: `StylePaperDollSlots`, `ApplyChonkySlotLayout`, `UpdateCustomGearFrame`, slot skin state, item tooltip cache, enchant quality logic.
@@ -361,7 +361,7 @@ HaraUI is a ~15,000-line WoW Retail addon with 12 feature modules, a custom opti
 **Files Impacted:**
 - NEW: `Modules/CharacterSheet/StatsPanel.lua`
 - `Modules/CharacterSheet.lua`
-- `HarathUI.toc`
+- `HaraUI.toc`
 
 **Tasks:**
 1. Extract: `UpdateCustomStatsFrame`, stat row creation, stat section layout, stats mode button logic, sidebar buttons.
@@ -475,7 +475,7 @@ HaraUI is a ~15,000-line WoW Retail addon with 12 feature modules, a custom opti
 **Objective:** Final cleanup pass. Ensure TOC load order is correct for all new files, remove any dead code discovered during the refactor, and add minimal inline documentation.
 
 **Files Impacted:**
-- `HarathUI.toc`
+- `HaraUI.toc`
 - Various files (minor cleanups only)
 
 **Tasks:**
@@ -507,7 +507,7 @@ HaraUI is a ~15,000-line WoW Retail addon with 12 feature modules, a custom opti
 | 2 | All 12 modules Apply/Disable correctly | Toggle each via options, verify enable/disable |
 | 3 | Options panel fully functional | Open every page, toggle every control, move every slider |
 | 4 | Character Sheet stable | Shift-C 10x, tab cycling, right panel attach/detach |
-| 5 | SavedVariables backward-compatible | Copy a pre-refactor `HarathUI_DB.lua` into SavedVariables/, load, verify no data loss |
+| 5 | SavedVariables backward-compatible | Copy a pre-refactor `HaraUI_DB.lua` into SavedVariables/, load, verify no data loss |
 | 6 | No visual regressions | Screenshot comparison of every module against golden master |
 | 7 | Frame positions preserved | Existing anchor/x/y values load correctly |
 | 8 | CharacterSheet.lua < 4,000 lines | `wc -l` check |

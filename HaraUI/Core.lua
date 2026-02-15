@@ -110,7 +110,7 @@ function NS:GetDB()
     return NS.db
   end
   local success, result = pcall(function()
-    return HarathUI_DB and HarathUI_DB.profile
+    return HaraUI_DB and HaraUI_DB.profile
   end)
   if not success then
     return NS.DEFAULTS.profile
@@ -121,28 +121,28 @@ end
 
 function NS:InitDB()
   -- Validate saved data structure
-  if HarathUI_DB and type(HarathUI_DB) ~= "table" then
+  if HaraUI_DB and type(HaraUI_DB) ~= "table" then
     Print("Saved data corrupted, resetting to defaults")
-    HarathUI_DB = nil
+    HaraUI_DB = nil
   end
 
-  HarathUI_DB = HarathUI_DB or {}
+  HaraUI_DB = HaraUI_DB or {}
 
   -- Run additive migrations once per stored migration version.
-  local migrateOK, migrateErr = pcall(RunDBMigrations, HarathUI_DB)
+  local migrateOK, migrateErr = pcall(RunDBMigrations, HaraUI_DB)
   if not migrateOK then
     NS:Debug("Error running settings migrations:", migrateErr)
   end
 
   -- Safely merge defaults with error handling
-  local success, result = pcall(DeepCopyDefaults, HarathUI_DB.profile or {}, NS.DEFAULTS.profile)
+  local success, result = pcall(DeepCopyDefaults, HaraUI_DB.profile or {}, NS.DEFAULTS.profile)
   if success then
-    HarathUI_DB.profile = result
+    HaraUI_DB.profile = result
   else
     Print("Error loading settings, using defaults")
-    HarathUI_DB.profile = DeepCopyDefaults({}, NS.DEFAULTS.profile)
+    HaraUI_DB.profile = DeepCopyDefaults({}, NS.DEFAULTS.profile)
   end
-  NS.db = HarathUI_DB.profile
+  NS.db = HaraUI_DB.profile
 end
 
 NS.Modules = {}
