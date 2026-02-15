@@ -16,6 +16,7 @@ SavedVariables.lua
 Constants.lua
 Core.lua
 Core/Compat.lua
+Core/VersionTracker.lua
 Options.lua
 Core/GlobalsShim.lua
 
