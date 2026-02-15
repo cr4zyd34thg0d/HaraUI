@@ -403,19 +403,28 @@ local function Update(forceQuest)
       bar.detailText:SetText("")
     end
     if xpbar.showSessionTime then
-      local elapsed = GetTime() - (state.sessionStart or GetTime())
+      local now = GetTime()
+      if state.sessionStart == nil then
+        state.sessionStart = now
+      end
+      local elapsed = now - state.sessionStart
       bar.sessionText:SetText(("Session: %s"):format(FormatTime(elapsed)))
     else
       bar.sessionText:SetText("")
     end
     if xpbar.showRateText then
-      local elapsed = GetTime() - (state.sessionStart or GetTime())
+      local now = GetTime()
+      if state.sessionStart == nil then
+        state.sessionStart = now
+      end
+      local elapsed = now - state.sessionStart
       if state.sessionStartXP == nil then
         state.sessionStartXP = cur
       end
       if cur < state.sessionStartXP then
         state.sessionStartXP = cur
-        state.sessionStart = GetTime()
+        state.sessionStart = now
+        elapsed = 0
       end
       local xpGained = math_max(0, cur - state.sessionStartXP)
       local rate = (elapsed > 0) and (xpGained / elapsed) * 3600 or 0
