@@ -28,6 +28,7 @@ Options/Pages/XP.lua
 Options/Pages/Cast.lua
 Options/Pages/Friendly.lua
 Options/Pages/Rotation.lua
+Options/Pages/Minimap.lua
 Options.lua
 Core/Slash.lua
 Core/GlobalsShim.lua
