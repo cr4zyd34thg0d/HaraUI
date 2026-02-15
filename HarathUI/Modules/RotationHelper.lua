@@ -39,6 +39,7 @@ local function EnsureKeybindCacheEvents()
   keybindEventFrame:RegisterEvent("UPDATE_BINDINGS")
   keybindEventFrame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
   keybindEventFrame:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
+  keybindEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
   keybindEventFrame:RegisterEvent("SPELLS_CHANGED")
   keybindEventFrame:SetScript("OnEvent", function()
     if K.InvalidateCache then
