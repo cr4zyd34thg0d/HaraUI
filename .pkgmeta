@@ -1,0 +1,34 @@
+package-as: HarathUI
+
+move-folders:
+  HarathUI/HarathUI: HarathUI
+
+ignore:
+  - .git
+  - .github
+  - .claude
+  - .gitignore
+  - .tmp
+  - .pkgmeta
+  - docs
+  - patches
+  - scripts
+  - README.md
+  - REFACTOR_PLAN.md
+  - "*.code-workspace"
+  - AlterEgo
+  - Baganator
+  - Chattynator
+  - CooldownManagerCentered
+  - Details
+  - Details_*
+  - HealthBarColor
+  - HeirloomSteward
+  - MRT
+  - OPie
+  - Platynator
+  - RaidFrameSettings
+  - RaidFrameSettingsOptions
+  - RXPGuides
+  - Syndicator
+  - ZygorGuidesViewer

@@ -4,6 +4,10 @@
 # Keep repository metadata/docs.
 !/.gitignore
 !/README.md
+!/REFACTOR_PLAN.md
+!/.pkgmeta
+!/.github/
+!/.github/**
 
 # Only include tracked project roots.
 !/HarathUI/
