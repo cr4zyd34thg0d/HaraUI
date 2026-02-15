@@ -16,11 +16,7 @@ local function IsEnabled(db)
   return db and db.gamemenu and db.gamemenu.enabled ~= false
 end
 
-local function Clamp(v, minv, maxv)
-  if v < minv then return minv end
-  if v > maxv then return maxv end
-  return v
-end
+local Clamp = NS.UIHelpers.Clamp
 
 local function GetCurrentResolution()
   if type(GetPhysicalScreenSize) == "function" then

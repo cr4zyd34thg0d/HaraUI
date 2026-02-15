@@ -62,12 +62,7 @@ local function GetDB()
   return db and db.minimapbar
 end
 
-
-local function Clamp(v, minv, maxv)
-  if v < minv then return minv end
-  if v > maxv then return maxv end
-  return v
-end
+local Clamp = NS.UIHelpers.Clamp
 
 local function IsMinimapOrAncestor(frame)
   if not frame or not Minimap then return false end
