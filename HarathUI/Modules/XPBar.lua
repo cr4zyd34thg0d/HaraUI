@@ -47,6 +47,7 @@ local GetXPExhaustion = GetXPExhaustion
 local math_min = math.min
 local math_max = math.max
 local math_floor = math.floor
+local AbbreviateNumber = AbbreviateLargeNumbers or BreakUpLargeNumbers or tostring
 
 local function ApplyBarFont(fontString, size)
   if not fontString then return end
@@ -430,7 +431,7 @@ local function Update(forceQuest)
       local rate = (elapsed > 0) and (xpGained / elapsed) * 3600 or 0
       local remaining = max - cur
       local eta = (rate > 0) and (remaining / rate) or 0
-      bar.rateText:SetText(("ETA %s - %s/hr"):format(FormatTime(eta), AbbreviateLargeNumbers(math_floor(rate + 0.5))))
+      bar.rateText:SetText(("ETA %s - %s/hr"):format(FormatTime(eta), AbbreviateNumber(math_floor(rate + 0.5))))
     else
       bar.rateText:SetText("")
     end
