@@ -23,11 +23,7 @@ function NS.OptionsPages.BuildXPPage(pages, content, MakeModuleHeader, BuildStan
 
     local preview = MakeButton(cards.general.content, "Preview Bar", 170, 24)
     preview:SetPoint("TOPLEFT", 6, -40)
-    preview:SetScript("OnClick", function()
-      if NS.Modules and NS.Modules.xpbar and NS.Modules.xpbar.Preview then
-        NS.Modules.xpbar:Preview()
-      end
-    end)
+    NS.OptionsPages.SetModulePreviewOnClick(preview, "xpbar", NS)
 
     local generalDivider = MakeAccentDivider(cards.general.content)
     generalDivider:SetPoint("TOPLEFT", 0, -84)

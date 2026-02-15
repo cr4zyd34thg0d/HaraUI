@@ -26,11 +26,7 @@ function NS.OptionsPages.BuildRotationPage(pages, content, MakeModuleHeader, Bui
 
     local preview = MakeButton(cards.general.content, "Preview", 170, 24)
     preview:SetPoint("TOPLEFT", 6, -40)
-    preview:SetScript("OnClick", function()
-      if NS.Modules and NS.Modules.rotationhelper and NS.Modules.rotationhelper.Preview then
-        NS.Modules.rotationhelper:Preview()
-      end
-    end)
+    NS.OptionsPages.SetModulePreviewOnClick(preview, "rotationhelper", NS)
 
     local generalDivider = MakeAccentDivider(cards.general.content)
     generalDivider:SetPoint("TOPLEFT", 0, -84)

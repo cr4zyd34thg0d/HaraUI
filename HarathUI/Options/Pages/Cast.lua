@@ -51,11 +51,7 @@ function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildSt
 
     local previewBtn = MakeButton(cards.general.content, "Preview Cast Bar", 170, 24)
     previewBtn:SetPoint("TOPLEFT", 6, -86)
-    previewBtn:SetScript("OnClick", function()
-      if NS.Modules and NS.Modules.castbar and NS.Modules.castbar.Preview then
-        NS.Modules.castbar:Preview()
-      end
-    end)
+    NS.OptionsPages.SetModulePreviewOnClick(previewBtn, "castbar", NS)
 
     local generalDivider = MakeAccentDivider(cards.general.content)
     generalDivider:SetPoint("TOPLEFT", 0, -124)

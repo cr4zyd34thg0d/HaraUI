@@ -12,11 +12,7 @@ function NS.OptionsPages.BuildLootPage(pages, content, MakeModuleHeader, BuildSt
 
     local preview = MakeButton(cards.general.content, "Preview Toasts", 170, 24)
     preview:SetPoint("TOPLEFT", 6, -40)
-    preview:SetScript("OnClick", function()
-      if NS.Modules and NS.Modules.loot and NS.Modules.loot.Preview then
-        NS.Modules.loot:Preview()
-      end
-    end)
+    NS.OptionsPages.SetModulePreviewOnClick(preview, "loot", NS)
 
     local generalDivider = MakeAccentDivider(cards.general.content)
     generalDivider:SetPoint("TOPLEFT", 0, -84)

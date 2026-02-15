@@ -15,6 +15,14 @@ function NS.OptionsPages.AttachModuleEnableToggle(toggle, parent, ApplyToggleSki
   ApplyToggleSkin(toggle)
 end
 
+function NS.OptionsPages.SetModulePreviewOnClick(button, moduleKey, NS)
+  button:SetScript("OnClick", function()
+    if NS.Modules and NS.Modules[moduleKey] and NS.Modules[moduleKey].Preview then
+      NS.Modules[moduleKey]:Preview()
+    end
+  end)
+end
+
 function NS.OptionsPages.CreateBuildGeneralPageCards(db, ORANGE, MakeCheckbox, NS, UpdateNavIndicators, ApplyToggleSkin, MakeAccentDivider, MakeButton, MakeColorSwatch, SetThemeColor, Small)
   return function(cards)
     db.summons = db.summons or {}
