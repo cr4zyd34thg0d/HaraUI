@@ -20,6 +20,9 @@ Core/Compat.lua
 Core/VersionTracker.lua
 Core/MinimapButton.lua
 Core/TooltipHooks.lua
+Options/Theme.lua
+Options/Widgets.lua
+Options/Window.lua
 Options.lua
 Core/Slash.lua
 Core/GlobalsShim.lua
