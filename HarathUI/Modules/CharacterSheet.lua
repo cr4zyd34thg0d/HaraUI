@@ -46,6 +46,7 @@ local S = {
   pendingLootSpecID = nil,
   refreshInProgress = false,
   refreshQueuedAfterCurrent = false,
+  lastRefreshFrame = nil,
   elapsedSinceData = 0,
   portalSpellCache = {},
   lastMPlusSnapshot = {
@@ -71,6 +72,19 @@ local ShowNativeCharacterMode
 local SyncCustomModeToNativePanel
 local HasAccountCurrencyTransferSupport
 local ResolveNativeCharacterMode
+local IN_NATIVE_VIS_SWITCH = 0
+
+local function RunWithNativeVisGuard(fn)
+  IN_NATIVE_VIS_SWITCH = IN_NATIVE_VIS_SWITCH + 1
+  local ok, r1, r2, r3, r4, r5 = pcall(fn)
+  local depth = IN_NATIVE_VIS_SWITCH - 1
+  if depth < 0 then depth = 0 end
+  IN_NATIVE_VIS_SWITCH = depth
+  if not ok then
+    error(r1, 0)
+  end
+  return r1, r2, r3, r4, r5
+end
 
 local function IsModeSwitchGuardActive()
   return (S.modeSwitchGuardDepth or 0) > 0
@@ -2437,9 +2451,11 @@ local function ApplyReputationPaneMode(db)
   local rep = _G.ReputationFrame
   if not rep or not CharacterFrame then return false end
 
-  if _G.PaperDollFrame and _G.PaperDollFrame.Hide then _G.PaperDollFrame:Hide() end
-  if _G.TokenFrame and _G.TokenFrame.Hide then _G.TokenFrame:Hide() end
-  rep:Show()
+  RunWithNativeVisGuard(function()
+    if _G.PaperDollFrame and _G.PaperDollFrame.Hide then _G.PaperDollFrame:Hide() end
+    if _G.TokenFrame and _G.TokenFrame.Hide then _G.TokenFrame:Hide() end
+    rep:Show()
+  end)
 
   local canEditRepLayout = not IsFrameForbidden(rep) and not IsFrameProtected(rep)
   if canEditRepLayout then
@@ -2554,9 +2570,13 @@ local function LeaveReputationPaneMode()
       if repFilter.EnableMouse then repFilter:EnableMouse(true) end
       if repFilter.Hide then repFilter:Hide() end
     end
-    if _G.ReputationFrame.Hide then _G.ReputationFrame:Hide() end
+    RunWithNativeVisGuard(function()
+      if _G.ReputationFrame.Hide then _G.ReputationFrame:Hide() end
+    end)
   end
-  if _G.PaperDollFrame and _G.PaperDollFrame.Show then _G.PaperDollFrame:Show() end
+  RunWithNativeVisGuard(function()
+    if _G.PaperDollFrame and _G.PaperDollFrame.Show then _G.PaperDollFrame:Show() end
+  end)
 end
 
 local function GetCurrencyPaneFrame()
@@ -2614,17 +2634,21 @@ local function ApplyCurrencyPaneMode(db)
     end
   end
 
-  if _G.PaperDollFrame and _G.PaperDollFrame.Hide then _G.PaperDollFrame:Hide() end
-  if _G.ReputationFrame and _G.ReputationFrame.Hide then _G.ReputationFrame:Hide() end
+  RunWithNativeVisGuard(function()
+    if _G.PaperDollFrame and _G.PaperDollFrame.Hide then _G.PaperDollFrame:Hide() end
+    if _G.ReputationFrame and _G.ReputationFrame.Hide then _G.ReputationFrame:Hide() end
+  end)
   local repFilter = _G.ReputationFrame and (_G.ReputationFrame.filterDropdown
     or _G.ReputationFrame.FilterDropdown
     or _G.ReputationFrame.filterDropDown
     or _G.ReputationFrame.FilterDropDown
     or _G.ReputationFrameFilterDropdown
     or _G.ReputationFrameFilterDropDown)
-  if repFilter and repFilter.Hide then
-    repFilter:Hide()
-  end
+  RunWithNativeVisGuard(function()
+    if repFilter and repFilter.Hide then
+      repFilter:Hide()
+    end
+  end)
 
   if HasAccountCurrencyTransferSupport() then
     -- In account-transfer builds, mutating TokenFrame internals taints transfer calls.
@@ -2662,7 +2686,9 @@ local function ApplyCurrencyPaneMode(db)
   end
 
   HideAccountCurrencyBackdrop()
-  token:Show()
+  RunWithNativeVisGuard(function()
+    token:Show()
+  end)
   if token.SetAlpha then token:SetAlpha(1) end
   if token.EnableMouse then token:EnableMouse(true) end
 
@@ -2778,7 +2804,9 @@ local function LeaveCurrencyPaneMode()
     if token and not seen[token] then
       seen[token] = true
       if _G.TokenFramePopup and _G.TokenFramePopup.Hide then
-        _G.TokenFramePopup:Hide()
+        RunWithNativeVisGuard(function()
+          _G.TokenFramePopup:Hide()
+        end)
       end
       HideNativePaneDecor(token)
       local tokenFilter = token.filterDropdown
@@ -2792,10 +2820,14 @@ local function LeaveCurrencyPaneMode()
         if tokenFilter.EnableMouse then tokenFilter:EnableMouse(true) end
         if tokenFilter.Hide then tokenFilter:Hide() end
       end
-      if token.Hide then token:Hide() end
+      RunWithNativeVisGuard(function()
+        if token.Hide then token:Hide() end
+      end)
     end
   end
-  if _G.PaperDollFrame and _G.PaperDollFrame.Show then _G.PaperDollFrame:Show() end
+  RunWithNativeVisGuard(function()
+    if _G.PaperDollFrame and _G.PaperDollFrame.Show then _G.PaperDollFrame:Show() end
+  end)
 end
 
 local function SyncBottomModeButtonsVisibility(db)
@@ -2909,7 +2941,17 @@ M.SwitchMode = function(mode, source, opts)
       end
     end
 
-    if M and M.Refresh then
+    if C_Timer and C_Timer.After then
+      C_Timer.After(0, function()
+        if IN_NATIVE_VIS_SWITCH > 0 then return end
+        if not (M and M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
+        if M and M.Refresh then
+          M:Refresh()
+        elseif UpdateCustomStatsFrame and NS and NS.GetDB then
+          UpdateCustomStatsFrame(NS:GetDB())
+        end
+      end)
+    elseif M and M.Refresh then
       M:Refresh()
     elseif UpdateCustomStatsFrame and NS and NS.GetDB then
       UpdateCustomStatsFrame(NS:GetDB())
@@ -2928,6 +2970,7 @@ end
 M._RunDeferredNativeModeMirror = function()
   M._deferredNativeModeRefreshQueued = false
   if not M.active then return end
+  if IN_NATIVE_VIS_SWITCH > 0 then return end
   if S.suppressSubFrameRefresh or M._mirroringNativeSubframeSwitch then return end
   local liveDB = NS and NS.GetDB and NS:GetDB() or nil
   if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then
@@ -2950,6 +2993,7 @@ M._RunDeferredNativeModeMirror = function()
   end
   M._pendingNativeMode = nil
   SyncCustomModeToNativePanel()
+  if IN_NATIVE_VIS_SWITCH > 0 then return end
   M:Refresh()
 end
 
@@ -2968,10 +3012,12 @@ ShowNativeCharacterMode = function(mode)
     return false
   end
   local function SafeShowSubFrame(name)
-    S.suppressSubFrameRefresh = true
-    local ok = pcall(CharacterFrame_ShowSubFrame, name)
-    S.suppressSubFrameRefresh = false
-    return ok
+    return RunWithNativeVisGuard(function()
+      S.suppressSubFrameRefresh = true
+      local ok = pcall(CharacterFrame_ShowSubFrame, name)
+      S.suppressSubFrameRefresh = false
+      return ok
+    end)
   end
   if TryClickNativeSidebarMode(mode) then
     return true
@@ -3049,6 +3095,7 @@ local function FlushPendingRightPanelHide()
 end
 
 UpdateCustomStatsFrame = function(db)
+  if IN_NATIVE_VIS_SWITCH > 0 then return end
   local frame = EnsureCustomStatsFrame()
   if not frame then return end
   if not CharacterFrame then return end
@@ -6927,6 +6974,7 @@ end
 
 function M:Refresh()
   if not M.active then return end
+  if IN_NATIVE_VIS_SWITCH > 0 then return end
   local db = NS:GetDB()
   if not db then return end
   if not CharacterFrame then return end
@@ -6934,6 +6982,11 @@ function M:Refresh()
     S.refreshQueuedAfterCurrent = true
     return
   end
+  local refreshFrame = GetFrameCount and GetFrameCount() or nil
+  if refreshFrame and S.lastRefreshFrame == refreshFrame then
+    return
+  end
+  S.lastRefreshFrame = refreshFrame
   S.refreshInProgress = true
   SyncCustomModeToNativePanel()
 
@@ -7109,6 +7162,7 @@ function M:Apply()
 
   if CharacterFrame and not S.hookedShow then
     CharacterFrame:HookScript("OnShow", function()
+      if IN_NATIVE_VIS_SWITCH > 0 then return end
       if S.rightPanel then
         HideRightPanel()
       end
@@ -7141,6 +7195,7 @@ function M:Apply()
   end
   if CharacterFrame and not S.hookedHide then
     CharacterFrame:HookScript("OnHide", function()
+      if IN_NATIVE_VIS_SWITCH > 0 then return end
       if S.slotEnforcer then S.slotEnforcer:Hide() end
       if S.rightPanel then
         HideRightPanel()
@@ -7164,6 +7219,7 @@ function M:Apply()
   if CharacterFrame and not S.hookedSizeChanged then
     CharacterFrame:HookScript("OnSizeChanged", function(_, w, h)
       if not M.active then return end
+      if IN_NATIVE_VIS_SWITCH > 0 then return end
       if IsModeSwitchGuardActive() then return end
       local liveDB = NS and NS.GetDB and NS:GetDB() or nil
       if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then return end
@@ -7189,6 +7245,7 @@ function M:Apply()
   end
   local function RefreshForNativeSubframeSwitch(subFrameToken)
     if not M.active then return end
+    if IN_NATIVE_VIS_SWITCH > 0 then return end
     if IsModeSwitchGuardActive() then return end
     if S.suppressSubFrameRefresh or M._mirroringNativeSubframeSwitch then return end
     local liveDB = NS and NS.GetDB and NS:GetDB() or nil
@@ -7213,8 +7270,17 @@ function M:Apply()
     end
     M._pendingNativeMode = nil
     SyncCustomModeToNativePanel()
-    M:Refresh()
-    StartSlotEnforcer()
+    if C_Timer and C_Timer.After then
+      C_Timer.After(0, function()
+        if IN_NATIVE_VIS_SWITCH > 0 then return end
+        if not (M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
+        M:Refresh()
+        StartSlotEnforcer()
+      end)
+    else
+      M:Refresh()
+      StartSlotEnforcer()
+    end
   end
   if not S.hookedSubFrame and hooksecurefunc and CharacterFrame_ShowSubFrame then
     hooksecurefunc("CharacterFrame_ShowSubFrame", function(subFrameToken)
