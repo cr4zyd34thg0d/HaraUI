@@ -54,6 +54,89 @@ local function MakeSection(parent, title)
   return section
 end
 
+local function MakeGlassCard(parent, title)
+  local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+  card:SetBackdrop({
+    bgFile = "Interface/Buttons/WHITE8x8",
+    edgeFile = "Interface/Buttons/WHITE8x8",
+    edgeSize = 1,
+    insets = { left = 1, right = 1, top = 1, bottom = 1 },
+  })
+  card:SetBackdropColor(0.07, 0.08, 0.10, 0.62)
+  card:SetBackdropBorderColor(0.58, 0.60, 0.70, 0.22)
+
+  card.bgGradient = card:CreateTexture(nil, "BACKGROUND")
+  card.bgGradient:SetPoint("TOPLEFT", 1, -1)
+  card.bgGradient:SetPoint("BOTTOMRIGHT", -1, 1)
+  card.bgGradient:SetTexture("Interface/Buttons/WHITE8x8")
+  if card.bgGradient.SetGradientAlpha then
+    card.bgGradient:SetGradientAlpha("VERTICAL", 0.95, 0.95, 1.0, 0.16, 0.18, 0.20, 0.24, 0.04)
+  else
+    card.bgGradient:SetColorTexture(0.95, 0.95, 1.0, 0.08)
+  end
+
+  card.innerTop = card:CreateTexture(nil, "ARTWORK")
+  card.innerTop:SetPoint("TOPLEFT", 1, -1)
+  card.innerTop:SetPoint("TOPRIGHT", -1, -1)
+  card.innerTop:SetHeight(1)
+  card.innerTop:SetColorTexture(1, 1, 1, 0.14)
+
+  card.innerBottom = card:CreateTexture(nil, "ARTWORK")
+  card.innerBottom:SetPoint("BOTTOMLEFT", 1, 1)
+  card.innerBottom:SetPoint("BOTTOMRIGHT", -1, 1)
+  card.innerBottom:SetHeight(1)
+  card.innerBottom:SetColorTexture(0, 0, 0, 0.25)
+
+  card.accent = card:CreateTexture(nil, "OVERLAY")
+  card.accent:SetPoint("TOPLEFT", 10, -1)
+  card.accent:SetPoint("TOPRIGHT", -10, -1)
+  card.accent:SetHeight(1)
+  card.accent:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 0.92)
+  RegisterTheme(function(c)
+    if card.accent and card.accent.SetColorTexture then
+      card.accent:SetColorTexture(c[1], c[2], c[3], 0.92)
+    end
+  end)
+
+  if title and title ~= "" then
+    card.title = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    card.title:SetPoint("TOPLEFT", 12, -10)
+    card.title:SetText(title)
+    ApplyUIFont(card.title, ORANGE_SIZE, "OUTLINE", ORANGE)
+  end
+
+  card.content = CreateFrame("Frame", nil, card)
+  card.content:SetPoint("TOPLEFT", 12, (card.title and -30) or -12)
+  card.content:SetPoint("BOTTOMRIGHT", -12, 12)
+  card.content:SetFrameLevel(card:GetFrameLevel() + 1)
+
+  return card
+end
+
+local function MakeAccentDivider(parent)
+  local line = CreateFrame("Frame", nil, parent)
+  line:SetHeight(2)
+
+  line.base = line:CreateTexture(nil, "ARTWORK")
+  line.base:SetPoint("TOPLEFT", 0, 0)
+  line.base:SetPoint("TOPRIGHT", 0, 0)
+  line.base:SetHeight(1)
+  line.base:SetColorTexture(1, 1, 1, 0.10)
+
+  line.accent = line:CreateTexture(nil, "OVERLAY")
+  line.accent:SetPoint("BOTTOMLEFT", 0, 0)
+  line.accent:SetPoint("BOTTOMRIGHT", 0, 0)
+  line.accent:SetHeight(1)
+  line.accent:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 0.40)
+  RegisterTheme(function(c)
+    if line.accent and line.accent.SetColorTexture then
+      line.accent:SetColorTexture(c[1], c[2], c[3], 0.40)
+    end
+  end)
+
+  return line
+end
+
 local function Title(parent, text)
   local t = parent:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
   t:SetText(text)
@@ -147,6 +230,100 @@ local function MakeCheckbox(parent, label, tooltip)
     GameTooltip:Hide()
   end)
 
+  return cb
+end
+
+local function ApplyToggleSkin(cb)
+  if not cb or cb._huiToggleSkinned then return cb end
+  cb._huiToggleSkinned = true
+
+  local normal = cb.GetNormalTexture and cb:GetNormalTexture() or nil
+  local pushed = cb.GetPushedTexture and cb:GetPushedTexture() or nil
+  local highlight = cb.GetHighlightTexture and cb:GetHighlightTexture() or nil
+  local checked = cb.GetCheckedTexture and cb:GetCheckedTexture() or nil
+  local disabledChecked = cb.GetDisabledCheckedTexture and cb:GetDisabledCheckedTexture() or nil
+  local disabled = cb.GetDisabledTexture and cb:GetDisabledTexture() or nil
+
+  if normal then normal:SetAlpha(0) end
+  if pushed then pushed:SetAlpha(0) end
+  if highlight then highlight:SetAlpha(0) end
+  if checked then checked:SetAlpha(0) end
+  if disabledChecked then disabledChecked:SetAlpha(0) end
+  if disabled then disabled:SetAlpha(0) end
+
+  local toggle = CreateFrame("Frame", nil, cb, "BackdropTemplate")
+  toggle:SetPoint("LEFT", cb, "LEFT", 0, 0)
+  toggle:SetSize(36, 18)
+  toggle:SetBackdrop({
+    bgFile = "Interface/Buttons/WHITE8x8",
+    edgeFile = "Interface/Buttons/WHITE8x8",
+    edgeSize = 1,
+    insets = { left = 1, right = 1, top = 1, bottom = 1 },
+  })
+  toggle:SetFrameLevel(cb:GetFrameLevel() + 1)
+
+  toggle.fill = toggle:CreateTexture(nil, "ARTWORK")
+  toggle.fill:SetPoint("TOPLEFT", 1, -1)
+  toggle.fill:SetPoint("BOTTOMRIGHT", -1, 1)
+  toggle.fill:SetTexture("Interface/Buttons/WHITE8x8")
+
+  toggle.knob = toggle:CreateTexture(nil, "OVERLAY")
+  toggle.knob:SetSize(12, 12)
+  toggle.knob:SetTexture("Interface/Buttons/WHITE8x8")
+  toggle.knob:SetColorTexture(0.96, 0.96, 0.98, 1)
+
+  cb._huiToggle = toggle
+
+  if cb.Text then
+    cb.Text:ClearAllPoints()
+    cb.Text:SetPoint("LEFT", toggle, "RIGHT", 8, 0)
+    cb.Text:SetJustifyH("LEFT")
+    ApplyUIFont(cb.Text, 12, "OUTLINE", { 0.95, 0.95, 0.95 })
+  end
+
+  local function Refresh()
+    local isChecked = cb:GetChecked()
+    if isChecked then
+      toggle:SetBackdropColor(0.14, 0.12, 0.09, 0.96)
+      toggle:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.90)
+      toggle.fill:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 0.26)
+      toggle.knob:ClearAllPoints()
+      toggle.knob:SetPoint("RIGHT", toggle, "RIGHT", -3, 0)
+    else
+      toggle:SetBackdropColor(0.10, 0.11, 0.13, 0.96)
+      toggle:SetBackdropBorderColor(0.52, 0.54, 0.60, 0.35)
+      toggle.fill:SetColorTexture(0.28, 0.30, 0.36, 0.18)
+      toggle.knob:ClearAllPoints()
+      toggle.knob:SetPoint("LEFT", toggle, "LEFT", 3, 0)
+    end
+
+    if cb:IsEnabled() then
+      toggle:SetAlpha(1)
+    else
+      toggle:SetAlpha(0.5)
+    end
+  end
+
+  RegisterTheme(function()
+    Refresh()
+  end)
+
+  cb:HookScript("OnClick", Refresh)
+  cb:HookScript("OnShow", Refresh)
+  if cb.HasScript and cb:HasScript("OnEnable") then
+    cb:HookScript("OnEnable", Refresh)
+  end
+  if cb.HasScript and cb:HasScript("OnDisable") then
+    cb:HookScript("OnDisable", Refresh)
+  end
+  cb:HookScript("OnEnter", function()
+    if not cb:GetChecked() then
+      toggle:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.65)
+    end
+  end)
+  cb:HookScript("OnLeave", Refresh)
+
+  Refresh()
   return cb
 end
 
@@ -285,14 +462,62 @@ local function MakeColorSwatch(parent, label, getColor, setColor)
   return labelFS, swatch, Refresh
 end
 
+local function MakeValueChip(parent, width, height)
+  local chip = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+  chip:SetSize(width or 50, height or 20)
+  chip:SetBackdrop({
+    bgFile = "Interface/Buttons/WHITE8x8",
+    edgeFile = "Interface/Buttons/WHITE8x8",
+    edgeSize = 1,
+    insets = { left = 1, right = 1, top = 1, bottom = 1 },
+  })
+  chip:SetBackdropColor(0.08, 0.09, 0.11, 0.92)
+  chip:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.45)
+
+  chip.shine = chip:CreateTexture(nil, "ARTWORK")
+  chip.shine:SetPoint("TOPLEFT", 1, -1)
+  chip.shine:SetPoint("TOPRIGHT", -1, -1)
+  chip.shine:SetHeight((height or 20) * 0.48)
+  chip.shine:SetTexture("Interface/Buttons/WHITE8x8")
+  if chip.shine.SetGradientAlpha then
+    chip.shine:SetGradientAlpha("VERTICAL", 1, 1, 1, 0.10, 1, 1, 1, 0.00)
+  else
+    chip.shine:SetColorTexture(1, 1, 1, 0.05)
+  end
+
+  chip.text = chip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  chip.text:SetPoint("CENTER", 0, 0)
+  ApplyUIFont(chip.text, 11, "OUTLINE", { 0.92, 0.92, 0.94 })
+
+  function chip:SetValue(v, fmt)
+    if type(v) == "number" and fmt then
+      self.text:SetText(string.format(fmt, v))
+    else
+      self.text:SetText(tostring(v))
+    end
+  end
+
+  RegisterTheme(function(c)
+    if chip and chip.SetBackdropBorderColor then
+      chip:SetBackdropBorderColor(c[1], c[2], c[3], 0.45)
+    end
+  end)
+
+  return chip
+end
+
 NS.OptionsWidgets = NS.OptionsWidgets or {}
 NS.OptionsWidgets.ApplyDarkBackdrop = ApplyDarkBackdrop
 NS.OptionsWidgets.MakeSection = MakeSection
+NS.OptionsWidgets.MakeGlassCard = MakeGlassCard
+NS.OptionsWidgets.MakeAccentDivider = MakeAccentDivider
 NS.OptionsWidgets.Title = Title
 NS.OptionsWidgets.Small = Small
 NS.OptionsWidgets.MakeButton = MakeButton
 NS.OptionsWidgets.MakeCheckbox = MakeCheckbox
+NS.OptionsWidgets.ApplyToggleSkin = ApplyToggleSkin
 NS.OptionsWidgets.MakeSlider = MakeSlider
 NS.OptionsWidgets.Round2 = Round2
 NS.OptionsWidgets.OpenColorPickerRGB = OpenColorPickerRGB
 NS.OptionsWidgets.MakeColorSwatch = MakeColorSwatch
+NS.OptionsWidgets.MakeValueChip = MakeValueChip
