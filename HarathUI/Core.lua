@@ -19,6 +19,73 @@ local function Print(msg)
 end
 NS.Print = Print
 
+local DB_MIGRATION_VERSION = 1
+
+local function RunDBMigrations(dbRoot)
+  if type(dbRoot) ~= "table" then return end
+
+  local state = dbRoot._huiMigrationState
+  if type(state) ~= "table" then
+    state = {}
+    dbRoot._huiMigrationState = state
+  end
+
+  local currentVersion = tonumber(state.version) or 0
+  if currentVersion >= DB_MIGRATION_VERSION then
+    return
+  end
+
+  -- Rule 1: ensure legacy/non-table profile containers are upgraded to tables.
+  -- Additive only: existing keys are preserved as-is.
+  local profile = dbRoot.profile
+  if type(profile) ~= "table" then
+    profile = {}
+    dbRoot.profile = profile
+  end
+  local general = profile.general
+  if type(general) ~= "table" then
+    general = {}
+    profile.general = general
+  end
+
+  -- Rule 2: normalize legacy minimap button shape.
+  -- Older profiles may store this as a boolean; modern shape is { hide = <bool> }.
+  if type(general.minimapButton) == "boolean" then
+    general.minimapButton = { hide = not general.minimapButton }
+  elseif type(general.minimapButton) ~= "table" then
+    general.minimapButton = {}
+  end
+  if general.minimapButton.hide == nil then
+    general.minimapButton.hide = false
+  end
+
+  -- Rule 3: normalize theme color container and channel values.
+  -- Preserve existing numeric channels; only fill missing/invalid values.
+  if type(general.themeColor) ~= "table" then
+    general.themeColor = {}
+  end
+  if type(general.themeColor.r) ~= "number" then
+    general.themeColor.r = NS.DEFAULTS.profile.general.themeColor.r
+  end
+  if type(general.themeColor.g) ~= "number" then
+    general.themeColor.g = NS.DEFAULTS.profile.general.themeColor.g
+  end
+  if type(general.themeColor.b) ~= "number" then
+    general.themeColor.b = NS.DEFAULTS.profile.general.themeColor.b
+  end
+
+  -- Rule 4: ensure summons container exists for legacy profiles.
+  -- No removals; only additive keys required by runtime toggle paths.
+  if type(profile.summons) ~= "table" then
+    profile.summons = {}
+  end
+  if profile.summons.enabled == nil then
+    profile.summons.enabled = NS.DEFAULTS.profile.summons.enabled
+  end
+
+  state.version = DB_MIGRATION_VERSION
+end
+
 function NS:Debug(...)
   local db = NS:GetDB()
   if db and db.general.debug then
@@ -51,6 +118,12 @@ function NS:InitDB()
   end
 
   HarathUI_DB = HarathUI_DB or {}
+
+  -- Run additive migrations once per stored migration version.
+  local migrateOK, migrateErr = pcall(RunDBMigrations, HarathUI_DB)
+  if not migrateOK then
+    NS:Debug("Error running settings migrations:", migrateErr)
+  end
 
   -- Safely merge defaults with error handling
   local success, result = pcall(DeepCopyDefaults, HarathUI_DB.profile or {}, NS.DEFAULTS.profile)
