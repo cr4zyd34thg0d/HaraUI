@@ -55,6 +55,7 @@ local S = {
   },
   pendingSecureUpdate = false,
   pendingRightPanelHide = false,
+  modeSwitchGuardDepth = 0,
 }
 
 local DATA_REFRESH_INTERVAL = 2.0
@@ -70,6 +71,22 @@ local ShowNativeCharacterMode
 local SyncCustomModeToNativePanel
 local HasAccountCurrencyTransferSupport
 local ResolveNativeCharacterMode
+
+local function IsModeSwitchGuardActive()
+  return (S.modeSwitchGuardDepth or 0) > 0
+end
+
+local function RunWithModeSwitchGuard(fn)
+  S.modeSwitchGuardDepth = (S.modeSwitchGuardDepth or 0) + 1
+  local ok, r1, r2, r3, r4, r5 = pcall(fn)
+  local depth = (S.modeSwitchGuardDepth or 1) - 1
+  if depth < 0 then depth = 0 end
+  S.modeSwitchGuardDepth = depth
+  if not ok then
+    error(r1, 0)
+  end
+  return r1, r2, r3, r4, r5
+end
 
 local CFG = {
   CUSTOM_CHAR_HEIGHT = 675,
@@ -2863,40 +2880,42 @@ M._ResolveModeFromSubFrameToken = function(subFrameToken)
 end
 
 M.SwitchMode = function(mode, source, opts)
-  mode = tonumber(mode)
-  if mode ~= 1 and mode ~= 2 and mode ~= 3 then
-    return false
-  end
-
-  local applyNative = true
-  if type(opts) == "table" and opts.applyNative ~= nil then
-    applyNative = opts.applyNative == true
-  elseif source == "native" or source == "keybind" or source == "native-deferred" or source == "mirror" then
-    applyNative = false
-  end
-
-  M._pendingNativeMode = mode
-  if S.customStatsFrame then
-    S.customStatsFrame.activeMode = mode
-  end
-
-  if applyNative then
-    ShowNativeCharacterMode(mode)
-  end
-
-  if mode == 1 then
-    local liveDB = NS and NS.GetDB and NS:GetDB() or nil
-    if liveDB and liveDB.charsheet then
-      liveDB.charsheet.rightPanelCollapsed = false
+  return RunWithModeSwitchGuard(function()
+    mode = tonumber(mode)
+    if mode ~= 1 and mode ~= 2 and mode ~= 3 then
+      return false
     end
-  end
 
-  if M and M.Refresh then
-    M:Refresh()
-  elseif UpdateCustomStatsFrame and NS and NS.GetDB then
-    UpdateCustomStatsFrame(NS:GetDB())
-  end
-  return true
+    local applyNative = true
+    if type(opts) == "table" and opts.applyNative ~= nil then
+      applyNative = opts.applyNative == true
+    elseif source == "native" or source == "keybind" or source == "native-deferred" or source == "mirror" then
+      applyNative = false
+    end
+
+    M._pendingNativeMode = mode
+    if S.customStatsFrame then
+      S.customStatsFrame.activeMode = mode
+    end
+
+    if applyNative then
+      ShowNativeCharacterMode(mode)
+    end
+
+    if mode == 1 then
+      local liveDB = NS and NS.GetDB and NS:GetDB() or nil
+      if liveDB and liveDB.charsheet then
+        liveDB.charsheet.rightPanelCollapsed = false
+      end
+    end
+
+    if M and M.Refresh then
+      M:Refresh()
+    elseif UpdateCustomStatsFrame and NS and NS.GetDB then
+      UpdateCustomStatsFrame(NS:GetDB())
+    end
+    return true
+  end)
 end
 
 M._TriggerBottomModeButton = function(mode)
@@ -7145,6 +7164,7 @@ function M:Apply()
   if CharacterFrame and not S.hookedSizeChanged then
     CharacterFrame:HookScript("OnSizeChanged", function(_, w, h)
       if not M.active then return end
+      if IsModeSwitchGuardActive() then return end
       local liveDB = NS and NS.GetDB and NS:GetDB() or nil
       if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then return end
       if not (CharacterFrame and CharacterFrame:IsShown()) then return end
@@ -7169,6 +7189,7 @@ function M:Apply()
   end
   local function RefreshForNativeSubframeSwitch(subFrameToken)
     if not M.active then return end
+    if IsModeSwitchGuardActive() then return end
     if S.suppressSubFrameRefresh or M._mirroringNativeSubframeSwitch then return end
     local liveDB = NS and NS.GetDB and NS:GetDB() or nil
     if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then return end
