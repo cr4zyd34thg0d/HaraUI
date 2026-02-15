@@ -22,10 +22,7 @@ function NS.OptionsPages.BuildMinimapPage(pages, content, MakeModuleHeader, Buil
 
     local cards = BuildStandardModuleCards(pages.minimap)
 
-    minimapEnable:ClearAllPoints()
-    minimapEnable:SetParent(cards.general.content)
-    minimapEnable:SetPoint("TOPLEFT", 6, -4)
-    ApplyToggleSkin(minimapEnable)
+    NS.OptionsPages.AttachModuleEnableToggle(minimapEnable, cards.general.content, ApplyToggleSkin)
 
     local lockCB = MakeCheckbox(cards.general.content, "Lock Bar", "Prevents dragging the minimap bar.")
     lockCB:SetPoint("TOPLEFT", 330, -4)

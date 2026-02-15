@@ -20,10 +20,7 @@ function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildSt
     local cards = BuildStandardModuleCards(pages.cast)
 
     -- General card controls.
-    castEnable:ClearAllPoints()
-    castEnable:SetParent(cards.general.content)
-    castEnable:SetPoint("TOPLEFT", 6, -4)
-    ApplyToggleSkin(castEnable)
+    NS.OptionsPages.AttachModuleEnableToggle(castEnable, cards.general.content, ApplyToggleSkin)
 
     local showIcon = MakeCheckbox(cards.general.content, "Show Spell Icon", "Show the spell icon on the left.")
     showIcon:SetPoint("TOPLEFT", 330, -4)

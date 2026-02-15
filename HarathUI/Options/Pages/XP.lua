@@ -10,10 +10,7 @@ function NS.OptionsPages.BuildXPPage(pages, content, MakeModuleHeader, BuildStan
     local cards = BuildStandardModuleCards(pages.xp)
 
     -- General card controls.
-    xpEnable:ClearAllPoints()
-    xpEnable:SetParent(cards.general.content)
-    xpEnable:SetPoint("TOPLEFT", 6, -4)
-    ApplyToggleSkin(xpEnable)
+    NS.OptionsPages.AttachModuleEnableToggle(xpEnable, cards.general.content, ApplyToggleSkin)
 
     local showAtMax = MakeCheckbox(cards.general.content, "Show Bar at Max Level", "Keep XP bar visible at max level.")
     showAtMax:SetPoint("TOPLEFT", 330, -4)

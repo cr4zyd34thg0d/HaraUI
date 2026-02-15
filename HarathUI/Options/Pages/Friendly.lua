@@ -22,10 +22,7 @@ function NS.OptionsPages.BuildFriendlyPage(pages, content, MakeModuleHeader, Bui
 
     local cards = BuildStandardModuleCards(pages.friendly)
 
-    friendlyEnable:ClearAllPoints()
-    friendlyEnable:SetParent(cards.general.content)
-    friendlyEnable:SetPoint("TOPLEFT", 6, -4)
-    ApplyToggleSkin(friendlyEnable)
+    NS.OptionsPages.AttachModuleEnableToggle(friendlyEnable, cards.general.content, ApplyToggleSkin)
 
     local function RefreshFriendly()
       if NS.Modules and NS.Modules.friendlyplates and NS.Modules.friendlyplates.Refresh then

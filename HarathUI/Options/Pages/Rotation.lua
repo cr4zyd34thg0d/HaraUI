@@ -22,10 +22,7 @@ function NS.OptionsPages.BuildRotationPage(pages, content, MakeModuleHeader, Bui
 
     local cards = BuildStandardModuleCards(pages.rotation)
 
-    rotationEnable:ClearAllPoints()
-    rotationEnable:SetParent(cards.general.content)
-    rotationEnable:SetPoint("TOPLEFT", 6, -4)
-    ApplyToggleSkin(rotationEnable)
+    NS.OptionsPages.AttachModuleEnableToggle(rotationEnable, cards.general.content, ApplyToggleSkin)
 
     local preview = MakeButton(cards.general.content, "Preview", 170, 24)
     preview:SetPoint("TOPLEFT", 6, -40)

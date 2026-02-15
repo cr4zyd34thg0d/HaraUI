@@ -8,10 +8,7 @@ function NS.OptionsPages.BuildLootPage(pages, content, MakeModuleHeader, BuildSt
     local lootEnable = MakeModuleHeader(pages.loot, "loot")
     local cards = BuildStandardModuleCards(pages.loot)
 
-    lootEnable:ClearAllPoints()
-    lootEnable:SetParent(cards.general.content)
-    lootEnable:SetPoint("TOPLEFT", 6, -4)
-    ApplyToggleSkin(lootEnable)
+    NS.OptionsPages.AttachModuleEnableToggle(lootEnable, cards.general.content, ApplyToggleSkin)
 
     local preview = MakeButton(cards.general.content, "Preview Toasts", 170, 24)
     preview:SetPoint("TOPLEFT", 6, -40)

@@ -8,6 +8,13 @@ function NS.OptionsPages.CoerceInt(v)
   return floor(v + 0.5)
 end
 
+function NS.OptionsPages.AttachModuleEnableToggle(toggle, parent, ApplyToggleSkin)
+  toggle:ClearAllPoints()
+  toggle:SetParent(parent)
+  toggle:SetPoint("TOPLEFT", 6, -4)
+  ApplyToggleSkin(toggle)
+end
+
 function NS.OptionsPages.CreateBuildGeneralPageCards(db, ORANGE, MakeCheckbox, NS, UpdateNavIndicators, ApplyToggleSkin, MakeAccentDivider, MakeButton, MakeColorSwatch, SetThemeColor, Small)
   return function(cards)
     db.summons = db.summons or {}
