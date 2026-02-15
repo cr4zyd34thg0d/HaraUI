@@ -420,7 +420,10 @@ local function Update(forceQuest)
       local xpGained = math_max(0, cur - state.sessionStartXP)
       local rate = (elapsed > 0) and (xpGained / elapsed) * 3600 or 0
       local remaining = max - cur
-      local eta = (rate > 0) and (remaining / rate) or 0
+      local eta = 0
+      if rate > 0 and remaining > 0 then
+        eta = math_max(0, math_floor(((remaining * 3600) / rate) + 0.5))
+      end
       bar.rateText:SetText(("ETA %s - %s/hr"):format(FormatTime(eta), AbbreviateLargeNumbers(math_floor(rate + 0.5))))
     else
       bar.rateText:SetText("")
