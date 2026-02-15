@@ -6,7 +6,7 @@ on:
       - "v*"
 
 env:
-  CURSEFORGE_PROJECT_ID: "REPLACE_ME"  # TODO: set to your CurseForge project ID
+  CURSEFORGE_PROJECT_ID: "1461250"
 
 jobs:
   release:
