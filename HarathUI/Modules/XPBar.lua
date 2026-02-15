@@ -21,21 +21,32 @@ local M = {}
 NS:RegisterModule("xpbar", M)
 M.active = false
 
-local bar
-local previewActive = false
-local sessionStart
-local sessionStartXP
-local cachedQuestXP = 0
-local questDirty = true
-local updateTimer
+local state = {
+  bar = nil,
+  previewActive = false,
+  sessionStart = nil,
+  sessionStartXP = nil,
+  cachedQuestXP = 0,
+  questDirty = true,
+  updateTimer = nil,
+  hideBlizzardTicker = nil,
+  hideBlizzardHooked = false,
+  eventFrame = nil,
+}
 local UPDATE_INTERVAL = 1
-local hideBlizzardTicker
-local hideBlizzardHooked = false
 
 -- Cache color codes for performance (avoid string creation in hot paths)
 local QUEST_COLOR = NS.THEME.QUEST_COLOR
 local RESTED_COLOR = NS.THEME.RESTED_COLOR
 local COLOR_END = NS.THEME.COLOR_END
+local GetTime = GetTime
+local UnitLevel = UnitLevel
+local UnitXP = UnitXP
+local UnitXPMax = UnitXPMax
+local GetXPExhaustion = GetXPExhaustion
+local math_min = math.min
+local math_max = math.max
+local math_floor = math.floor
 
 local function ApplyBarFont(fontString, size)
   if not fontString then return end
@@ -73,7 +84,8 @@ local function HideBlizzardXPTrackingBars()
 end
 
 local function Create()
-  bar = CreateFrame("StatusBar", nil, UIParent, "BackdropTemplate")
+  state.bar = CreateFrame("StatusBar", nil, UIParent, "BackdropTemplate")
+  local bar = state.bar
   bar:SetSize(520, 12)
   bar:SetStatusBarTexture(NS.TEXTURES.STATUSBAR)
   bar:SetMinMaxValues(0, 1)
@@ -154,10 +166,12 @@ local function GetCompletedQuestXP()
 end
 
 local function UpdateSegments(cur, max, questXP, restedXP)
+  local bar = state.bar
+  if not bar then return end
   local width = bar:GetWidth()
-  local curPct = (max > 0) and math.min(cur / max, 1) or 0
-  local questPct = (max > 0) and math.max(0, questXP / max) or 0
-  local restedPct = (max > 0) and math.max(0, restedXP / max) or 0
+  local curPct = (max > 0) and math_min(cur / max, 1) or 0
+  local questPct = (max > 0) and math_max(0, questXP / max) or 0
+  local restedPct = (max > 0) and math_max(0, restedXP / max) or 0
 
   local curWidth = width * curPct
   local questWidth = width * questPct
@@ -170,7 +184,7 @@ local function UpdateSegments(cur, max, questXP, restedXP)
     bar.questTex:SetPoint("LEFT", bar, "LEFT", curWidth, 0)
     bar.questTex:SetPoint("TOP", bar, "TOP", 0, 0)
     bar.questTex:SetPoint("BOTTOM", bar, "BOTTOM", 0, 0)
-    bar.questTex:SetWidth(math.min(width - curWidth, questWidth))
+    bar.questTex:SetWidth(math_min(width - curWidth, questWidth))
     bar.questTex:Show()
   else
     bar.questTex:Hide()
@@ -181,7 +195,7 @@ local function UpdateSegments(cur, max, questXP, restedXP)
     bar.restedTex:SetPoint("LEFT", bar, "LEFT", offset, 0)
     bar.restedTex:SetPoint("TOP", bar, "TOP", 0, 0)
     bar.restedTex:SetPoint("BOTTOM", bar, "BOTTOM", 0, 0)
-    bar.restedTex:SetWidth(math.min(width - offset, restedWidth))
+    bar.restedTex:SetWidth(math_min(width - offset, restedWidth))
     bar.restedTex:Show()
   else
     bar.restedTex:Hide()
@@ -209,11 +223,11 @@ local function WatchedReputationInfo()
 end
 
 local function GetQuestXP(force)
-  if force or questDirty then
-    cachedQuestXP = GetCompletedQuestXP()
-    questDirty = false
+  if force or state.questDirty then
+    state.cachedQuestXP = GetCompletedQuestXP()
+    state.questDirty = false
   end
-  return cachedQuestXP
+  return state.cachedQuestXP
 end
 
 local function IsFramesUnlocked(db)
@@ -221,6 +235,7 @@ local function IsFramesUnlocked(db)
 end
 
 local function ShowUnlockPlaceholder()
+  local bar = state.bar
   if not bar then return end
   bar._huiUnlockPlaceholder = true
   bar:SetValue(0)
@@ -236,31 +251,33 @@ local function ShowUnlockPlaceholder()
 end
 
 local function Update(forceQuest)
+  local bar = state.bar
   if not bar then return end
   local db = NS:GetDB()
-  if not db or not db.xpbar.enabled then return end
+  local xpbar = db and db.xpbar
+  if not db or not xpbar or not xpbar.enabled then return end
 
-  if previewActive then
+  if state.previewActive then
     -- Toggle preview state from the options button.
     bar._huiUnlockPlaceholder = nil
     bar:SetValue(0.658)
     bar.overlay:SetValue(0)
     UpdateSegments(0.658, 1, 0.048, 0.064)
-    if db.xpbar.showText then
+    if xpbar.showText then
       bar.levelText:SetText("Level 57")
       bar.xpText:SetText("204931 / 311490")
       bar.pctText:SetText("65.8% (70.6%)")
-      if db.xpbar.showQuestText ~= false then
+      if xpbar.showQuestText ~= false then
         bar.detailText:SetText("Completed Quests: |cffffa11a4.8%|r - Rested: |cff5aa0ff6.4%|r")
       else
         bar.detailText:SetText("")
       end
-      if db.xpbar.showSessionTime then
+      if xpbar.showSessionTime then
         bar.sessionText:SetText("Session: 0:22")
       else
         bar.sessionText:SetText("")
       end
-      if db.xpbar.showRateText then
+      if xpbar.showRateText then
       bar.rateText:SetText("ETA 1h12m - 52k/hr")
       else
         bar.rateText:SetText("")
@@ -283,7 +300,7 @@ local function Update(forceQuest)
   local atMaxLevel = (xpMax == 0) or (level >= 80)
 
   if atMaxLevel then
-    if not db.xpbar.showAtMaxLevel then
+    if not xpbar.showAtMaxLevel then
       if unlocked then
         ShowUnlockPlaceholder()
       else
@@ -304,7 +321,7 @@ local function Update(forceQuest)
       bar.overlay:SetValue(0)
       UpdateSegments(cur, max, 0, 0)
 
-      if db.xpbar.showText then
+      if xpbar.showText then
         bar.levelText:SetText(rep.name or "Reputation")
         bar.xpText:SetText(("%d / %d"):format(cur, max))
         bar.pctText:SetText(("%.1f%%"):format(pct * 100))
@@ -319,7 +336,7 @@ local function Update(forceQuest)
       return
     end
 
-    if db.xpbar.hideAtMaxIfNoRep and not db.xpbar.showAtMaxLevel then
+    if xpbar.hideAtMaxIfNoRep and not xpbar.showAtMaxLevel then
       if unlocked then
         ShowUnlockPlaceholder()
       else
@@ -330,14 +347,14 @@ local function Update(forceQuest)
     end
 
     bar._huiUnlockPlaceholder = nil
-    if db.xpbar.showAtMaxLevel then
+    if xpbar.showAtMaxLevel then
       bar:SetValue(1)
     else
       bar:SetValue(0)
     end
     bar.overlay:SetValue(0)
     UpdateSegments(0, 1, 0, 0)
-    if db.xpbar.showText then
+    if xpbar.showText then
       bar.levelText:SetText("Max Level")
       bar.xpText:SetText("")
       bar.pctText:SetText("")
@@ -364,20 +381,20 @@ local function Update(forceQuest)
 
   local rested = GetXPExhaustion()
   local restedPct = 0
-  if rested and max > 0 then restedPct = math.min(1, (cur + rested) / max) end
+  if rested and max > 0 then restedPct = math_min(1, (cur + rested) / max) end
   bar.overlay:SetValue(restedPct)
 
   local questXP = GetQuestXP(forceQuest)
   UpdateSegments(cur, max, questXP, rested or 0)
 
-  if db.xpbar.showText then
-    local totalPct = math.min(1, (cur + (rested or 0) + questXP) / max)
+  if xpbar.showText then
+    local totalPct = math_min(1, (cur + (rested or 0) + questXP) / max)
     bar.levelText:SetText(("Level %d"):format(level))
     bar.xpText:SetText(("%d / %d"):format(cur, max))
     bar.pctText:SetText(("%.1f%% (%.1f%%)"):format(pct * 100, totalPct * 100))
     local questPct = (questXP > 0 and max > 0) and (questXP / max * 100) or 0
     local restedPctNum = (rested and max > 0) and (rested / max * 100) or 0
-    if db.xpbar.showQuestText ~= false then
+    if xpbar.showQuestText ~= false then
       bar.detailText:SetText(("Completed Quests: %s%.1f%%%s - Rested: %s%.1f%%%s"):format(
         QUEST_COLOR, questPct, COLOR_END,
         RESTED_COLOR, restedPctNum, COLOR_END
@@ -385,26 +402,26 @@ local function Update(forceQuest)
     else
       bar.detailText:SetText("")
     end
-    if db.xpbar.showSessionTime then
-      local elapsed = GetTime() - (sessionStart or GetTime())
+    if xpbar.showSessionTime then
+      local elapsed = GetTime() - (state.sessionStart or GetTime())
       bar.sessionText:SetText(("Session: %s"):format(FormatTime(elapsed)))
     else
       bar.sessionText:SetText("")
     end
-    if db.xpbar.showRateText then
-      local elapsed = GetTime() - (sessionStart or GetTime())
-      if sessionStartXP == nil then
-        sessionStartXP = cur
+    if xpbar.showRateText then
+      local elapsed = GetTime() - (state.sessionStart or GetTime())
+      if state.sessionStartXP == nil then
+        state.sessionStartXP = cur
       end
-      if cur < sessionStartXP then
-        sessionStartXP = cur
-        sessionStart = GetTime()
+      if cur < state.sessionStartXP then
+        state.sessionStartXP = cur
+        state.sessionStart = GetTime()
       end
-      local xpGained = math.max(0, cur - sessionStartXP)
+      local xpGained = math_max(0, cur - state.sessionStartXP)
       local rate = (elapsed > 0) and (xpGained / elapsed) * 3600 or 0
       local remaining = max - cur
       local eta = (rate > 0) and (remaining / rate) or 0
-      bar.rateText:SetText(("ETA %s - %s/hr"):format(FormatTime(eta), AbbreviateLargeNumbers(math.floor(rate + 0.5))))
+      bar.rateText:SetText(("ETA %s - %s/hr"):format(FormatTime(eta), AbbreviateLargeNumbers(math_floor(rate + 0.5))))
     else
       bar.rateText:SetText("")
     end
@@ -425,6 +442,7 @@ local function ShouldRealtimeUpdate(db)
 end
 
 function M:SetLocked(locked)
+  local bar = state.bar
   if not M.active or not bar or not bar._huiMover then return end
   if locked then
     bar:EnableMouse(false)
@@ -448,8 +466,10 @@ function M:Apply()
     self:Disable()
     return
   end
+  local xpbar = db.xpbar
   M.active = true
-  if not bar then Create() end
+  if not state.bar then Create() end
+  local bar = state.bar
 
   -- Refresh fonts when settings change
   if bar then
@@ -461,50 +481,50 @@ function M:Apply()
     ApplyBarFont(bar.rateText, 10)
   end
 
-  if db.xpbar.hideAtMaxIfNoRep == nil then
-    db.xpbar.hideAtMaxIfNoRep = true
+  if xpbar.hideAtMaxIfNoRep == nil then
+    xpbar.hideAtMaxIfNoRep = true
   end
-  if db.xpbar.showSessionTime == nil then
-    db.xpbar.showSessionTime = false
+  if xpbar.showSessionTime == nil then
+    xpbar.showSessionTime = false
   end
-  if db.xpbar.showRateText == nil then
-    db.xpbar.showRateText = false
+  if xpbar.showRateText == nil then
+    xpbar.showRateText = false
   end
-  if db.xpbar.showQuestText == nil then
-    db.xpbar.showQuestText = true
+  if xpbar.showQuestText == nil then
+    xpbar.showQuestText = true
   end
-  if db.xpbar.showAtMaxLevel == nil then
-    db.xpbar.showAtMaxLevel = false
+  if xpbar.showAtMaxLevel == nil then
+    xpbar.showAtMaxLevel = false
   end
-  if not sessionStart then
-    sessionStart = GetTime()
-    sessionStartXP = UnitXP("player") or 0
+  if not state.sessionStart then
+    state.sessionStart = GetTime()
+    state.sessionStartXP = UnitXP("player") or 0
   end
 
-  bar:SetSize(db.xpbar.width, db.xpbar.height)
-  bar:SetScale(db.xpbar.scale)
+  bar:SetSize(xpbar.width, xpbar.height)
+  bar:SetScale(xpbar.scale)
   if bar.detailText then
     bar.detailText:SetPoint("TOP", bar, "BOTTOM", 0, -4)
   end
   bar:ClearAllPoints()
-  bar:SetPoint(db.xpbar.anchor, UIParent, db.xpbar.anchor, db.xpbar.x, db.xpbar.y)
+  bar:SetPoint(xpbar.anchor, UIParent, xpbar.anchor, xpbar.x, xpbar.y)
   local tex = bar:GetStatusBarTexture()
   if tex and tex.SetGradient then
     tex:SetGradient("HORIZONTAL", CreateColor(0.45, 0.3, 0.95), CreateColor(0.7, 0.45, 1.0))
   end
 
-  if not M.eventFrame then
-    M.eventFrame = CreateFrame("Frame")
-    M.eventFrame:RegisterEvent("PLAYER_XP_UPDATE")
-    M.eventFrame:RegisterEvent("UPDATE_EXHAUSTION")
-    M.eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
-    M.eventFrame:RegisterEvent("UPDATE_FACTION")
-    M.eventFrame:RegisterEvent("QUEST_LOG_UPDATE")
-    M.eventFrame:RegisterEvent("QUEST_LOG_CRITERIA_UPDATE")
-    M.eventFrame:SetScript("OnEvent", function(self, event)
+  if not state.eventFrame then
+    state.eventFrame = CreateFrame("Frame")
+    state.eventFrame:RegisterEvent("PLAYER_XP_UPDATE")
+    state.eventFrame:RegisterEvent("UPDATE_EXHAUSTION")
+    state.eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
+    state.eventFrame:RegisterEvent("UPDATE_FACTION")
+    state.eventFrame:RegisterEvent("QUEST_LOG_UPDATE")
+    state.eventFrame:RegisterEvent("QUEST_LOG_CRITERIA_UPDATE")
+    state.eventFrame:SetScript("OnEvent", function(self, event)
       if not M.active then return end
       if event == "QUEST_LOG_UPDATE" or event == "QUEST_LOG_CRITERIA_UPDATE" then
-        questDirty = true
+        state.questDirty = true
         Update(true)
       else
         Update(false)
@@ -515,29 +535,29 @@ function M:Apply()
   M:SetLocked(db.general.framesLocked)
 
   HideBlizzardXPTrackingBars()
-  if not hideBlizzardHooked then
+  if not state.hideBlizzardHooked then
     if StatusTrackingBarManager and hooksecurefunc then
       hooksecurefunc(StatusTrackingBarManager, "UpdateBarsShown", HideBlizzardXPTrackingBars)
     elseif MainStatusTrackingBarContainer and hooksecurefunc then
       hooksecurefunc(MainStatusTrackingBarContainer, "UpdateBarsShown", HideBlizzardXPTrackingBars)
     end
-    hideBlizzardHooked = true
+    state.hideBlizzardHooked = true
   end
-  if not hideBlizzardTicker and C_Timer and C_Timer.NewTicker then
-    hideBlizzardTicker = C_Timer.NewTicker(3, HideBlizzardXPTrackingBars)
+  if not state.hideBlizzardTicker and C_Timer and C_Timer.NewTicker then
+    state.hideBlizzardTicker = C_Timer.NewTicker(3, HideBlizzardXPTrackingBars)
   end
 
   -- Use C_Timer instead of OnUpdate for better performance
   if ShouldRealtimeUpdate(db) then
-    if not updateTimer then
-      updateTimer = C_Timer.NewTicker(UPDATE_INTERVAL, function()
+    if not state.updateTimer then
+      state.updateTimer = C_Timer.NewTicker(UPDATE_INTERVAL, function()
         Update(false)
       end)
     end
   else
-    if updateTimer then
-      updateTimer:Cancel()
-      updateTimer = nil
+    if state.updateTimer then
+      state.updateTimer:Cancel()
+      state.updateTimer = nil
     end
   end
 
@@ -545,31 +565,32 @@ function M:Apply()
 end
 
 function M:Preview()
-  previewActive = not previewActive
+  state.previewActive = not state.previewActive
   Update()
-  return previewActive
+  return state.previewActive
 end
 
 function M:Disable()
+  local bar = state.bar
   M.active = false
-  previewActive = false
+  state.previewActive = false
   if bar then
     bar._huiUnlockPlaceholder = nil
   end
   if bar then bar:Hide() end
-  if updateTimer then
-    updateTimer:Cancel()
-    updateTimer = nil
+  if state.updateTimer then
+    state.updateTimer:Cancel()
+    state.updateTimer = nil
   end
-  if hideBlizzardTicker then
-    hideBlizzardTicker:Cancel()
-    hideBlizzardTicker = nil
+  if state.hideBlizzardTicker then
+    state.hideBlizzardTicker:Cancel()
+    state.hideBlizzardTicker = nil
   end
-  if M.eventFrame then
-    M.eventFrame:UnregisterAllEvents()
-    M.eventFrame:SetScript("OnEvent", nil)
-    M.eventFrame:Hide()
-    M.eventFrame:SetParent(nil)
-    M.eventFrame = nil
+  if state.eventFrame then
+    state.eventFrame:UnregisterAllEvents()
+    state.eventFrame:SetScript("OnEvent", nil)
+    state.eventFrame:Hide()
+    state.eventFrame:SetParent(nil)
+    state.eventFrame = nil
   end
 end
