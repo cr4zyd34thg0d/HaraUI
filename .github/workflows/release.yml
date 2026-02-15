@@ -10,6 +10,7 @@ env:
 
 jobs:
   release:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write  # needed for creating GitHub Releases
@@ -41,19 +42,88 @@ jobs:
       - name: Package addon
         uses: BigWigsMods/packager@v2
 
-      - name: Generate changelog
+      - name: Generate release notes from tag range
         id: changelog
         run: |
-          # Use the tagged commit's own message as the changelog.
-          # Strip the first line (subject) and Co-Authored-By, keep the body.
-          BODY=$(git log -1 --pretty=format:"%b" HEAD \
-            | grep -v "Co-Authored-By" \
-            | sed '/^$/d')
+          TAG="${{ steps.meta.outputs.tag }}"
+          PREV_TAG="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..${TAG}"
+            RANGE_LABEL="${PREV_TAG} -> ${TAG}"
+          else
+            RANGE="${TAG}"
+            RANGE_LABEL="start of history -> ${TAG}"
+          fi
+
+          normalize_subject() {
+            local raw="$1"
+            local cleaned
+            cleaned="$(echo "$raw" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^[A-Za-z]+(\([^)]+\))?!?:[[:space:]]*//')"
+            if [ -z "$cleaned" ]; then
+              cleaned="$raw"
+            fi
+            cleaned="$(echo "$cleaned" | sed -E 's/[[:space:]]+/ /g')"
+            local first="${cleaned:0:1}"
+            local rest="${cleaned:1}"
+            printf '%s%s' "$(echo "$first" | tr '[:lower:]' '[:upper:]')" "$rest"
+          }
+
+          added=()
+          changed=()
+          fixed=()
+
+          while IFS= read -r subject; do
+            [ -z "$subject" ] && continue
+            lower="$(echo "$subject" | tr '[:upper:]' '[:lower:]')"
+            clean="$(normalize_subject "$subject")"
+            if [[ "$lower" =~ ^(feat|feature|add|added|new)(\(|:|[[:space:]]) ]]; then
+              added+=("$clean")
+            elif [[ "$lower" =~ ^(fix|bug|hotfix|patch|regression)(\(|:|[[:space:]]) ]]; then
+              fixed+=("$clean")
+            else
+              changed+=("$clean")
+            fi
+          done < <(git log --no-merges --pretty=format:'%s' "$RANGE")
+
+          if [ ${#added[@]} -eq 0 ] && [ ${#changed[@]} -eq 0 ] && [ ${#fixed[@]} -eq 0 ]; then
+            changed+=("No user-facing changes recorded in this tag range.")
+          fi
+
+          BODY="$(
+            {
+              echo "## Release notes"
+              echo
+              echo "Range: ${RANGE_LABEL}"
+              echo
+              if [ ${#added[@]} -gt 0 ]; then
+                echo "### Added"
+                for item in "${added[@]}"; do
+                  echo "- ${item}"
+                done
+                echo
+              fi
+              if [ ${#changed[@]} -gt 0 ]; then
+                echo "### Changed"
+                for item in "${changed[@]}"; do
+                  echo "- ${item}"
+                done
+                echo
+              fi
+              if [ ${#fixed[@]} -gt 0 ]; then
+                echo "### Fixed"
+                for item in "${fixed[@]}"; do
+                  echo "- ${item}"
+                done
+              fi
+            }
+          )"
 
           {
             echo "body<<CHANGELOG_EOF"
             echo "$BODY"
             echo "CHANGELOG_EOF"
+            echo "range=$RANGE_LABEL"
           } >> "$GITHUB_OUTPUT"
 
       - name: Find release zip

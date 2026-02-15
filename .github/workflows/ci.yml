@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify TOC version token
+        run: |
+          if ! grep -q '^## Version: @project-version@$' HaraUI/HaraUI.toc; then
+            echo "::error::HaraUI/HaraUI.toc must contain: ## Version: @project-version@"
+            exit 1
+          fi
+
+      - name: Verify packager metadata exists
+        run: |
+          if ! grep -q '^package-as: HaraUI$' .pkgmeta; then
+            echo "::error::.pkgmeta must define package-as: HaraUI"
+            exit 1
+          fi
+          if grep -q '^plain-copy:' .pkgmeta; then
+            echo "::error::.pkgmeta must not use plain-copy when TOC token replacement is required"
+            exit 1
+          fi

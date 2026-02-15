@@ -1,126 +1,96 @@
-# HaraUI — CI / Publishing Reference
+# HaraUI - CI / Publishing Reference
 
-## Release Pipeline (GitHub Actions)
+## Workflow Triggers
 
-When you push a git tag matching `v*`, the workflow at `.github/workflows/release.yml` runs automatically:
+- `.github/workflows/ci.yml` runs on `push` to branches and on `pull_request`.
+- `.github/workflows/ci.yml` is validation-only and never publishes artifacts.
+- `.github/workflows/release.yml` runs only on `push` tags matching `v*`.
+- Only `.github/workflows/release.yml` can package, create a GitHub Release, and upload to CurseForge.
 
-1. **Package** — BigWigsMods/packager builds a distributable `.zip` from the repo, guided by `.pkgmeta`. The `@project-version@` token in `HaraUI/HaraUI.toc` is replaced with the tag name (e.g. `v2.0.3`).
-2. **GitHub Release** — A release is created for the tag with auto-generated notes and the zip attached.
-3. **CurseForge Upload** — The same zip is uploaded to CurseForge with the correct release type.
+## Release Pipeline (Tags Only)
 
-### Tag → Release Type Mapping
+When you push a tag that matches `v*`, `.github/workflows/release.yml` executes:
+
+1. Parse tag metadata and map tag to release type (`release`, `beta`, `alpha`).
+2. Package with `BigWigsMods/packager@v2` using `.pkgmeta`.
+3. Stamp version from tag into the packaged TOC:
+   - Source file keeps `## Version: @project-version@` in `HaraUI/HaraUI.toc`.
+   - Packager replaces `@project-version@` with the pushed tag value in the release zip.
+4. Generate release notes from commit subjects in the current tag range:
+   - Range is `previous_tag..current_tag` (or start of history for the first tag).
+   - Notes are grouped into `Added`, `Changed`, and `Fixed` bullets.
+   - The same generated notes body is used for both GitHub Release and CurseForge.
+5. Create GitHub Release for the tag and attach the generated zip.
+6. Upload the same zip to CurseForge with the same release notes.
+
+### Tag -> Release Type Mapping
 
 | Tag pattern            | Release type | Example           |
 |------------------------|--------------|-------------------|
 | `v2.0.3`               | `release`    | Stable release    |
-| `v2.0.3-beta.1`        | `beta`       | Beta / pre-release|
-| `v2.0.3-alpha.1`       | `alpha`      | Alpha / dev build |
+| `v2.0.3-beta.1`        | `beta`       | Beta pre-release  |
+| `v2.0.3-alpha.1`       | `alpha`      | Alpha dev build   |
 
----
+## Safe Push Behavior
+
+- Normal branch pushes (no tag) run `CI` only.
+- Normal branch pushes do not create a GitHub Release.
+- Normal branch pushes do not upload to CurseForge.
 
 ## How to Release
 
-### 1. Ensure main branch is clean
+1. Ensure your branch is ready:
 
 ```bash
 git checkout main
 git pull
-git status  # should be clean
+git status
 ```
 
-### 2. Create a tag
+2. Create a tag:
 
-**Stable release:**
 ```bash
+# Stable
 git tag v2.0.3
-```
 
-**Beta:**
-```bash
+# Beta
 git tag v2.0.3-beta.1
-```
 
-**Alpha:**
-```bash
+# Alpha
 git tag v2.0.3-alpha.1
 ```
 
-### 3. Push the tag
+3. Push the tag:
 
 ```bash
 git push origin v2.0.3
 ```
 
-Or push all tags at once:
-```bash
-git push origin --tags
-```
+## Required GitHub Secrets and Config
 
-### 4. Monitor
+| Name                     | Purpose |
+|--------------------------|---------|
+| `CURSEFORGE_API_TOKEN`   | Required by `itsmeow/curseforge-upload@v3` |
 
-- Go to **Actions** tab in GitHub — the "Release" workflow should be running.
-- Once complete, check:
-  - GitHub Releases page for the new release + zip download
-  - CurseForge project page for the new file
-
----
-
-## Required GitHub Secrets
-
-| Secret name              | Where to get it                                                                 |
-|--------------------------|---------------------------------------------------------------------------------|
-| `CURSEFORGE_API_TOKEN`   | [CurseForge API Tokens](https://authors.curseforge.com/account/api-tokens) — generate a token with upload permissions |
-
-### Required Workflow Config
-
-In `.github/workflows/release.yml`, set the `CURSEFORGE_PROJECT_ID` env var to your CurseForge project's numeric ID. You can find this on your project's sidebar on the CurseForge author dashboard.
-
-```yaml
-env:
-  CURSEFORGE_PROJECT_ID: "123456"  # replace with actual ID
-```
-
----
-
-## How to Roll Back a Bad Release
-
-### Delete the tag and re-tag
-
-```bash
-# Delete remote tag
-git push origin --delete v2.0.3
-
-# Delete local tag
-git tag -d v2.0.3
-
-# Fix the issue, commit, then re-tag
-git tag v2.0.4
-git push origin v2.0.4
-```
-
-### Delete a GitHub Release
-
-Go to the GitHub Releases page → find the release → click **Delete**.
-
-### Remove from CurseForge
-
-Log into the CurseForge author dashboard → navigate to the file → delete it manually. CurseForge does not support API-based file deletion.
-
----
+`CURSEFORGE_PROJECT_ID` is set in `.github/workflows/release.yml` and must match the CurseForge project numeric ID.
 
 ## Version Stamping
 
-- **Source of truth:** The git tag. No version is hardcoded in the source tree.
-- **Mechanism:** `HaraUI/HaraUI.toc` contains `## Version: @project-version@`. The BigWigsMods packager replaces this token with the tag name at build time.
-- **Local development:** When running the addon directly from the repo (not packaged), the version line reads literally `@project-version@`. This is normal — WoW treats it as a string. The in-addon version tracker (`Core/VersionTracker.lua`) handles version comparison separately.
+- Source of truth is the git tag used for release.
+- `HaraUI/HaraUI.toc` intentionally stores `## Version: @project-version@` in source control.
+- The packaged artifact gets the concrete tag value during the release workflow.
 
----
+## Legacy Script Status
+
+- `scripts/release-haraui.ps1` was removed.
+- It was not used by CI and referenced a missing `stamp-version-metadata.ps1` script.
+- Use GitHub Actions tag releases as the single publishing path.
 
 ## File Reference
 
-| File                              | Purpose                                           |
-|-----------------------------------|---------------------------------------------------|
-| `.pkgmeta`                        | Packager config: folder mapping, ignore rules     |
-| `.github/workflows/release.yml`   | Tag-triggered CI: package → release → upload      |
-| `HaraUI/HaraUI.toc`          | Addon manifest (contains `@project-version@` token)|
-| `scripts/release-haraui.ps1`      | Legacy local release script (pre-CI)              |
+| File                            | Purpose |
+|---------------------------------|---------|
+| `.github/workflows/ci.yml`      | Branch/PR validation only (safe push path) |
+| `.github/workflows/release.yml` | Tag-triggered package + GitHub Release + CurseForge upload |
+| `.pkgmeta`                      | Packager layout and ignore rules |
+| `HaraUI/HaraUI.toc`             | TOC manifest with `@project-version@` token |
