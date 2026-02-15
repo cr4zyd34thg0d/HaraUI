@@ -7145,6 +7145,7 @@ function M:Apply()
   if CharacterFrame and not S.hookedSizeChanged then
     CharacterFrame:HookScript("OnSizeChanged", function(_, w, h)
       if not M.active then return end
+      if S.refreshInProgress then return end
       local liveDB = NS and NS.GetDB and NS:GetDB() or nil
       if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then return end
       if not (CharacterFrame and CharacterFrame:IsShown()) then return end
