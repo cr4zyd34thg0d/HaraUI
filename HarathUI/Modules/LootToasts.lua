@@ -18,12 +18,17 @@ local M = {}
 NS:RegisterModule("loot", M)
 M.active = false
 
-local pool, active = {}, {}
-local anchorFrame
-local pendingIcons = nil
-local toastTimers = {}
+local state = {
+  pool = {},
+  active = {},
+  anchorFrame = nil,
+  pendingIcons = nil,
+  toastTimers = {},
+  eventFrame = nil,
+}
 local ShowItemTooltip
 
+-- Parser
 local function ResolveToastItemData(toast)
   if not toast then return nil, nil end
   local itemID = toast._huiItemID
@@ -105,27 +110,28 @@ local function ApplyToastLayout(t, db)
 end
 
 local function EnsureAnchor()
-  if anchorFrame then return anchorFrame end
-  anchorFrame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-  anchorFrame:SetSize(24, 24)
-  anchorFrame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -80, -220)
-  anchorFrame:Hide()
+  if state.anchorFrame then return state.anchorFrame end
+  state.anchorFrame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+  state.anchorFrame:SetSize(24, 24)
+  state.anchorFrame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -80, -220)
+  state.anchorFrame:Hide()
 
-  anchorFrame.tex = anchorFrame:CreateTexture(nil, "OVERLAY")
-  anchorFrame.tex:SetAllPoints(true)
-  anchorFrame.tex:SetColorTexture(1, 1, 1, 0.08)
+  state.anchorFrame.tex = state.anchorFrame:CreateTexture(nil, "OVERLAY")
+  state.anchorFrame.tex:SetAllPoints(true)
+  state.anchorFrame.tex:SetColorTexture(1, 1, 1, 0.08)
 
-  anchorFrame.label = anchorFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  anchorFrame.label:SetPoint("CENTER")
-  anchorFrame.label:SetText("Loot")
-  ApplyToastFont(anchorFrame.label, 12)
+  state.anchorFrame.label = state.anchorFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  state.anchorFrame.label:SetPoint("CENTER")
+  state.anchorFrame.label:SetText("Loot")
+  ApplyToastFont(state.anchorFrame.label, 12)
 
-  NS:MakeMovable(anchorFrame, "loot", "Loot Toasts (drag)")
-  return anchorFrame
+  NS:MakeMovable(state.anchorFrame, "loot", "Loot Toasts (drag)")
+  return state.anchorFrame
 end
 
+-- Pool
 local function AcquireToast()
-  local t = table.remove(pool)
+  local t = table.remove(state.pool)
   if t then return t end
 
   t = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
@@ -278,12 +284,13 @@ local function LayoutToasts()
   local anchor = EnsureAnchor()
   anchor:ClearAllPoints()
   anchor:SetPoint(point, UIParent, point, x, y)
-  for i, t in ipairs(active) do
+  for i, t in ipairs(state.active) do
     t:ClearAllPoints()
     t:SetPoint(point, anchor, point, 0, -((i - 1) * 54))
   end
 end
 
+-- Timer
 local function ReleaseToast(t)
   if t and t.SetScript then
     t:SetScript("OnUpdate", nil)
@@ -292,11 +299,11 @@ local function ReleaseToast(t)
     GameTooltip:Hide()
   end
   t:Hide()
-  if toastTimers[t] then
-    toastTimers[t]:Cancel()
-    toastTimers[t] = nil
+  if state.toastTimers[t] then
+    state.toastTimers[t]:Cancel()
+    state.toastTimers[t] = nil
   end
-  table.insert(pool, t)
+  table.insert(state.pool, t)
 end
 
 local function HexToRGB(hex)
@@ -373,6 +380,7 @@ ShowItemTooltip = function(owner, toast)
   GameTooltip:Show()
 end
 
+-- Render
 local function ShowToast(icon, text, durationOverride, itemID, itemLink, itemName)
   local db = NS:GetDB()
   if not db.loot.enabled then return nil end
@@ -392,7 +400,7 @@ local function ShowToast(icon, text, durationOverride, itemID, itemLink, itemNam
   -- Apply font settings to toast text
   ApplyToastFont(t.text, 12)
 
-  table.insert(active, 1, t)
+  table.insert(state.active, 1, t)
 
   LayoutToasts()
   t:Show()
@@ -412,13 +420,13 @@ local function ShowToast(icon, text, durationOverride, itemID, itemLink, itemNam
   end
 
   local duration = durationOverride or db.loot.duration or 3.5
-  if toastTimers[t] then
-    toastTimers[t]:Cancel()
+  if state.toastTimers[t] then
+    state.toastTimers[t]:Cancel()
   end
-  toastTimers[t] = C_Timer.NewTimer(duration, function()
-    for i = #active, 1, -1 do
-      if active[i] == t then
-        table.remove(active, i)
+  state.toastTimers[t] = C_Timer.NewTimer(duration, function()
+    for i = #state.active, 1, -1 do
+      if state.active[i] == t then
+        table.remove(state.active, i)
         break
       end
     end
@@ -443,8 +451,8 @@ local function UpdateToastIcon(toast, itemID)
 end
 
 local function TryUpdatePending(itemID)
-  if not pendingIcons then return true end
-  local list = pendingIcons[itemID]
+  if not state.pendingIcons then return true end
+  local list = state.pendingIcons[itemID]
   if not list then return true end
   local anyUpdated = false
   for i = #list, 1, -1 do
@@ -453,7 +461,7 @@ local function TryUpdatePending(itemID)
     end
   end
   if anyUpdated then
-    pendingIcons[itemID] = nil
+    state.pendingIcons[itemID] = nil
     return true
   end
   return false
@@ -551,14 +559,14 @@ end
 local function FindToastByItem(itemID, link)
   local id = itemID and tonumber(itemID) or nil
   if id then
-    for _, t in ipairs(active) do
+    for _, t in ipairs(state.active) do
       if t._huiItemID == id then
         return t
       end
     end
   end
   if not link then return nil end
-  for _, t in ipairs(active) do
+  for _, t in ipairs(state.active) do
     if t._huiItemLink == link then
       return t
     end
@@ -573,9 +581,9 @@ local function UpdateToastCount(toast, link, count)
   toast.text:SetText(("%s |cffffffffx%d|r"):format(link, toast._huiCount))
 
   -- Clean up old timer before creating new one
-  if toastTimers[toast] then
-    toastTimers[toast]:Cancel()
-    toastTimers[toast] = nil
+  if state.toastTimers[toast] then
+    state.toastTimers[toast]:Cancel()
+    state.toastTimers[toast] = nil
   end
 end
 
@@ -597,10 +605,10 @@ local function OnLoot(msg)
     local existing = FindToastByItem(itemID, itemLink)
     if existing then
       UpdateToastCount(existing, itemLink, count or 1)
-      toastTimers[existing] = C_Timer.NewTimer(db.loot.duration or 3.5, function()
-        for i = #active, 1, -1 do
-          if active[i] == existing then
-            table.remove(active, i)
+      state.toastTimers[existing] = C_Timer.NewTimer(db.loot.duration or 3.5, function()
+        for i = #state.active, 1, -1 do
+          if state.active[i] == existing then
+            table.remove(state.active, i)
             break
           end
         end
@@ -639,10 +647,10 @@ local function OnSpecialLoot(link, quantity, isUpgraded)
     local existing = FindToastByItem(itemID, itemLink)
     if existing then
       UpdateToastCount(existing, itemLink, quantity or 1)
-      toastTimers[existing] = C_Timer.NewTimer(db.loot.duration or 3.5, function()
-        for i = #active, 1, -1 do
-          if active[i] == existing then
-            table.remove(active, i)
+      state.toastTimers[existing] = C_Timer.NewTimer(db.loot.duration or 3.5, function()
+        for i = #state.active, 1, -1 do
+          if state.active[i] == existing then
+            table.remove(state.active, i)
             break
           end
         end
@@ -696,15 +704,15 @@ function M:Apply()
   end
   M.active = true
 
-  if not M.eventFrame then
-    M.eventFrame = CreateFrame("Frame")
-    M.eventFrame:RegisterEvent("CHAT_MSG_LOOT")
-    M.eventFrame:RegisterEvent("CHAT_MSG_MONEY")
-    M.eventFrame:RegisterEvent("CHAT_MSG_CURRENCY")
-    M.eventFrame:RegisterEvent("SHOW_LOOT_TOAST")
-    M.eventFrame:RegisterEvent("SHOW_LOOT_TOAST_UPGRADE")
+  if not state.eventFrame then
+    state.eventFrame = CreateFrame("Frame")
+    state.eventFrame:RegisterEvent("CHAT_MSG_LOOT")
+    state.eventFrame:RegisterEvent("CHAT_MSG_MONEY")
+    state.eventFrame:RegisterEvent("CHAT_MSG_CURRENCY")
+    state.eventFrame:RegisterEvent("SHOW_LOOT_TOAST")
+    state.eventFrame:RegisterEvent("SHOW_LOOT_TOAST_UPGRADE")
     -- No GET_ITEM_INFO_RECEIVED handling; we drop uncached items like ls_Toasts.
-    M.eventFrame:SetScript("OnEvent", function(_, event, ...)
+    state.eventFrame:SetScript("OnEvent", function(_, event, ...)
       if not M.active then return end
       if event == "CHAT_MSG_LOOT" then
         local msg = ...
@@ -729,7 +737,7 @@ function M:Apply()
     end)
   end
 
-  for _, t in ipairs(active) do
+  for _, t in ipairs(state.active) do
     ApplyToastLayout(t, db)
     t:SetScale(db.loot.scale or 1.0)
   end
@@ -776,20 +784,20 @@ end
 
 function M:Disable()
   M.active = false
-  if M.eventFrame then
-    M.eventFrame:UnregisterAllEvents()
-    M.eventFrame:SetScript("OnEvent", nil)
-    M.eventFrame = nil
+  if state.eventFrame then
+    state.eventFrame:UnregisterAllEvents()
+    state.eventFrame:SetScript("OnEvent", nil)
+    state.eventFrame = nil
   end
-  for i = #active, 1, -1 do
-    ReleaseToast(active[i])
-    table.remove(active, i)
+  for i = #state.active, 1, -1 do
+    ReleaseToast(state.active[i])
+    table.remove(state.active, i)
   end
-  for toast, timer in pairs(toastTimers) do
+  for toast, timer in pairs(state.toastTimers) do
     if timer and timer.Cancel then timer:Cancel() end
-    toastTimers[toast] = nil
+    state.toastTimers[toast] = nil
   end
-  if anchorFrame then
-    anchorFrame:Hide()
+  if state.anchorFrame then
+    state.anchorFrame:Hide()
   end
 end
