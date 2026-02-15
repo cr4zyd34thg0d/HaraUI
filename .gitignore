@@ -5,6 +5,7 @@
 !/.gitignore
 !/README.md
 !/REFACTOR_PLAN.md
+!/agents.md
 !/.pkgmeta
 !/.github/
 !/.github/**
