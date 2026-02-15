@@ -41,6 +41,32 @@ jobs:
       - name: Package addon
         uses: BigWigsMods/packager@v2
 
+      - name: Generate changelog
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          # Find the previous tag (skip current)
+          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${TAG}$" | head -1)
+          if [ -z "$PREV_TAG" ]; then
+            # First tag ever — use all commits
+            RANGE="HEAD"
+          else
+            RANGE="${PREV_TAG}..HEAD"
+          fi
+
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "## What's Changed"
+            echo ""
+            git log "$RANGE" --pretty=format:"- %s" --no-merges \
+              | grep -v "Co-Authored-By" \
+              | grep -v "^$"
+            echo ""
+            echo ""
+            echo "**Full diff**: https://github.com/${{ github.repository }}/compare/${PREV_TAG:-HEAD~10}...${TAG}"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Find release zip
         id: zip
         run: |
@@ -57,8 +83,8 @@ jobs:
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: HarathUI ${{ steps.meta.outputs.tag }}
+          body: ${{ steps.changelog.outputs.body }}
           prerelease: ${{ steps.meta.outputs.release_type != 'release' }}
-          generate_release_notes: true
           files: ${{ steps.zip.outputs.path }}
 
       - name: Upload to CurseForge
@@ -70,5 +96,5 @@ jobs:
           file_path: ${{ steps.zip.outputs.path }}
           display_name: HarathUI ${{ steps.meta.outputs.version }}
           release_type: ${{ steps.meta.outputs.release_type }}
-          changelog: "See [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.meta.outputs.tag }})"
+          changelog: ${{ steps.changelog.outputs.body }}
           changelog_type: markdown
