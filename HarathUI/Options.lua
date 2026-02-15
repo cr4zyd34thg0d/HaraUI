@@ -62,6 +62,7 @@ end
 
 local Theme = NS.OptionsTheme or {}
 local Widgets = NS.OptionsWidgets or {}
+local Pages = NS.OptionsPages or {}
 
 local ORANGE = Theme.ORANGE
 local ORANGE_SIZE = Theme.ORANGE_SIZE
@@ -72,9 +73,7 @@ local GetUIFontPath = Theme.GetUIFontPath
 local SetUIFont = Theme.SetUIFont
 local ApplyUIFont = Theme.ApplyUIFont
 local ApplyDropdownFont = Theme.ApplyDropdownFont
-local RightAlignDropdownText = Theme.RightAlignDropdownText
 local ApplyDarkBackdrop = Widgets.ApplyDarkBackdrop
-local MakeSection = Widgets.MakeSection
 local MakeGlassCard = Widgets.MakeGlassCard
 local MakeAccentDivider = Widgets.MakeAccentDivider
 local Title = Widgets.Title
@@ -84,19 +83,8 @@ local MakeCheckbox = Widgets.MakeCheckbox
 local ApplyToggleSkin = Widgets.ApplyToggleSkin
 local MakeSlider = Widgets.MakeSlider
 local Round2 = Widgets.Round2
-local OpenColorPickerRGB = Widgets.OpenColorPickerRGB
 local MakeColorSwatch = Widgets.MakeColorSwatch
 local MakeValueChip = Widgets.MakeValueChip
-
-local CHECKBOX_GAP = -2
-local CAST_CHECKBOX_GAP = CHECKBOX_GAP
--- Layout constants (global defaults)
-local FIRST_CONTROL_Y = -128        -- First control below Enable Module
-local GROUP_GAP = -48               -- Between major groups
-local BUTTON_TO_SLIDER_GAP = GROUP_GAP
-local SLIDER_GAP = -18              -- Between stacked sliders
-local SLIDER_TO_CHECKBOX_GAP = GROUP_GAP
-local DROPDOWN_GAP = -10            -- Between dropdown groups
 
 -- =========================================================
 -- =========================================================
@@ -129,12 +117,38 @@ function NS:InitOptions()
     -- Remove outer border so each panel has its own rounded border.
     panel.border:SetBackdropBorderColor(0, 0, 0, 0)
 
+    local function ApplyCharacterGradient(frame, baseTex)
+      if not frame or not baseTex then return end
+      baseTex:SetColorTexture(0, 0, 0, 0.90)
+
+      local g = frame._huiCharacterGradient
+      if not g then
+        g = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
+        frame._huiCharacterGradient = g
+      end
+      g:SetAllPoints(baseTex)
+      g:SetTexture("Interface/Buttons/WHITE8x8")
+
+      -- Match Character Sheet black -> purple panel gradient.
+      if g.SetGradient and CreateColor then
+        g:SetGradient(
+          "VERTICAL",
+          CreateColor(0, 0, 0, 0.90),
+          CreateColor(0.08, 0.02, 0.12, 0.90)
+        )
+      elseif g.SetGradientAlpha then
+        g:SetGradientAlpha("VERTICAL", 0, 0, 0, 0.90, 0.08, 0.02, 0.12, 0.90)
+      else
+        g:SetColorTexture(0.08, 0.02, 0.12, 0.90)
+      end
+    end
+
     local nav = CreateFrame("Frame", nil, panel, "BackdropTemplate")
     nav:SetPoint("TOPLEFT", 0, 0)
     nav:SetPoint("BOTTOMLEFT", 0, 0)
     nav:SetWidth(200)
     ApplyDarkBackdrop(nav)
-    nav.bg:SetColorTexture(0.15, 0.15, 0.16, 0.98)
+    ApplyCharacterGradient(nav, nav.bg)
     nav.border:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.8)
     RegisterTheme(function(c)
       if nav.border and nav.border.SetBackdropBorderColor then
@@ -152,29 +166,23 @@ function NS:InitOptions()
       edgeSize = 1,
       insets = { left = 0, right = 0, top = 0, bottom = 0 },
     })
-    -- Match header tone to the main nav panel.
-    navHeader:SetBackdropColor(0.15, 0.15, 0.16, 0.98)
+    -- Match header tone to the black/purple nav panel.
+    navHeader:SetBackdropColor(0, 0, 0, 0.90)
     navHeader:SetBackdropBorderColor(0, 0, 0, 0)
-
-    -- Logo in header area (replaces text title).
-    local navLogo = navHeader:CreateTexture(nil, "OVERLAY")
-    navLogo:SetPoint("CENTER", 0, 0)
-    -- Constrain logo to the padded header area.
-    navLogo:SetSize(170, 56)
-    navLogo:SetTexCoord(0, 1, 0, 1)
-    navLogo:SetTexture("Interface\\AddOns\\HarathUI\\Media\\logo.tga")
-    navLogo:SetVertexColor(ORANGE[1], ORANGE[2], ORANGE[3], 1)
-    RegisterTheme(function(c)
-      if navLogo and navLogo.SetVertexColor then
-        navLogo:SetVertexColor(c[1], c[2], c[3], 1)
-      end
-    end)
-
-    local navLogoCaps = navHeader:CreateTexture(nil, "OVERLAY")
-    navLogoCaps:SetPoint("TOPLEFT", navLogo, "TOPLEFT", 0, 0)
-    navLogoCaps:SetPoint("BOTTOMRIGHT", navLogo, "BOTTOMRIGHT", 0, 0)
-    navLogoCaps:SetTexCoord(0, 1, 0, 1)
-    navLogoCaps:SetTexture("Interface\\AddOns\\HarathUI\\Media\\logoCaps.tga")
+    local navHeaderGradient = navHeader:CreateTexture(nil, "BACKGROUND", nil, 1)
+    navHeaderGradient:SetAllPoints()
+    navHeaderGradient:SetTexture("Interface/Buttons/WHITE8x8")
+    if navHeaderGradient.SetGradient and CreateColor then
+      navHeaderGradient:SetGradient(
+        "VERTICAL",
+        CreateColor(0, 0, 0, 0.90),
+        CreateColor(0.08, 0.02, 0.12, 0.90)
+      )
+    elseif navHeaderGradient.SetGradientAlpha then
+      navHeaderGradient:SetGradientAlpha("VERTICAL", 0, 0, 0, 0.90, 0.08, 0.02, 0.12, 0.90)
+    else
+      navHeaderGradient:SetColorTexture(0.08, 0.02, 0.12, 0.90)
+    end
 
     -- Line under logo to match settings pages (inset, lower).
     local navLine = nav:CreateTexture(nil, "OVERLAY")
@@ -190,6 +198,7 @@ function NS:InitOptions()
 
     local navVersion = nav:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     navVersion:SetPoint("BOTTOMRIGHT", -12, 10)
+    navVersion:SetJustifyH("RIGHT")
     ApplyUIFont(navVersion, 10, "OUTLINE", ORANGE)
 
     local navGitIndicator = nav:CreateTexture(nil, "OVERLAY")
@@ -256,18 +265,46 @@ function NS:InitOptions()
     end
 
     local content = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-    -- Small gap so the two panel borders read as separate.
-    content:SetPoint("TOPLEFT", nav, "TOPRIGHT", 3, 0)
+    -- Left pane removed: content fills the full options window.
+    content:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
     content:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
     ApplyDarkBackdrop(content)
-    -- Match the left nav panel tone.
-    content.bg:SetColorTexture(0.15, 0.15, 0.16, 0.98)
+    -- Match the left nav panel black/purple gradient.
+    ApplyCharacterGradient(content, content.bg)
     content.border:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.8)
     RegisterTheme(function(c)
       if content.border and content.border.SetBackdropBorderColor then
         content.border:SetBackdropBorderColor(c[1], c[2], c[3], 0.8)
       end
     end)
+
+    -- Move logo into the header lane of the right panel.
+    local rightLogo = content:CreateTexture(nil, "OVERLAY")
+    rightLogo:SetSize(170, 56)
+    rightLogo:SetTexCoord(0, 1, 0, 1)
+    rightLogo:SetTexture("Interface\\AddOns\\HarathUI\\Media\\logo.tga")
+    rightLogo:SetVertexColor(ORANGE[1], ORANGE[2], ORANGE[3], 1)
+    rightLogo:SetPoint("TOPRIGHT", content, "TOPRIGHT", -46, -20)
+    RegisterTheme(function(c)
+      if rightLogo and rightLogo.SetVertexColor then
+        rightLogo:SetVertexColor(c[1], c[2], c[3], 1)
+      end
+    end)
+
+    local rightLogoCaps = content:CreateTexture(nil, "OVERLAY", nil, 1)
+    rightLogoCaps:SetPoint("TOPLEFT", rightLogo, "TOPLEFT", 0, 0)
+    rightLogoCaps:SetPoint("BOTTOMRIGHT", rightLogo, "BOTTOMRIGHT", 0, 0)
+    rightLogoCaps:SetTexCoord(0, 1, 0, 1)
+    rightLogoCaps:SetTexture("Interface\\AddOns\\HarathUI\\Media\\logoCaps.tga")
+
+    -- Version text under logo, right-aligned.
+    navVersion:SetParent(content)
+    navVersion:ClearAllPoints()
+    navVersion:SetPoint("TOPRIGHT", rightLogo, "BOTTOMRIGHT", -8, 4)
+    navGitIndicator:SetParent(content)
+    navGitIndicator:ClearAllPoints()
+    navGitIndicator:SetPoint("RIGHT", navVersion, "LEFT", -6, 0)
+    nav:Hide()
 
     local pages = {}
     local function ShowPage(key)
@@ -276,172 +313,23 @@ function NS:InitOptions()
       end
     end
 
-    local function BuildTopRow(parent)
-      local enable = MakeCheckbox(parent, "Enable HarathUI", "Toggle the whole UI suite on/off.")
-      enable:SetPoint("TOPLEFT", 18, -96)
-      enable:SetChecked(db.general.enabled)
-      enable:SetScript("OnClick", function()
-        db.general.enabled = enable:GetChecked()
-        NS:ApplyAll()
+    local BuildGeneralPageCards = Pages.CreateBuildGeneralPageCards(
+      db,
+      ORANGE,
+      MakeCheckbox,
+      NS,
+      function()
         UpdateNavIndicators()
-      end)
-
-      local move = MakeCheckbox(parent, "Unlock Frames", "Show simple drag outlines for movable UI elements.")
-      move:SetPoint("TOPLEFT", enable, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
-      move:SetChecked(not db.general.framesLocked)
-      move:SetScript("OnClick", function()
-        db.general.framesLocked = not move:GetChecked()
-        if NS.SetFramesLocked then NS:SetFramesLocked(db.general.framesLocked) end
-      end)
-
-      local moveOptions = MakeCheckbox(parent, "Move Options", "Drag the Blizzard Settings window.")
-      moveOptions:SetPoint("TOPLEFT", move, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
-      moveOptions:SetChecked(db.general.moveOptions)
-      moveOptions:SetScript("OnClick", function()
-        db.general.moveOptions = moveOptions:GetChecked()
-        NS:ApplyAll()
-      end)
-
-      local minimapBtn = MakeCheckbox(parent, "Minimap Button", "Show or hide the HarathUI minimap button.")
-      minimapBtn:SetPoint("TOPLEFT", moveOptions, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
-      minimapBtn:SetChecked(not (db.general.minimapButton and db.general.minimapButton.hide))
-      minimapBtn:SetScript("OnClick", function()
-        db.general.minimapButton = db.general.minimapButton or {}
-        db.general.minimapButton.hide = not minimapBtn:GetChecked()
-        if NS.UpdateMinimapButton then NS:UpdateMinimapButton() end
-      end)
-
-      if db.general.showSpellIDs == nil then
-        db.general.showSpellIDs = false
-      end
-      local spellIdsCB = MakeCheckbox(parent, "Show Spell IDs", "Append spell IDs to spell tooltips.")
-      spellIdsCB:SetPoint("TOPLEFT", minimapBtn, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
-      spellIdsCB:SetChecked(db.general.showSpellIDs == true)
-      spellIdsCB:SetScript("OnClick", function()
-        db.general.showSpellIDs = spellIdsCB:GetChecked()
-      end)
-
-      local smallMenu = MakeCheckbox(parent, "Smaller Game Menu", "Use the compact game menu.")
-      smallMenu:SetPoint("TOPLEFT", spellIdsCB, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
-      smallMenu:SetChecked(db.gamemenu and db.gamemenu.enabled)
-      smallMenu:SetScript("OnClick", function()
-        db.gamemenu = db.gamemenu or {}
-        db.gamemenu.enabled = smallMenu:GetChecked()
-        NS:ApplyAll()
-      end)
-
-      db.summons = db.summons or {}
-      if db.summons.enabled == nil then
-        db.summons.enabled = true
-      end
-
-      local summonCB = MakeCheckbox(parent, "Auto Accept Summons", "Automatically accept incoming party/raid summons.")
-      summonCB:SetPoint("TOPLEFT", smallMenu, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
-      summonCB:SetChecked(db.summons.enabled == true)
-      summonCB:SetScript("OnClick", function()
-        db.summons.enabled = summonCB:GetChecked()
-        NS:ApplyAll()
-      end)
-
-      local trackedBars = MakeCheckbox(parent, "Skin Tracked Bars", "Apply cast-bar style to Blizzard Cooldown Viewer tracked bars.")
-      trackedBars:SetPoint("TOPLEFT", summonCB, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
-      trackedBars:SetChecked(db.general.trackedBarsSkin == true)
-      trackedBars:SetScript("OnClick", function()
-        db.general.trackedBarsSkin = trackedBars:GetChecked()
-        NS:ApplyAll()
-      end)
-
-      local resetAll = MakeButton(parent, "Reset All Positions", 160, 24)
-      resetAll:SetPoint("TOPLEFT", trackedBars, "BOTTOMLEFT", 0, GROUP_GAP)
-      resetAll:SetScript("OnClick", function()
-        NS:ResetFramePosition("xpbar", NS.DEFAULTS.profile.xpbar)
-        NS:ResetFramePosition("castbar", NS.DEFAULTS.profile.castbar)
-        if NS.SetFramesLocked then NS:SetFramesLocked(db.general.framesLocked) end
-      end)
-
-      local themeLabel, themeSwatch = MakeColorSwatch(
-        parent,
-        "Theme",
-        function()
-          db.general.themeColor = db.general.themeColor or { r = ORANGE[1], g = ORANGE[2], b = ORANGE[3] }
-          return db.general.themeColor
-        end,
-        function(r, g, b)
-          db.general.themeColor = { r = r, g = g, b = b }
-          SetThemeColor(r, g, b)
-        end
-      )
-      themeLabel:SetPoint("TOPLEFT", resetAll, "BOTTOMLEFT", 0, GROUP_GAP)
-      themeSwatch:SetPoint("LEFT", themeLabel, "RIGHT", 12, 0)
-    end
-
-    local function AddHeaderImage(page, baseName)
-      if not baseName or baseName == "" then return end
-      local sizes = {
-        ["General"] = { 155, 56 },
-        ["XP"] = { 229, 56 },
-        ["CastBar"] = { 166, 56 },
-        ["Nameplate"] = { 270, 56 },
-        ["Helper"] = { 282, 56 },
-        ["Minimap"] = { 231, 56 },
-        ["Toasts"] = { 212, 56 },
-        ["Menu"] = { 219, 56 },
-      }
-      local size = sizes[baseName]
-      local tex = page:CreateTexture(nil, "OVERLAY")
-      tex:SetPoint("TOPLEFT", 8, -12)
-      if size then
-        tex:SetSize(size[1], size[2])
-      else
-        tex:SetSize(200, 56)
-      end
-      tex:SetTexture("Interface\\AddOns\\HarathUI\\Media\\" .. baseName .. "White.tga")
-      tex:SetVertexColor(ORANGE[1], ORANGE[2], ORANGE[3], 1)
-      tex:SetAlpha(1)
-      RegisterTheme(function(c)
-        if tex and tex.SetVertexColor then
-          tex:SetVertexColor(c[1], c[2], c[3], 1)
-        end
-      end)
-
-      local caps = page:CreateTexture(nil, "OVERLAY", nil, 1)
-      caps:SetPoint("TOPLEFT", tex, "TOPLEFT", 0, 0)
-      caps:SetPoint("BOTTOMRIGHT", tex, "BOTTOMRIGHT", 0, 0)
-      caps:SetTexture("Interface\\AddOns\\HarathUI\\Media\\" .. baseName .. "Caps.tga")
-      caps:SetVertexColor(1, 1, 1, 1)
-      caps:SetAlpha(1)
-      caps:SetBlendMode("BLEND")
-
-      return tex
-    end
+      end,
+      ApplyToggleSkin,
+      MakeAccentDivider,
+      MakeButton,
+      MakeColorSwatch,
+      SetThemeColor,
+      Small
+    )
 
     local function MakeModuleHeader(page, key)
-      local headerMap = {
-        xpbar = "XP",
-        castbar = "CastBar",
-        charsheet = "General",
-        friendlyplates = "Nameplate",
-        rotation = "Helper",
-        rotationhelper = "Helper",
-        minimap = "Minimap",
-        minimapbar = "Minimap",
-        loot = "Toasts",
-        gamemenu = "Menu",
-      }
-      AddHeaderImage(page, headerMap[key])
-
-      -- Orange line under title position (title text removed).
-      local line = page:CreateTexture(nil, "ARTWORK")
-      line:SetPoint("TOPLEFT", 18, -80)
-      line:SetPoint("TOPRIGHT", -18, -80)
-      line:SetHeight(2)
-      line:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 0.8)
-      RegisterTheme(function(c)
-        if line and line.SetColorTexture then
-          line:SetColorTexture(c[1], c[2], c[3], 0.8)
-        end
-      end)
-
       local en = MakeCheckbox(page, "Enable Module", "Enable or disable this module.")
       en:SetPoint("TOPLEFT", 18, -96)
       en:SetChecked(db[key] and db[key].enabled)
@@ -453,44 +341,160 @@ function NS:InitOptions()
       return en
     end
 
+    local function BuildStandardSliderRow(parent, labelText, minv, maxv, step, initial, fmt, coerce, onValue)
+      local row = CreateFrame("Frame", nil, parent)
+      row:SetHeight(34)
+
+      row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+      row.label:SetPoint("LEFT", 0, 0)
+      row.label:SetWidth(96)
+      row.label:SetJustifyH("LEFT")
+      row.label:SetText(labelText)
+      ApplyUIFont(row.label, 12, "OUTLINE", { 0.93, 0.93, 0.95 })
+
+      local slider = MakeSlider(row, labelText, minv, maxv, step)
+      if slider.Label then slider.Label:Hide() end
+      if slider.Text then slider.Text:Hide() end
+      slider:ClearAllPoints()
+      slider:SetWidth(330)
+      slider:SetPoint("LEFT", row.label, "RIGHT", 10, 0)
+
+      local initialValue = coerce and coerce(initial) or initial
+      slider:SetValue(initialValue)
+
+      local chip = MakeValueChip(row, 62, 20)
+      chip:SetPoint("LEFT", slider, "RIGHT", 14, 0)
+      chip:SetValue(initialValue, fmt)
+
+      slider:SetScript("OnValueChanged", function(_, raw)
+        local value = coerce and coerce(raw) or raw
+        chip:SetValue(value, fmt)
+        onValue(value)
+      end)
+
+      row.slider = slider
+      row.chip = chip
+      return row
+    end
+
+    local function BuildStandardModuleCards(page)
+      local tabOrder = { "general", "sizing", "visuals", "advanced" }
+      local tabLabels = {
+        general = "General",
+        sizing = "Sizing",
+        visuals = "Visuals",
+        advanced = "Advanced",
+      }
+
+      local tabRow = CreateFrame("Frame", nil, page)
+      tabRow:SetPoint("TOPLEFT", 18, -96)
+      tabRow:SetPoint("TOPRIGHT", -18, -96)
+      tabRow:SetHeight(26)
+
+      local tabDivider = MakeAccentDivider(page)
+      tabDivider:SetPoint("TOPLEFT", tabRow, "BOTTOMLEFT", 0, -4)
+      tabDivider:SetPoint("TOPRIGHT", tabRow, "BOTTOMRIGHT", 0, -4)
+
+      local cards = {
+        general = MakeGlassCard(page, "General"),
+        sizing = MakeGlassCard(page, "Sizing"),
+        visuals = MakeGlassCard(page, "Visuals"),
+        advanced = MakeGlassCard(page, "Advanced"),
+      }
+
+      for _, card in pairs(cards) do
+        card:SetPoint("TOPLEFT", 18, -136)
+        card:SetPoint("TOPRIGHT", -18, -136)
+        card:SetPoint("BOTTOMLEFT", 18, 18)
+        card:SetPoint("BOTTOMRIGHT", -18, 18)
+      end
+
+      local tabs = {}
+
+      local function ApplyTabStyle(btn, selected)
+        if selected then
+          btn:SetBackdropColor(0.16, 0.13, 0.09, 0.94)
+          btn:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.92)
+          btn.label:SetTextColor(ORANGE[1], ORANGE[2], ORANGE[3])
+          btn.accent:Show()
+        else
+          btn:SetBackdropColor(0.08, 0.09, 0.11, 0.82)
+          btn:SetBackdropBorderColor(0.54, 0.56, 0.62, 0.28)
+          btn.label:SetTextColor(0.86, 0.86, 0.89)
+          btn.accent:Hide()
+        end
+      end
+
+      local function ShowTab(key)
+        if not cards[key] then key = "general" end
+        for cardKey, card in pairs(cards) do
+          card:SetShown(cardKey == key)
+        end
+        for tabKey, tab in pairs(tabs) do
+          tab._selected = (tabKey == key)
+          ApplyTabStyle(tab, tab._selected)
+        end
+      end
+
+      local previous
+      for _, key in ipairs(tabOrder) do
+        local tabKey = key
+        local tab = CreateFrame("Button", nil, tabRow, "BackdropTemplate")
+        tab:SetSize(110, 24)
+        if previous then
+          tab:SetPoint("LEFT", previous, "RIGHT", 8, 0)
+        else
+          tab:SetPoint("LEFT", tabRow, "LEFT", 0, 0)
+        end
+        tab:SetBackdrop({
+          bgFile = "Interface/Buttons/WHITE8x8",
+          edgeFile = "Interface/Buttons/WHITE8x8",
+          edgeSize = 1,
+          insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+
+        tab.accent = tab:CreateTexture(nil, "OVERLAY")
+        tab.accent:SetPoint("BOTTOMLEFT", 5, 1)
+        tab.accent:SetPoint("BOTTOMRIGHT", -5, 1)
+        tab.accent:SetHeight(1)
+        tab.accent:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 0.95)
+        RegisterTheme(function(c)
+          if tab.accent and tab.accent.SetColorTexture then
+            tab.accent:SetColorTexture(c[1], c[2], c[3], 0.95)
+          end
+          ApplyTabStyle(tab, tab._selected)
+        end)
+
+        tab.label = tab:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        tab.label:SetPoint("CENTER", 0, 0)
+        tab.label:SetText(tabLabels[tabKey] or tabKey)
+        ApplyUIFont(tab.label, 11, "OUTLINE", { 0.86, 0.86, 0.89 })
+
+        tab:SetScript("OnEnter", function(self)
+          if self._selected then return end
+          self:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.58)
+          self.label:SetTextColor(ORANGE[1], ORANGE[2], ORANGE[3])
+        end)
+        tab:SetScript("OnLeave", function(self)
+          if self._selected then return end
+          ApplyTabStyle(self, false)
+        end)
+        tab:SetScript("OnClick", function()
+          ShowTab(tabKey)
+        end)
+
+        tabs[tabKey] = tab
+        previous = tab
+      end
+
+      ShowTab("general")
+      return cards, ShowTab, tabs
+    end
+
   -- =========================================================
   -- GENERAL PAGE
   -- =========================================================
-    pages.general = CreateFrame("Frame", nil, content); pages.general:SetAllPoints(true)
-    do
-    AddHeaderImage(pages.general, "General")
-
-    -- Orange line under title position (title text removed)
-    local generalLine = pages.general:CreateTexture(nil, "ARTWORK")
-    generalLine:SetPoint("TOPLEFT", 18, -80)
-    generalLine:SetPoint("TOPRIGHT", -18, -80)
-    generalLine:SetHeight(2)
-    generalLine:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 0.8)
-    RegisterTheme(function(c)
-      if generalLine and generalLine.SetColorTexture then
-        generalLine:SetColorTexture(c[1], c[2], c[3], 0.8)
-      end
-    end)
-
-    BuildTopRow(pages.general)
-
-    local card = MakeSection(pages.general, "Quick Commands")
-    card:SetPoint("BOTTOMLEFT", 18, 18)
-    card:SetPoint("BOTTOMRIGHT", -18, 18)
-    card:SetHeight(110)
-    -- No border, just the background fill.
-    card:SetBackdrop({
-      bgFile = "Interface/Buttons/WHITE8x8",
-      edgeFile = nil,
-      edgeSize = 0,
-      insets = { left = 0, right = 0, top = 0, bottom = 0 },
-    })
-    card:SetBackdropColor(0.12, 0.12, 0.14, 0.6)
-    card:SetBackdropBorderColor(0, 0, 0, 0)
-
-    local txt = Small(card, "- /hui (options)\n- /hui lock (toggle Unlock Frames)\n- /hui xp | cast | loot | summon\n")
-    txt:SetPoint("TOPLEFT", 14, -32)
-  end
+    Pages.BuildGeneralPage(pages, content, BuildStandardModuleCards, BuildGeneralPageCards)
 
   -- =========================================================
   -- XP / REP BAR PAGE
@@ -499,86 +503,128 @@ function NS:InitOptions()
     do
     local xpEnable = MakeModuleHeader(pages.xp, "xpbar")
 
-    local preview = MakeButton(pages.xp, "Preview Bar", 160, 24)
-    preview:SetPoint("TOPLEFT", 18, FIRST_CONTROL_Y)
+    local cards = BuildStandardModuleCards(pages.xp)
+
+    -- General card controls.
+    xpEnable:ClearAllPoints()
+    xpEnable:SetParent(cards.general.content)
+    xpEnable:SetPoint("TOPLEFT", 6, -4)
+    ApplyToggleSkin(xpEnable)
+
+    local showAtMax = MakeCheckbox(cards.general.content, "Show Bar at Max Level", "Keep XP bar visible at max level.")
+    showAtMax:SetPoint("TOPLEFT", 330, -4)
+    showAtMax:SetChecked(db.xpbar.showAtMaxLevel)
+    showAtMax:SetScript("OnClick", function()
+      db.xpbar.showAtMaxLevel = showAtMax:GetChecked()
+      NS:ApplyAll()
+    end)
+    ApplyToggleSkin(showAtMax)
+
+    local preview = MakeButton(cards.general.content, "Preview Bar", 170, 24)
+    preview:SetPoint("TOPLEFT", 6, -40)
     preview:SetScript("OnClick", function()
       if NS.Modules and NS.Modules.xpbar and NS.Modules.xpbar.Preview then
         NS.Modules.xpbar:Preview()
       end
     end)
 
-    local scale = MakeSlider(pages.xp, "Scale", 0.6, 1.5, 0.05)
-    scale:SetPoint("TOPLEFT", preview, "BOTTOMLEFT", 0, BUTTON_TO_SLIDER_GAP)
-    scale:SetValue(db.xpbar.scale or 1.0)
-    scale:SetLabelValue(db.xpbar.scale or 1.0, "%.2f")
-    scale:SetScript("OnValueChanged", function(_, v)
-      v = Round2(v)
-      db.xpbar.scale = v
-      scale:SetLabelValue(v, "%.2f")
-      NS:ApplyAll()
-    end)
+    local generalDivider = MakeAccentDivider(cards.general.content)
+    generalDivider:SetPoint("TOPLEFT", 0, -84)
+    generalDivider:SetPoint("TOPRIGHT", 0, -84)
 
-    local width = MakeSlider(pages.xp, "Length", 200, 800, 10)
-    width:SetPoint("TOPLEFT", scale, "BOTTOMLEFT", 0, SLIDER_GAP)
-    width:SetValue(db.xpbar.width or 520)
-    width:SetLabelValue(db.xpbar.width or 520, "%.0f")
-    width:SetScript("OnValueChanged", function(_, v)
-      v = math.floor(v + 0.5)
-      db.xpbar.width = v
-      width:SetLabelValue(v, "%.0f")
-      NS:ApplyAll()
-    end)
+    -- Sizing card controls.
+    local scale = BuildStandardSliderRow(
+      cards.sizing.content,
+      "Scale",
+      0.6,
+      1.5,
+      0.05,
+      db.xpbar.scale or 1.0,
+      "%.2f",
+      Round2,
+      function(v)
+        db.xpbar.scale = v
+        NS:ApplyAll()
+      end
+    )
+    scale:SetPoint("TOPLEFT", 6, -10)
+    scale:SetPoint("TOPRIGHT", -6, -10)
 
-    local height = MakeSlider(pages.xp, "Height", 6, 26, 1)
-    height:SetPoint("TOPLEFT", width, "BOTTOMLEFT", 0, SLIDER_GAP)
-    height:SetValue(db.xpbar.height or 12)
-    height:SetLabelValue(db.xpbar.height or 12, "%.0f")
-    height:SetScript("OnValueChanged", function(_, v)
-      v = math.floor(v + 0.5)
-      db.xpbar.height = v
-      height:SetLabelValue(v, "%.0f")
-      NS:ApplyAll()
-    end)
+    local width = BuildStandardSliderRow(
+      cards.sizing.content,
+      "Length",
+      200,
+      800,
+      10,
+      db.xpbar.width or 520,
+      "%.0f",
+      function(v) return math.floor(v + 0.5) end,
+      function(v)
+        db.xpbar.width = v
+        NS:ApplyAll()
+      end
+    )
+    width:SetPoint("TOPLEFT", scale, "BOTTOMLEFT", 0, -14)
+    width:SetPoint("TOPRIGHT", scale, "BOTTOMRIGHT", 0, -14)
 
-    local showText = MakeCheckbox(pages.xp, "Show Text", "Show exact progress numbers.")
-    showText:SetPoint("TOPLEFT", height, "BOTTOMLEFT", 0, SLIDER_TO_CHECKBOX_GAP)
+    local height = BuildStandardSliderRow(
+      cards.sizing.content,
+      "Height",
+      6,
+      26,
+      1,
+      db.xpbar.height or 12,
+      "%.0f",
+      function(v) return math.floor(v + 0.5) end,
+      function(v)
+        db.xpbar.height = v
+        NS:ApplyAll()
+      end
+    )
+    height:SetPoint("TOPLEFT", width, "BOTTOMLEFT", 0, -14)
+    height:SetPoint("TOPRIGHT", width, "BOTTOMRIGHT", 0, -14)
+
+    -- Visuals card controls.
+    local showText = MakeCheckbox(cards.visuals.content, "Show Text", "Show exact progress numbers.")
+    showText:SetPoint("TOPLEFT", 6, -10)
     showText:SetChecked(db.xpbar.showText)
     showText:SetScript("OnClick", function()
       db.xpbar.showText = showText:GetChecked()
       NS:ApplyAll()
     end)
+    ApplyToggleSkin(showText)
 
-    local showSession = MakeCheckbox(pages.xp, "Session Time", "Show time played this session.")
-    showSession:SetPoint("TOPLEFT", showText, "BOTTOMLEFT", 0, -CHECKBOX_GAP)
-    showSession:SetChecked(db.xpbar.showSessionTime)
-    showSession:SetScript("OnClick", function()
-      db.xpbar.showSessionTime = showSession:GetChecked()
-      NS:ApplyAll()
-    end)
-
-    local showRate = MakeCheckbox(pages.xp, "TTL & Exp P/h", "Show ETA and XP per hour.")
-    showRate:SetPoint("LEFT", showText, "RIGHT", 160, 0)
+    local showRate = MakeCheckbox(cards.visuals.content, "TTL & Exp P/h", "Show ETA and XP per hour.")
+    showRate:SetPoint("TOPLEFT", 330, -10)
     showRate:SetChecked(db.xpbar.showRateText)
     showRate:SetScript("OnClick", function()
       db.xpbar.showRateText = showRate:GetChecked()
       NS:ApplyAll()
     end)
+    ApplyToggleSkin(showRate)
 
-    local showQuest = MakeCheckbox(pages.xp, "Quest Exp", "Show completed quests and rested text.")
-    showQuest:SetPoint("LEFT", showSession, "RIGHT", 160, 0)
+    local showSession = MakeCheckbox(cards.visuals.content, "Session Time", "Show time played this session.")
+    showSession:SetPoint("TOPLEFT", 6, -46)
+    showSession:SetChecked(db.xpbar.showSessionTime)
+    showSession:SetScript("OnClick", function()
+      db.xpbar.showSessionTime = showSession:GetChecked()
+      NS:ApplyAll()
+    end)
+    ApplyToggleSkin(showSession)
+
+    local showQuest = MakeCheckbox(cards.visuals.content, "Quest Exp", "Show completed quests and rested text.")
+    showQuest:SetPoint("TOPLEFT", 330, -46)
     showQuest:SetChecked(db.xpbar.showQuestText)
     showQuest:SetScript("OnClick", function()
       db.xpbar.showQuestText = showQuest:GetChecked()
       NS:ApplyAll()
     end)
+    ApplyToggleSkin(showQuest)
 
-    local showAtMax = MakeCheckbox(pages.xp, "Show Bar at Max Level", "Keep XP bar visible at max level.")
-    showAtMax:SetPoint("LEFT", xpEnable, "RIGHT", 160, 0)
-    showAtMax:SetChecked(db.xpbar.showAtMaxLevel)
-    showAtMax:SetScript("OnClick", function()
-      db.xpbar.showAtMaxLevel = showAtMax:GetChecked()
-      NS:ApplyAll()
-    end)
+    -- Advanced placeholder card.
+    local advancedText = Small(cards.advanced.content, "Reserved for future XP / Rep options.")
+    advancedText:SetPoint("TOPLEFT", 6, -10)
+    advancedText:SetTextColor(0.78, 0.78, 0.80)
 
   end
 
@@ -599,61 +645,7 @@ function NS:InitOptions()
       { name = "White",    path = "Interface/Buttons/WHITE8x8" },
     }
 
-    local tabRow = CreateFrame("Frame", nil, pages.cast)
-    tabRow:SetPoint("TOPLEFT", 18, -96)
-    tabRow:SetPoint("TOPRIGHT", -18, -96)
-    tabRow:SetHeight(26)
-
-    local tabDivider = MakeAccentDivider(pages.cast)
-    tabDivider:SetPoint("TOPLEFT", tabRow, "BOTTOMLEFT", 0, -4)
-    tabDivider:SetPoint("TOPRIGHT", tabRow, "BOTTOMRIGHT", 0, -4)
-
-    local cards = {
-      general = MakeGlassCard(pages.cast, "General"),
-      sizing = MakeGlassCard(pages.cast, "Sizing"),
-      visuals = MakeGlassCard(pages.cast, "Visuals"),
-      advanced = MakeGlassCard(pages.cast, "Advanced"),
-    }
-    for _, card in pairs(cards) do
-      card:SetPoint("TOPLEFT", 18, -136)
-      card:SetPoint("TOPRIGHT", -18, -136)
-      card:SetPoint("BOTTOMLEFT", 18, 18)
-      card:SetPoint("BOTTOMRIGHT", -18, 18)
-    end
-
-    local function BuildSliderRow(parent, labelText, minv, maxv, step, initial, fmt, coerce, onValue)
-      local row = CreateFrame("Frame", nil, parent)
-      row:SetHeight(34)
-
-      row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-      row.label:SetPoint("LEFT", 0, 0)
-      row.label:SetWidth(96)
-      row.label:SetJustifyH("LEFT")
-      row.label:SetText(labelText)
-      ApplyUIFont(row.label, 12, "OUTLINE", { 0.93, 0.93, 0.95 })
-
-      local slider = MakeSlider(row, labelText, minv, maxv, step)
-      if slider.Label then slider.Label:Hide() end
-      if slider.Text then slider.Text:Hide() end
-      slider:ClearAllPoints()
-      slider:SetWidth(330)
-      slider:SetPoint("LEFT", row.label, "RIGHT", 10, 0)
-      slider:SetValue(initial)
-
-      local chip = MakeValueChip(row, 62, 20)
-      chip:SetPoint("LEFT", slider, "RIGHT", 14, 0)
-      chip:SetValue(initial, fmt)
-
-      slider:SetScript("OnValueChanged", function(_, raw)
-        local value = coerce and coerce(raw) or raw
-        chip:SetValue(value, fmt)
-        onValue(value)
-      end)
-
-      row.slider = slider
-      row.chip = chip
-      return row
-    end
+    local cards = BuildStandardModuleCards(pages.cast)
 
     -- General card controls.
     castEnable:ClearAllPoints()
@@ -701,7 +693,7 @@ function NS:InitOptions()
     generalDivider:SetPoint("TOPRIGHT", 0, -124)
 
     -- Sizing card controls.
-    local scale = BuildSliderRow(
+    local scale = BuildStandardSliderRow(
       cards.sizing.content,
       "Scale",
       0.6,
@@ -718,7 +710,7 @@ function NS:InitOptions()
     scale:SetPoint("TOPLEFT", 6, -10)
     scale:SetPoint("TOPRIGHT", -6, -10)
 
-    local width = BuildSliderRow(
+    local width = BuildStandardSliderRow(
       cards.sizing.content,
       "Width",
       220,
@@ -735,7 +727,7 @@ function NS:InitOptions()
     width:SetPoint("TOPLEFT", scale, "BOTTOMLEFT", 0, -14)
     width:SetPoint("TOPRIGHT", scale, "BOTTOMRIGHT", 0, -14)
 
-    local height = BuildSliderRow(
+    local height = BuildStandardSliderRow(
       cards.sizing.content,
       "Height",
       12,
@@ -752,7 +744,7 @@ function NS:InitOptions()
     height:SetPoint("TOPLEFT", width, "BOTTOMLEFT", 0, -14)
     height:SetPoint("TOPRIGHT", width, "BOTTOMRIGHT", 0, -14)
 
-    local textSize = BuildSliderRow(
+    local textSize = BuildStandardSliderRow(
       cards.sizing.content,
       "Text Size",
       8,
@@ -777,8 +769,12 @@ function NS:InitOptions()
       db.castbar.barColor = { r = r, g = g, b = b }
       NS:ApplyAll()
     end
+    local visualsLabelWidth = 90
     local colorLabel, colorSwatch = MakeColorSwatch(cards.visuals.content, "Bar Color", GetCastBarColor, SetCastBarColor)
     colorLabel:SetPoint("TOPLEFT", 6, -10)
+    colorLabel:SetWidth(visualsLabelWidth)
+    colorLabel:SetJustifyH("LEFT")
+    colorSwatch:ClearAllPoints()
     colorSwatch:SetPoint("LEFT", colorLabel, "RIGHT", 12, 0)
 
     local function GetCastTextColor()
@@ -790,6 +786,9 @@ function NS:InitOptions()
     end
     local textColorLabel, textColorSwatch = MakeColorSwatch(cards.visuals.content, "Text Color", GetCastTextColor, SetCastTextColor)
     textColorLabel:SetPoint("TOPLEFT", colorLabel, "BOTTOMLEFT", 0, -20)
+    textColorLabel:SetWidth(visualsLabelWidth)
+    textColorLabel:SetJustifyH("LEFT")
+    textColorSwatch:ClearAllPoints()
     textColorSwatch:SetPoint("LEFT", textColorLabel, "RIGHT", 12, 0)
 
     local visualsDivider = MakeAccentDivider(cards.visuals.content)
@@ -801,26 +800,49 @@ function NS:InitOptions()
     texLabel:SetText("Bar Texture")
     ApplyUIFont(texLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
 
-    local texWrap = CreateFrame("Frame", nil, cards.visuals.content, "BackdropTemplate")
-    texWrap:SetPoint("TOPLEFT", texLabel, "BOTTOMLEFT", 0, -8)
-    texWrap:SetSize(230, 32)
-    texWrap:SetBackdrop({
-      bgFile = "Interface/Buttons/WHITE8x8",
-      edgeFile = "Interface/Buttons/WHITE8x8",
-      edgeSize = 1,
-      insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    texWrap:SetBackdropColor(0.08, 0.09, 0.11, 0.88)
-    texWrap:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.35)
-    RegisterTheme(function(c)
-      if texWrap and texWrap.SetBackdropBorderColor then
-        texWrap:SetBackdropBorderColor(c[1], c[2], c[3], 0.35)
-      end
-    end)
-
     local texDD = CreateFrame("Frame", "HarathUI_CastBarTextureDropdown", cards.visuals.content, "UIDropDownMenuTemplate")
-    texDD:SetPoint("TOPLEFT", texWrap, "TOPLEFT", -14, 4)
-    UIDropDownMenu_SetWidth(texDD, 180)
+    texDD:ClearAllPoints()
+    texDD:SetPoint("TOPLEFT", texLabel, "BOTTOMLEFT", -16, -2)
+    UIDropDownMenu_SetWidth(texDD, 186)
+
+    -- Modernize the dropdown itself instead of wrapping it in an extra box.
+    local texDDName = texDD:GetName()
+    local ddLeft = texDDName and _G[texDDName .. "Left"]
+    local ddMiddle = texDDName and _G[texDDName .. "Middle"]
+    local ddRight = texDDName and _G[texDDName .. "Right"]
+    local ddButton = texDDName and _G[texDDName .. "Button"]
+    local ddButtonNormal = texDDName and _G[texDDName .. "ButtonNormalTexture"]
+
+    local function StyleCastTextureDropdown(c)
+      local accent = c or ORANGE
+      if ddLeft then
+        ddLeft:SetTexture("Interface/Buttons/WHITE8x8")
+        ddLeft:SetVertexColor(0.07, 0.08, 0.11, 0.92)
+      end
+      if ddMiddle then
+        ddMiddle:SetTexture("Interface/Buttons/WHITE8x8")
+        ddMiddle:SetVertexColor(0.07, 0.08, 0.11, 0.92)
+      end
+      if ddRight then
+        ddRight:SetTexture("Interface/Buttons/WHITE8x8")
+        ddRight:SetVertexColor(0.07, 0.08, 0.11, 0.92)
+      end
+
+      if ddButton and ddButton.GetHighlightTexture then
+        local hl = ddButton:GetHighlightTexture()
+        if hl then
+          hl:SetTexture("Interface/Buttons/WHITE8x8")
+          hl:SetVertexColor(1, 1, 1, 0.06)
+        end
+      end
+      if ddButtonNormal and ddButtonNormal.SetVertexColor then
+        ddButtonNormal:SetVertexColor(accent[1], accent[2], accent[3], 0.95)
+      end
+    end
+    StyleCastTextureDropdown(ORANGE)
+    RegisterTheme(function(c)
+      StyleCastTextureDropdown(c)
+    end)
 
     local function GetTextureName(path)
       for _, t in ipairs(textures) do
@@ -849,161 +871,15 @@ function NS:InitOptions()
     end)
 
     ApplyDropdownFont(texDD, 12, { 0.9, 0.9, 0.9 })
-    RightAlignDropdownText(texDD)
+    if UIDropDownMenu_JustifyText then
+      UIDropDownMenu_JustifyText(texDD, "LEFT")
+    end
     RefreshTex()
 
     -- Advanced placeholder card.
     local advancedText = Small(cards.advanced.content, "Reserved for future Cast Bar options.")
     advancedText:SetPoint("TOPLEFT", 6, -10)
     advancedText:SetTextColor(0.78, 0.78, 0.80)
-
-    local castTabs = {}
-    local tabOrder = { "general", "sizing", "visuals", "advanced" }
-    local tabLabels = {
-      general = "General",
-      sizing = "Sizing",
-      visuals = "Visuals",
-      advanced = "Advanced",
-    }
-
-    local function ApplyTabStyle(btn, selected)
-      if selected then
-        btn:SetBackdropColor(0.16, 0.13, 0.09, 0.94)
-        btn:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.92)
-        btn.label:SetTextColor(ORANGE[1], ORANGE[2], ORANGE[3])
-        btn.accent:Show()
-      else
-        btn:SetBackdropColor(0.08, 0.09, 0.11, 0.82)
-        btn:SetBackdropBorderColor(0.54, 0.56, 0.62, 0.28)
-        btn.label:SetTextColor(0.86, 0.86, 0.89)
-        btn.accent:Hide()
-      end
-    end
-
-    local function ShowCastTab(key)
-      if not cards[key] then key = "general" end
-      for cardKey, card in pairs(cards) do
-        card:SetShown(cardKey == key)
-      end
-      for tabKey, tab in pairs(castTabs) do
-        tab._selected = (tabKey == key)
-        ApplyTabStyle(tab, tab._selected)
-      end
-    end
-
-    local previous
-    for _, key in ipairs(tabOrder) do
-      local tabKey = key
-      local tab = CreateFrame("Button", nil, tabRow, "BackdropTemplate")
-      tab:SetSize(110, 24)
-      if previous then
-        tab:SetPoint("LEFT", previous, "RIGHT", 8, 0)
-      else
-        tab:SetPoint("LEFT", tabRow, "LEFT", 0, 0)
-      end
-      tab:SetBackdrop({
-        bgFile = "Interface/Buttons/WHITE8x8",
-        edgeFile = "Interface/Buttons/WHITE8x8",
-        edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-      })
-
-      tab.accent = tab:CreateTexture(nil, "OVERLAY")
-      tab.accent:SetPoint("BOTTOMLEFT", 5, 1)
-      tab.accent:SetPoint("BOTTOMRIGHT", -5, 1)
-      tab.accent:SetHeight(1)
-      tab.accent:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 0.95)
-      RegisterTheme(function(c)
-        if tab.accent and tab.accent.SetColorTexture then
-          tab.accent:SetColorTexture(c[1], c[2], c[3], 0.95)
-        end
-        ApplyTabStyle(tab, tab._selected)
-      end)
-
-      tab.label = tab:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-      tab.label:SetPoint("CENTER", 0, 0)
-      tab.label:SetText(tabLabels[tabKey] or tabKey)
-      ApplyUIFont(tab.label, 11, "OUTLINE", { 0.86, 0.86, 0.89 })
-
-      tab:SetScript("OnEnter", function(self)
-        if self._selected then return end
-        self:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.58)
-        self.label:SetTextColor(ORANGE[1], ORANGE[2], ORANGE[3])
-      end)
-      tab:SetScript("OnLeave", function(self)
-        if self._selected then return end
-        ApplyTabStyle(self, false)
-      end)
-      tab:SetScript("OnClick", function()
-        ShowCastTab(tabKey)
-      end)
-
-      castTabs[tabKey] = tab
-      previous = tab
-    end
-
-    ShowCastTab("general")
-  end
-
-  -- =========================================================
-  -- CHARACTER SHEET PAGE
-  -- =========================================================
-    pages.charsheet = CreateFrame("Frame", nil, content); pages.charsheet:SetAllPoints(true)
-    do
-    MakeModuleHeader(pages.charsheet, "charsheet")
-
-    if not db.charsheet then
-      db.charsheet = {}
-    end
-    if db.charsheet.hideArt == nil then
-      db.charsheet.hideArt = true
-    end
-    if db.charsheet.styleStats == nil then
-      db.charsheet.styleStats = true
-    end
-    if db.charsheet.showRightPanel == nil then
-      db.charsheet.showRightPanel = true
-    end
-    if db.charsheet.rightPanelDetached == nil then
-      db.charsheet.rightPanelDetached = false
-    end
-    if not db.charsheet.rightPanelAnchor then
-      db.charsheet.rightPanelAnchor = "TOPLEFT"
-    end
-    if db.charsheet.rightPanelX == nil then
-      db.charsheet.rightPanelX = 0
-    end
-    if db.charsheet.rightPanelY == nil then
-      db.charsheet.rightPanelY = 0
-    end
-    if db.charsheet.rightPanelOffsetX == nil then
-      db.charsheet.rightPanelOffsetX = 8
-    end
-    if db.charsheet.rightPanelOffsetY == nil then
-      db.charsheet.rightPanelOffsetY = 0
-    end
-    if db.charsheet.stripeAlpha == nil then
-      db.charsheet.stripeAlpha = 0.22
-    end
-    if not db.charsheet.fontSize then
-      db.charsheet.fontSize = 12
-    end
-
-    local openChar = MakeButton(pages.charsheet, "Open Character", 160, 24)
-    openChar:SetPoint("TOPLEFT", 18, FIRST_CONTROL_Y)
-    openChar:SetScript("OnClick", function()
-      if ToggleCharacter then
-        ToggleCharacter("PaperDollFrame")
-      elseif _G.ToggleCharacterFrame then
-        _G.ToggleCharacterFrame()
-      elseif CharacterFrame then
-        if CharacterFrame:IsShown() then
-          HideUIPanel(CharacterFrame)
-        else
-          ShowUIPanel(CharacterFrame)
-        end
-      end
-    end)
 
   end
 
@@ -1012,38 +888,67 @@ function NS:InitOptions()
   -- =========================================================
     pages.loot = CreateFrame("Frame", nil, content); pages.loot:SetAllPoints(true)
     do
-    MakeModuleHeader(pages.loot, "loot")
+    local lootEnable = MakeModuleHeader(pages.loot, "loot")
+    local cards = BuildStandardModuleCards(pages.loot)
 
-    local preview = MakeButton(pages.loot, "Preview Toasts", 160, 24)
-    preview:SetPoint("TOPLEFT", 18, FIRST_CONTROL_Y)
+    lootEnable:ClearAllPoints()
+    lootEnable:SetParent(cards.general.content)
+    lootEnable:SetPoint("TOPLEFT", 6, -4)
+    ApplyToggleSkin(lootEnable)
+
+    local preview = MakeButton(cards.general.content, "Preview Toasts", 170, 24)
+    preview:SetPoint("TOPLEFT", 6, -40)
     preview:SetScript("OnClick", function()
       if NS.Modules and NS.Modules.loot and NS.Modules.loot.Preview then
         NS.Modules.loot:Preview()
       end
     end)
 
-    local scale = MakeSlider(pages.loot, "Scale", 0.6, 1.5, 0.05)
-    scale:SetPoint("TOPLEFT", preview, "BOTTOMLEFT", 0, BUTTON_TO_SLIDER_GAP)
-    scale:SetValue(db.loot.scale or 1.0)
-    scale:SetLabelValue(db.loot.scale or 1.0, "%.2f")
-    scale:SetScript("OnValueChanged", function(_, v)
-      v = Round2(v)
-      db.loot.scale = v
-      scale:SetLabelValue(v, "%.2f")
-      NS:ApplyAll()
-    end)
+    local generalDivider = MakeAccentDivider(cards.general.content)
+    generalDivider:SetPoint("TOPLEFT", 0, -84)
+    generalDivider:SetPoint("TOPRIGHT", 0, -84)
 
-    local duration = MakeSlider(pages.loot, "Duration (sec)", 1.0, 8.0, 0.5)
-    duration:SetPoint("TOPLEFT", scale, "BOTTOMLEFT", 0, SLIDER_GAP)
-    duration:SetValue(db.loot.duration or 3.5)
-    duration:SetLabelValue(db.loot.duration or 3.5, "%.1f")
-    duration:SetScript("OnValueChanged", function(_, v)
-      v = Round2(v)
-      db.loot.duration = v
-      duration:SetLabelValue(v, "%.1f")
-      NS:ApplyAll()
-    end)
+    local scale = BuildStandardSliderRow(
+      cards.sizing.content,
+      "Scale",
+      0.6,
+      1.5,
+      0.05,
+      db.loot.scale or 1.0,
+      "%.2f",
+      Round2,
+      function(v)
+        db.loot.scale = v
+        NS:ApplyAll()
+      end
+    )
+    scale:SetPoint("TOPLEFT", 6, -10)
+    scale:SetPoint("TOPRIGHT", -6, -10)
 
+    local duration = BuildStandardSliderRow(
+      cards.sizing.content,
+      "Duration",
+      1.0,
+      8.0,
+      0.5,
+      db.loot.duration or 3.5,
+      "%.1f",
+      Round2,
+      function(v)
+        db.loot.duration = v
+        NS:ApplyAll()
+      end
+    )
+    duration:SetPoint("TOPLEFT", scale, "BOTTOMLEFT", 0, -14)
+    duration:SetPoint("TOPRIGHT", scale, "BOTTOMRIGHT", 0, -14)
+
+    local visualsText = Small(cards.visuals.content, "Reserved for future Loot visuals.")
+    visualsText:SetPoint("TOPLEFT", 6, -10)
+    visualsText:SetTextColor(0.78, 0.78, 0.80)
+
+    local advancedText = Small(cards.advanced.content, "Reserved for future Loot advanced options.")
+    advancedText:SetPoint("TOPLEFT", 6, -10)
+    advancedText:SetTextColor(0.78, 0.78, 0.80)
   end
 
   -- =========================================================
@@ -1051,7 +956,7 @@ function NS:InitOptions()
   -- =========================================================
     pages.friendly = CreateFrame("Frame", nil, content); pages.friendly:SetAllPoints(true)
     do
-    MakeModuleHeader(pages.friendly, "friendlyplates")
+    local friendlyEnable = MakeModuleHeader(pages.friendly, "friendlyplates")
 
     if not db.friendlyplates.nameColor then
       db.friendlyplates.nameColor = { r = 1, g = 1, b = 1 }
@@ -1066,17 +971,32 @@ function NS:InitOptions()
       db.friendlyplates.yOffset = 0
     end
 
-    local classColor = MakeCheckbox(pages.friendly, "Use Class Color", "Class colors override custom color.")
-    classColor:SetPoint("TOPLEFT", 18, FIRST_CONTROL_Y)
+    local cards = BuildStandardModuleCards(pages.friendly)
+
+    friendlyEnable:ClearAllPoints()
+    friendlyEnable:SetParent(cards.general.content)
+    friendlyEnable:SetPoint("TOPLEFT", 6, -4)
+    ApplyToggleSkin(friendlyEnable)
+
+    local function RefreshFriendly()
+      if NS.Modules and NS.Modules.friendlyplates and NS.Modules.friendlyplates.Refresh then
+        NS.Modules.friendlyplates:Refresh()
+      end
+    end
+
+    local classColor = MakeCheckbox(cards.general.content, "Use Class Color", "Class colors override custom color.")
+    classColor:SetPoint("TOPLEFT", 330, -4)
     classColor:SetChecked(db.friendlyplates.classColor)
     classColor:SetScript("OnClick", function()
       db.friendlyplates.classColor = classColor:GetChecked()
       NS:ApplyAll()
-      if NS.Modules and NS.Modules.friendlyplates and NS.Modules.friendlyplates.Refresh then
-        NS.Modules.friendlyplates:Refresh()
-      end
+      RefreshFriendly()
     end)
+    ApplyToggleSkin(classColor)
 
+    local generalDivider = MakeAccentDivider(cards.general.content)
+    generalDivider:SetPoint("TOPLEFT", 0, -40)
+    generalDivider:SetPoint("TOPRIGHT", 0, -40)
 
     local function GetNameplateColor()
       return db.friendlyplates.nameColor
@@ -1084,41 +1004,55 @@ function NS:InitOptions()
     local function SetNameplateColor(r, g, b)
       db.friendlyplates.nameColor = { r = r, g = g, b = b }
       NS:ApplyAll()
-      if NS.Modules and NS.Modules.friendlyplates and NS.Modules.friendlyplates.Refresh then
-        NS.Modules.friendlyplates:Refresh()
-      end
+      RefreshFriendly()
     end
-    local colorLabel, colorSwatch = MakeColorSwatch(pages.friendly, "Name Color", GetNameplateColor, SetNameplateColor)
-    colorLabel:SetPoint("TOPLEFT", classColor, "BOTTOMLEFT", 0, GROUP_GAP)
-    colorSwatch:SetPoint("LEFT", colorLabel, "RIGHT", 10, 0)
+    local visualsLabelWidth = 96
+    local colorLabel, colorSwatch = MakeColorSwatch(cards.visuals.content, "Name Color", GetNameplateColor, SetNameplateColor)
+    colorLabel:SetPoint("TOPLEFT", 6, -10)
+    colorLabel:SetWidth(visualsLabelWidth)
+    colorLabel:SetJustifyH("LEFT")
+    colorSwatch:ClearAllPoints()
+    colorSwatch:SetPoint("LEFT", colorLabel, "RIGHT", 12, 0)
 
-    local size = MakeSlider(pages.friendly, "Size", 8, 24, 1)
-    size:SetPoint("TOPLEFT", colorLabel, "BOTTOMLEFT", 0, GROUP_GAP)
-    size:SetValue(db.friendlyplates.fontSize or 12)
-    size:SetLabelValue(db.friendlyplates.fontSize or 12, "%.0f")
-    size:SetScript("OnValueChanged", function(_, v)
-      v = math.floor(v + 0.5)
-      db.friendlyplates.fontSize = v
-      size:SetLabelValue(v, "%.0f")
-      NS:ApplyAll()
-      if NS.Modules and NS.Modules.friendlyplates and NS.Modules.friendlyplates.Refresh then
-        NS.Modules.friendlyplates:Refresh()
+    local size = BuildStandardSliderRow(
+      cards.sizing.content,
+      "Size",
+      8,
+      24,
+      1,
+      db.friendlyplates.fontSize or 12,
+      "%.0f",
+      function(v) return math.floor(v + 0.5) end,
+      function(v)
+        db.friendlyplates.fontSize = v
+        NS:ApplyAll()
+        RefreshFriendly()
       end
-    end)
+    )
+    size:SetPoint("TOPLEFT", 6, -10)
+    size:SetPoint("TOPRIGHT", -6, -10)
 
-    local offset = MakeSlider(pages.friendly, "Y Offset", -30, 30, 1)
-    offset:SetPoint("TOPLEFT", size, "BOTTOMLEFT", 0, SLIDER_GAP)
-    offset:SetValue(db.friendlyplates.yOffset or 0)
-    offset:SetLabelValue(db.friendlyplates.yOffset or 0, "%.0f")
-    offset:SetScript("OnValueChanged", function(_, v)
-      v = math.floor(v + 0.5)
-      db.friendlyplates.yOffset = v
-      offset:SetLabelValue(v, "%.0f")
-      NS:ApplyAll()
-      if NS.Modules and NS.Modules.friendlyplates and NS.Modules.friendlyplates.Refresh then
-        NS.Modules.friendlyplates:Refresh()
+    local offset = BuildStandardSliderRow(
+      cards.sizing.content,
+      "Y Offset",
+      -30,
+      30,
+      1,
+      db.friendlyplates.yOffset or 0,
+      "%.0f",
+      function(v) return math.floor(v + 0.5) end,
+      function(v)
+        db.friendlyplates.yOffset = v
+        NS:ApplyAll()
+        RefreshFriendly()
       end
-    end)
+    )
+    offset:SetPoint("TOPLEFT", size, "BOTTOMLEFT", 0, -14)
+    offset:SetPoint("TOPRIGHT", size, "BOTTOMRIGHT", 0, -14)
+
+    local advancedText = Small(cards.advanced.content, "Reserved for future Friendly Nameplates options.")
+    advancedText:SetPoint("TOPLEFT", 6, -10)
+    advancedText:SetTextColor(0.78, 0.78, 0.80)
 
   end
 
@@ -1127,7 +1061,7 @@ function NS:InitOptions()
   -- =========================================================
     pages.rotation = CreateFrame("Frame", nil, content); pages.rotation:SetAllPoints(true)
     do
-    MakeModuleHeader(pages.rotation, "rotationhelper")
+    local rotationEnable = MakeModuleHeader(pages.rotation, "rotationhelper")
 
     if not db.rotationhelper then
       db.rotationhelper = {}
@@ -1142,46 +1076,83 @@ function NS:InitOptions()
       db.rotationhelper.height = 52
     end
 
-    local preview = MakeButton(pages.rotation, "Preview", 120, 24)
-    preview:SetPoint("TOPLEFT", 18, FIRST_CONTROL_Y)
+    local cards = BuildStandardModuleCards(pages.rotation)
+
+    rotationEnable:ClearAllPoints()
+    rotationEnable:SetParent(cards.general.content)
+    rotationEnable:SetPoint("TOPLEFT", 6, -4)
+    ApplyToggleSkin(rotationEnable)
+
+    local preview = MakeButton(cards.general.content, "Preview", 170, 24)
+    preview:SetPoint("TOPLEFT", 6, -40)
     preview:SetScript("OnClick", function()
       if NS.Modules and NS.Modules.rotationhelper and NS.Modules.rotationhelper.Preview then
         NS.Modules.rotationhelper:Preview()
       end
     end)
 
-    local scale = MakeSlider(pages.rotation, "Scale", 0.6, 2.0, 0.05)
-    scale:SetPoint("TOPLEFT", preview, "BOTTOMLEFT", 0, BUTTON_TO_SLIDER_GAP)
-    scale:SetValue(db.rotationhelper.scale or 1.0)
-    scale:SetLabelValue(db.rotationhelper.scale or 1.0, "%.2f")
-    scale:SetScript("OnValueChanged", function(_, v)
-      v = Round2(v)
-      db.rotationhelper.scale = v
-      scale:SetLabelValue(v, "%.2f")
-      NS:ApplyAll()
-    end)
+    local generalDivider = MakeAccentDivider(cards.general.content)
+    generalDivider:SetPoint("TOPLEFT", 0, -84)
+    generalDivider:SetPoint("TOPRIGHT", 0, -84)
 
-    local width = MakeSlider(pages.rotation, "Width", 24, 200, 1)
-    width:SetPoint("TOPLEFT", scale, "BOTTOMLEFT", 0, SLIDER_GAP)
-    width:SetValue(db.rotationhelper.width or 52)
-    width:SetLabelValue(db.rotationhelper.width or 52, "%.0f")
-    width:SetScript("OnValueChanged", function(_, v)
-      v = math.floor(v + 0.5)
-      db.rotationhelper.width = v
-      width:SetLabelValue(v, "%.0f")
-      NS:ApplyAll()
-    end)
+    local scale = BuildStandardSliderRow(
+      cards.sizing.content,
+      "Scale",
+      0.6,
+      2.0,
+      0.05,
+      db.rotationhelper.scale or 1.0,
+      "%.2f",
+      Round2,
+      function(v)
+        db.rotationhelper.scale = v
+        NS:ApplyAll()
+      end
+    )
+    scale:SetPoint("TOPLEFT", 6, -10)
+    scale:SetPoint("TOPRIGHT", -6, -10)
 
-    local height = MakeSlider(pages.rotation, "Height", 24, 200, 1)
-    height:SetPoint("TOPLEFT", width, "BOTTOMLEFT", 0, SLIDER_GAP)
-    height:SetValue(db.rotationhelper.height or 52)
-    height:SetLabelValue(db.rotationhelper.height or 52, "%.0f")
-    height:SetScript("OnValueChanged", function(_, v)
-      v = math.floor(v + 0.5)
-      db.rotationhelper.height = v
-      height:SetLabelValue(v, "%.0f")
-      NS:ApplyAll()
-    end)
+    local width = BuildStandardSliderRow(
+      cards.sizing.content,
+      "Width",
+      24,
+      200,
+      1,
+      db.rotationhelper.width or 52,
+      "%.0f",
+      function(v) return math.floor(v + 0.5) end,
+      function(v)
+        db.rotationhelper.width = v
+        NS:ApplyAll()
+      end
+    )
+    width:SetPoint("TOPLEFT", scale, "BOTTOMLEFT", 0, -14)
+    width:SetPoint("TOPRIGHT", scale, "BOTTOMRIGHT", 0, -14)
+
+    local height = BuildStandardSliderRow(
+      cards.sizing.content,
+      "Height",
+      24,
+      200,
+      1,
+      db.rotationhelper.height or 52,
+      "%.0f",
+      function(v) return math.floor(v + 0.5) end,
+      function(v)
+        db.rotationhelper.height = v
+        NS:ApplyAll()
+      end
+    )
+    height:SetPoint("TOPLEFT", width, "BOTTOMLEFT", 0, -14)
+    height:SetPoint("TOPRIGHT", width, "BOTTOMRIGHT", 0, -14)
+
+    local visualsText = Small(cards.visuals.content, "Reserved for future Rotation visuals.")
+    visualsText:SetPoint("TOPLEFT", 6, -10)
+    visualsText:SetTextColor(0.78, 0.78, 0.80)
+
+    local advancedText = Small(cards.advanced.content, "Reserved for future Rotation advanced options.")
+    advancedText:SetPoint("TOPLEFT", 6, -10)
+    advancedText:SetTextColor(0.78, 0.78, 0.80)
   end
 
   -- =========================================================
@@ -1189,7 +1160,7 @@ function NS:InitOptions()
   -- =========================================================
     pages.minimap = CreateFrame("Frame", nil, content); pages.minimap:SetAllPoints(true)
     do
-    MakeModuleHeader(pages.minimap, "minimapbar")
+    local minimapEnable = MakeModuleHeader(pages.minimap, "minimapbar")
 
     if db.minimapbar.locked == nil then
       db.minimapbar.locked = false
@@ -1197,9 +1168,22 @@ function NS:InitOptions()
     if not db.minimapbar.orientation then
       db.minimapbar.orientation = "VERTICAL"
     end
+    if db.minimapbar.popoutAlpha == nil then
+      db.minimapbar.popoutAlpha = 0.85
+    end
+    if db.minimapbar.popoutStay == nil then
+      db.minimapbar.popoutStay = 2.0
+    end
 
-    local lockCB = MakeCheckbox(pages.minimap, "Lock Bar", "Prevents dragging the minimap bar.")
-    lockCB:SetPoint("TOPLEFT", 18, FIRST_CONTROL_Y)
+    local cards = BuildStandardModuleCards(pages.minimap)
+
+    minimapEnable:ClearAllPoints()
+    minimapEnable:SetParent(cards.general.content)
+    minimapEnable:SetPoint("TOPLEFT", 6, -4)
+    ApplyToggleSkin(minimapEnable)
+
+    local lockCB = MakeCheckbox(cards.general.content, "Lock Bar", "Prevents dragging the minimap bar.")
+    lockCB:SetPoint("TOPLEFT", 330, -4)
     lockCB:SetChecked(db.minimapbar.locked == true)
     lockCB:SetScript("OnClick", function()
       db.minimapbar.locked = lockCB:GetChecked()
@@ -1207,63 +1191,81 @@ function NS:InitOptions()
         NS.Modules.minimapbar:SetLocked(db.minimapbar.locked, true)
       end
     end)
+    ApplyToggleSkin(lockCB)
 
-    if db.minimapbar.popoutAlpha == nil then
-      db.minimapbar.popoutAlpha = 0.85
-    end
-    local alpha = MakeSlider(pages.minimap, "Popout Opacity", 0.2, 1.0, 0.05)
-    alpha:SetPoint("TOPLEFT", lockCB, "BOTTOMLEFT", 0, GROUP_GAP)
-    alpha:SetValue(db.minimapbar.popoutAlpha or 0.85)
-    alpha:SetLabelValue(db.minimapbar.popoutAlpha or 0.85, "%.2f")
-    alpha:SetScript("OnValueChanged", function(_, v)
-      v = Round2(v)
-      db.minimapbar.popoutAlpha = v
-      alpha:SetLabelValue(v, "%.2f")
-      if NS.Modules and NS.Modules.minimapbar then
-        if NS.Modules.minimapbar.ApplyPopoutAlpha then
-          NS.Modules.minimapbar:ApplyPopoutAlpha()
+    local generalDivider = MakeAccentDivider(cards.general.content)
+    generalDivider:SetPoint("TOPLEFT", 0, -40)
+    generalDivider:SetPoint("TOPRIGHT", 0, -40)
+
+    local alpha = BuildStandardSliderRow(
+      cards.sizing.content,
+      "Opacity",
+      0.2,
+      1.0,
+      0.05,
+      db.minimapbar.popoutAlpha or 0.85,
+      "%.2f",
+      Round2,
+      function(v)
+        db.minimapbar.popoutAlpha = v
+        if NS.Modules and NS.Modules.minimapbar then
+          if NS.Modules.minimapbar.ApplyPopoutAlpha then
+            NS.Modules.minimapbar:ApplyPopoutAlpha()
+          else
+            NS:ApplyAll()
+          end
         else
           NS:ApplyAll()
         end
-      else
-        NS:ApplyAll()
       end
-    end)
+    )
+    alpha:SetPoint("TOPLEFT", 6, -10)
+    alpha:SetPoint("TOPRIGHT", -6, -10)
 
-    if db.minimapbar.popoutStay == nil then
-      db.minimapbar.popoutStay = 2.0
-    end
-    local stay = MakeSlider(pages.minimap, "Popout Visibility (sec)", 1, 10, 0.5)
-    stay:SetPoint("TOPLEFT", alpha, "BOTTOMLEFT", 0, SLIDER_GAP)
-    stay:SetValue(db.minimapbar.popoutStay or 2.0)
-    stay:SetLabelValue(db.minimapbar.popoutStay or 2.0, "%.1f")
-    stay:SetScript("OnValueChanged", function(_, v)
-      v = Round2(v)
-      db.minimapbar.popoutStay = v
-      stay:SetLabelValue(v, "%.1f")
-    end)
+    local stay = BuildStandardSliderRow(
+      cards.sizing.content,
+      "Visibility",
+      1,
+      10,
+      0.5,
+      db.minimapbar.popoutStay or 2.0,
+      "%.1f",
+      Round2,
+      function(v)
+        db.minimapbar.popoutStay = v
+      end
+    )
+    stay:SetPoint("TOPLEFT", alpha, "BOTTOMLEFT", 0, -14)
+    stay:SetPoint("TOPRIGHT", alpha, "BOTTOMRIGHT", 0, -14)
 
+    local visualsText = Small(cards.visuals.content, "Reserved for future Minimap visuals.")
+    visualsText:SetPoint("TOPLEFT", 6, -10)
+    visualsText:SetTextColor(0.78, 0.78, 0.80)
+
+    local advancedText = Small(cards.advanced.content, "Reserved for future Minimap advanced options.")
+    advancedText:SetPoint("TOPLEFT", 6, -10)
+    advancedText:SetTextColor(0.78, 0.78, 0.80)
   end
 
   -- =========================================================
   -- NAVIGATION MENU
   -- =========================================================
     local navItems = {
-    { key="general", label="General" },
-    { key="xp",      label="XP / Rep Bar" },
-    { key="cast",    label="Cast Bar" },
-    { key="charsheet", label="Character Sheet" },
-    { key="friendly", label="Friendly Nameplates" },
-    { key="rotation", label="Rotation Helper" },
-    { key="minimap", label="Minimap Bar" },
-    { key="loot",    label="Loot Toasts" },
+      { key = "general",  label = "General",              media = "General.png" },
+      { key = "xp",       label = "XP / Rep Bar",         media = "XP_Rep_Bar.png" },
+      { key = "cast",     label = "Cast Bar",             media = "Cast_Bar.png" },
+      { key = "friendly", label = "Friendly Nameplates",  media = "Friendly_Nameplates.png" },
+      { key = "rotation", label = "Rotation Helper",      media = "Rotation_Helper.png" },
+      { key = "minimap",  label = "Minimap Bar",          media = "Minimap_Bar.png" },
+      { key = "loot",     label = "Loot Toasts",          media = "Loot_Toasts.png" },
+      { key = nil,        label = "",                     media = nil },
+      { key = nil,        label = "",                     media = nil },
     }
 
     local navKeyToDb = {
       general = "general",
       xp = "xpbar",
       cast = "castbar",
-      charsheet = "charsheet",
       friendly = "friendlyplates",
       rotation = "rotationhelper",
       minimap = "minimapbar",
@@ -1279,73 +1281,106 @@ function NS:InitOptions()
       return db[dbKey] and db[dbKey].enabled ~= false
     end
 
-    local y = -92
-    for _, it in ipairs(navItems) do
-      local b = CreateFrame("Button", nil, nav, "BackdropTemplate")
-      b:SetSize(186, 28)
-      b:SetPoint("TOPLEFT", 7, y)
+    -- Single-row nav lives in the right content panel, left-aligned.
+    local navGrid = CreateFrame("Frame", nil, content)
+    navGrid:SetPoint("TOPLEFT", content, "TOPLEFT", 18, -26)
+    navGrid:SetPoint("TOPRIGHT", content, "TOPRIGHT", -18, -26)
+    navGrid:SetHeight(44)
 
-      -- Backdrop for button
+    local function ApplyNavButtonState(btn)
+      if not btn or btn._isPlaceholder then return end
+      if btn._huiSelected then
+        btn:SetBackdropColor(0.18, 0.08, 0.24, 0.88)
+        btn:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.95)
+        if btn.selectedGlow then btn.selectedGlow:Show() end
+      else
+        btn:SetBackdropColor(0.06, 0.07, 0.10, 0.82)
+        if btn._huiEnabledState == true then
+          btn:SetBackdropBorderColor(0.20, 0.88, 0.32, 0.90) -- enabled: green border
+        elseif btn._huiEnabledState == false then
+          btn:SetBackdropBorderColor(0.92, 0.22, 0.22, 0.90) -- disabled: red border
+        else
+          btn:SetBackdropBorderColor(0.52, 0.54, 0.60, 0.26)
+        end
+        if btn.selectedGlow then btn.selectedGlow:Hide() end
+      end
+    end
+
+    local function SelectNavKey(key)
+      if not key then return end
+      ShowPage(key)
+      for _, btn in ipairs(nav._huiButtons or {}) do
+        btn._huiSelected = (btn._key == key)
+        ApplyNavButtonState(btn)
+      end
+    end
+
+    for idx, it in ipairs(navItems) do
+      local navKey = it.key
+      local b = CreateFrame("Button", nil, navGrid, "BackdropTemplate")
+      b:SetSize(44, 44)
+      b:SetPoint("LEFT", navGrid, "LEFT", (idx - 1) * 46, 0)
+      b._key = it.key
+      b._isPlaceholder = (it.key == nil)
+      b._label = it.label
+
       b:SetBackdrop({
         bgFile = "Interface/Buttons/WHITE8x8",
         edgeFile = "Interface/Buttons/WHITE8x8",
         edgeSize = 1,
-        insets = { left = 0, right = 0, top = 0, bottom = 0 },
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
       })
-      b:SetBackdropColor(0, 0, 0, 0)
-      b:SetBackdropBorderColor(0, 0, 0, 0)
 
-      -- Left orange accent (hidden by default)
-      b.accent = b:CreateTexture(nil, "OVERLAY")
-      b.accent:SetPoint("TOPLEFT", 0, 0)
-      b.accent:SetPoint("BOTTOMLEFT", 0, 0)
-      b.accent:SetWidth(3)
-      b.accent:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 1)
-      b.accent:Hide()
+      b.icon = b:CreateTexture(nil, "ARTWORK")
+      b.icon:SetPoint("TOPLEFT", 1, -1)
+      b.icon:SetPoint("BOTTOMRIGHT", -1, 1)
+      if it.media then
+        b.icon:SetTexture("Interface\\AddOns\\HarathUI\\Media\\" .. it.media)
+      else
+        b.icon:SetTexture("Interface/Buttons/WHITE8x8")
+        b.icon:SetColorTexture(0, 0, 0, 0.18)
+      end
+
+      b.selectedGlow = b:CreateTexture(nil, "OVERLAY")
+      b.selectedGlow:SetPoint("TOPLEFT", 1, -1)
+      b.selectedGlow:SetPoint("BOTTOMRIGHT", -1, 1)
+      b.selectedGlow:SetTexture("Interface/Buttons/WHITE8x8")
+      b.selectedGlow:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 0.12)
+      b.selectedGlow:Hide()
+
       RegisterTheme(function(c)
-        if b.accent and b.accent.SetColorTexture then
-          b.accent:SetColorTexture(c[1], c[2], c[3], 1)
+        if b.selectedGlow and b.selectedGlow.SetColorTexture then
+          b.selectedGlow:SetColorTexture(c[1], c[2], c[3], 0.12)
         end
+        ApplyNavButtonState(b)
       end)
 
-      b.indicator = b:CreateTexture(nil, "OVERLAY")
-      b.indicator:SetSize(10, 10)
-      b.indicator:SetPoint("LEFT", 10, 0)
-
-      b.label = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-      b.label:SetPoint("LEFT", b.indicator, "RIGHT", 6, 0)
-      b.label:SetText(it.label)
-      b.label:SetTextColor(0.85, 0.85, 0.85)
-      ApplyUIFont(b.label, 13, "OUTLINE", { 0.85, 0.85, 0.85 })
-      b._key = it.key
-      b:SetScript("OnEnter", function(self)
-        if self._huiSelected then return end
-        self:SetBackdropColor(0.2, 0.2, 0.22, 0.5)
-        self.label:SetTextColor(ORANGE[1], ORANGE[2], ORANGE[3])
-      end)
-      b:SetScript("OnLeave", function(self)
-        if self._huiSelected then return end
-        self:SetBackdropColor(0, 0, 0, 0)
-        self.label:SetTextColor(0.85, 0.85, 0.85)
-      end)
-      y = y - 32
-      b:SetScript("OnClick", function()
-        ShowPage(it.key)
-        for _, btn in ipairs(nav._huiButtons or {}) do
-          btn._huiSelected = (btn._key == it.key)
-          if btn._huiSelected then
-            btn:SetBackdropColor(0.2, 0.2, 0.22, 0.7)
-            btn:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.4)
-            btn.label:SetTextColor(ORANGE[1], ORANGE[2], ORANGE[3])
-            btn.accent:Show()
-          else
-            btn:SetBackdropColor(0, 0, 0, 0)
-            btn:SetBackdropBorderColor(0, 0, 0, 0)
-            btn.label:SetTextColor(0.85, 0.85, 0.85)
-            btn.accent:Hide()
+      if b._isPlaceholder then
+        b:SetBackdropColor(0.02, 0.02, 0.03, 0.48)
+        b:SetBackdropBorderColor(0.28, 0.30, 0.36, 0.18)
+        b:Disable()
+      else
+        ApplyNavButtonState(b)
+        b:SetScript("OnEnter", function(self)
+          if not self._huiSelected then
+            self:SetBackdropColor(0.12, 0.09, 0.16, 0.88)
+            self:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.68)
           end
-        end
-      end)
+          if GameTooltip then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(self._label, ORANGE[1], ORANGE[2], ORANGE[3])
+            GameTooltip:Show()
+          end
+        end)
+        b:SetScript("OnLeave", function(self)
+          ApplyNavButtonState(self)
+          if GameTooltip then GameTooltip:Hide() end
+        end)
+        b:SetScript("OnClick", function()
+          SelectNavKey(navKey)
+        end)
+      end
+
       nav._huiButtons = nav._huiButtons or {}
       table.insert(nav._huiButtons, b)
     end
@@ -1353,13 +1388,10 @@ function NS:InitOptions()
     UpdateNavIndicators = function()
       if not nav._huiButtons then return end
       for _, btn in ipairs(nav._huiButtons) do
-        local enabled = IsNavEnabled(btn._key)
-        if enabled == nil then
-          btn.indicator:Hide()
-        else
-          btn.indicator:Show()
-          btn.indicator:SetTexture(enabled and "Interface\\FriendsFrame\\StatusIcon-Online"
-            or "Interface\\FriendsFrame\\StatusIcon-Offline")
+        if not btn._isPlaceholder then
+          local enabled = IsNavEnabled(btn._key)
+          btn._huiEnabledState = enabled
+          ApplyNavButtonState(btn)
         end
       end
       UpdateVersionIndicator()
@@ -1367,26 +1399,12 @@ function NS:InitOptions()
 
     UpdateNavIndicators()
 
-    ShowPage("general")
-    if nav._huiButtons then
-      for _, btn in ipairs(nav._huiButtons) do
-        if btn._key == "general" then
-          btn._huiSelected = true
-          btn:SetBackdropColor(0.2, 0.2, 0.22, 0.7)
-          btn:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.4)
-          btn.label:SetTextColor(ORANGE[1], ORANGE[2], ORANGE[3])
-          btn.accent:Show()
-        end
-      end
-    end
+    SelectNavKey("general")
 
     RegisterTheme(function(c)
       if not nav._huiButtons then return end
       for _, btn in ipairs(nav._huiButtons) do
-        if btn._huiSelected then
-          btn:SetBackdropBorderColor(c[1], c[2], c[3], 0.4)
-          btn.label:SetTextColor(c[1], c[2], c[3])
-        end
+        ApplyNavButtonState(btn)
       end
     end)
 

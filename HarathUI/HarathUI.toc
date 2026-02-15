@@ -2,7 +2,7 @@
 ## Title: HaraUI
 ## Notes: Modular quality-of-life UI suite (XP/Rep bar, cast bar, menu scale, loot toasts).
 ## Author: Harath
-## Version: 1.5.8
+## Version: 2.0
 ## SavedVariables: HarathUI_DB
 ## OptionalDeps: LibSharedMedia-3.0, LibDataBroker-1.1, LibDBIcon-1.0
 
@@ -23,6 +23,7 @@ Core/TooltipHooks.lua
 Options/Theme.lua
 Options/Widgets.lua
 Options/Window.lua
+Options/Pages/General.lua
 Options.lua
 Core/Slash.lua
 Core/GlobalsShim.lua
