@@ -225,6 +225,15 @@ local function ConfigureEmpowerStages()
     foundStages = desiredStages
   end
 
+  if foundStages > 0 and foundStages < 4 and (state.empowerHoldMS or 0) > 0 then
+    local totalDuration = math_max(0, state.endMS - state.startMS)
+    if totalDuration > state.empowerStageTotalMS then
+      foundStages = foundStages + 1
+      state.empowerStageDurations[foundStages] = totalDuration - state.empowerStageTotalMS
+      state.empowerStageTotalMS = totalDuration
+    end
+  end
+
   if foundStages <= 0 then
     state.empowerStages = 0
   else
