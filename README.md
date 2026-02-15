@@ -1,129 +1,126 @@
 # HaraUI
 
-A collection of World of Warcraft addons for patch 12.0.1 (Midnight).
+:sparkles: A curated World of Warcraft UI bundle focused on clean gameplay UX, practical QoL modules, and battle-tested nameplate behavior.
 
-**Bundle Version:** 1.2.1
-**Target WoW Patch:** 12.0.1 (Interface: 120001)
+![WoW Interface](https://img.shields.io/badge/WoW-12.0.1-1f6feb?style=for-the-badge)
+![HarathUI](https://img.shields.io/badge/HarathUI-1.5.8-f97316?style=for-the-badge)
+![Platynator](https://img.shields.io/badge/Platynator-319-22c55e?style=for-the-badge)
+![OPie](https://img.shields.io/badge/OPie-7.11.3-a855f7?style=for-the-badge)
 
-## Included Addons
+## :school_satchel: Bundle Overview
 
-| Addon | Version | Interface | Author |
-|-------|---------|-----------|--------|
-| HarathUI | 1.5.8 | 120001 | Harath |
-| OPie | 7.11.3 | 120001 | foxlit |
-| Platynator | 314 | 120001 | plusmouse |
+- **Target Patch:** WoW `12.0.1` (Interface `120001`)
+- **Bundle Release:** `v1.2.2` (rolling main)
+- **Focus:** fast setup, modern defaults, and modular control
 
-### HarathUI (v1.5.8)
-Modular quality-of-life UI suite.
+### :package: Included Addons
 
-**Features:**
-- XP/Reputation bar (shows rep only when tracked at max level)
-- Custom cast bar (replaces Blizzard's player cast bar)
-- Loot toasts (items, money, currency)
-- Smaller game menu scaling
-- Friendly nameplates toggle
-- Minimap button bar
-- HaraChonk character/player frame replacement with styled character sheet
-- Tracked Bars skinning for Blizzard Cooldown Viewer bars
-- Auto-accept summons module
-- Spell ID tooltip toggle
+| Addon | Version | Interface | Author | Purpose |
+|-------|---------|-----------|--------|---------|
+| HarathUI | 1.5.8 | 120001 | Harath | Modular UI/QoL suite |
+| Platynator | 319 | 120001 | plusmouse | Highly customizable nameplates |
+| OPie | 7.11.3 | 120001 | foxlit | Radial action rings |
 
-**Commands:**
-- `/hui` - Open options
-- `/hui lock` - Toggle Move Mode
-- `/hui xp | cast | loot | summon` - Toggle individual modules
+## :jigsaw: HarathUI Feature Highlights
 
-### OPie (v7.11.3)
-Radial action-binding addon.
+### :gear: Core UI Modules
+- :orange_circle: **XP/Rep Bar** with session text, rate text, and max-level behavior options
+- :large_blue_circle: **Custom Cast Bar** with icon, shield, latency spark, texture/color controls
+- :gift: **Loot Toasts** for items, currencies, and money
+- :compass: **Minimap Button Bar** with orientation, sizing, and popout controls
+- :chart_with_downwards_trend: **Smaller Game Menu** with resolution-aware scaling
 
-Groups abilities, items, mounts, macros, and more into customizable rings that appear when you hold down a keybind. Release to activate the selected action.
+### :shield: Combat & Utility
+- :label: **Friendly Player Nameplates** with class color support, font sizing, and dungeon/raid-friendly font handling
+- :dart: **Rotation Helper Frame** (compact keybind indicator panel)
+- :white_check_mark: **Auto Accept Summons**
+- :receipt: **Tracked Bars Skinning** for Blizzard Cooldown Viewer bars
+- :id: **Spell ID Tooltip Toggle**
+- :busts_in_silhouette: **Copy BattleTag** from Friends dropdown
 
-**Commands:**
-- `/opie` - Open configuration
-- `/opie rings` - Ring customization
+### :bricks: Character Sheet (HaraChonk)
+- :bust_in_silhouette: Expanded custom character frame layout
+- :bar_chart: Styled stats and gear presentation
+- :world_map: Mythic+ / vault-focused right panel with richer activity rendering
+- :art: Font/theme integration across custom frame elements
 
-**Website:** [townlong-yak.com/addons/opie](https://www.townlong-yak.com/addons/opie)
+## :keyboard: Slash Commands
 
-### Platynator (v314)
-Nameplate customization addon.
+### HarathUI
+- `/hui` -> open options
+- `/hui lock` -> toggle Move Mode
+- `/hui xp | cast | loot | summon` -> toggle module quickly
+- `/hui debug` -> toggle debug mode
+- `/hui version` -> show version details
 
-Highly configurable nameplate replacement with support for:
-- Health/Cast/Power bars
-- Aura tracking
-- Target/Focus/Mouseover highlights
-- Quest markers
-- Elite/Rare markers
-- PvP indicators
-- Custom widget positioning
+### OPie
+- `/opie` -> open configuration
+- `/opie rings` -> ring customization
 
-## Installation
+Docs: https://www.townlong-yak.com/addons/opie
 
-Copy the addon folders to your WoW AddOns directory:
-```
+## :rocket: Installation
+
+Copy addon folders into:
+
+```text
 World of Warcraft/_retail_/Interface/AddOns/
 ```
 
-## Changelog
+Then run `/reload` in-game.
 
-### v1.2.1 (2026-02-14)
-- Updated HarathUI to v1.5.8
-- Resolved Currency tab account-transfer taint path by routing bottom Character/Rep/Currency buttons through native CharacterFrame tabs
-- Fixed bottom tab routing mismatch where Rep/Currency could open Blizzard Titles/Equipment panes
+## :wrench: Local Development Workflows
 
-### v1.2.0 (2026-02-11)
-- Updated HarathUI to v1.4.1 for significant module additions
-- Added HaraChonk character/player frame replacement (Character Sheet module)
-- Added Tracked Bars skinning module
-- Added Auto Accept Summons module
-- Added Spell ID toggle to General settings
-
-### v1.1.0 (2026-02-11)
-- Updated bundle target to WoW 12.0.1 (Interface 120001)
-- Updated OPie TOC interface to 120001-only
-- Updated HarathUI to v1.2.6 and added visible version text in the settings UI
-
-### v1.0.0 (2026-01-29)
-- Initial release for WoW 12.0.7
-- Updated all addon TOC files to Interface 120007
-- Bundled HarathUI v1.2.4, OPie v7.11.3, Platynator v287
-## Local patch workflow
-
-For upstream addon updates that overwrite local compatibility changes, reapply local patches:
+### Reapply local compatibility patches
 
 ```powershell
 .\scripts\reapply-local-patches.ps1 -Patch platynator-no-friendly
 ```
 
-Patch docs are in `patches/README.md`.
+Patch docs: `patches/README.md`
 
-For a full Platynator update flow (mirror upstream folder, reapply patch, verify):
+### Full Platynator refresh flow
 
 ```powershell
 .\scripts\update-platynator.ps1 -SourcePath "C:\path\to\Platynator"
 ```
 
-## HarathUI version metadata workflow
-
-When releasing HarathUI, stamp TOC metadata from a specific git ref so build diagnostics match what you package:
+### Stamp HarathUI release metadata
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\release-harathui.ps1 -Version 1.5.8 -GitVersion 1.5.8 -CommitRef HEAD
 ```
 
-By default this also refreshes `HarathUI/Generated/HostedVersion.lua` from GitHub (`cr4zyd34thg0d/HaraUI`) so the in-game version light can compare against hosted release/tag data.
+This also updates `HarathUI/Generated/HostedVersion.lua` by default, using GitHub release/tag data for hosted version checks.
 
 Optional flags:
-- `-SkipGitHubHostedSync` to skip GitHub feed refresh.
-- `-RequireGitHubHostedSync` to fail the command if GitHub sync fails.
-- `-GitHubOwner/-GitHubRepo` to target a different repository.
-- `-GitHubToken` (or `GITHUB_TOKEN` env var) to avoid GitHub API rate limits.
+- `-SkipGitHubHostedSync`
+- `-RequireGitHubHostedSync`
+- `-GitHubOwner`, `-GitHubRepo`
+- `-GitHubToken` (or `GITHUB_TOKEN` env var)
 
-Direct low-level stamp example (advanced):
+Low-level stamp example:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata.ps1 -Version 1.5.8 -GitVersion 1.5.8 -BuildCommit 56a5bb9 -LatestCommit 56a5bb9
 ```
 
-Notes:
-- `X-Build-Commit` reflects the packaged build commit.
-- Runtime "update available" status is sourced from addon comms (and optional hosted feeds), not only local TOC metadata.
+## :spiral_notepad: Changelog
+
+### v1.2.2 (2026-02-15)
+- Updated Platynator to `v319`
+- Improved dungeon/raid friendly name font behavior for HaraUI-friendly plates
+- Expanded CharacterSheet vault and layout logic for better live data handling
+- Switched game menu scaling to a resolution-aware model
+
+### v1.2.1 (2026-02-14)
+- Updated HarathUI to `v1.5.8`
+- Resolved Currency tab account-transfer taint path by routing bottom Character/Rep/Currency buttons through native CharacterFrame tabs
+- Fixed bottom tab routing mismatch where Rep/Currency could open Blizzard Titles/Equipment panes
+
+### v1.2.0 (2026-02-11)
+- Updated HarathUI to `v1.4.1` for significant module additions
+- Added HaraChonk character/player frame replacement (Character Sheet module)
+- Added Tracked Bars skinning module
+- Added Auto Accept Summons module
+- Added Spell ID toggle to General settings
