@@ -17,6 +17,7 @@ Constants.lua
 Core.lua
 Core/Compat.lua
 Core/VersionTracker.lua
+Core/MinimapButton.lua
 Options.lua
 Core/GlobalsShim.lua
 
