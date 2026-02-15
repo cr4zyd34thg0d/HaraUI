@@ -7,14 +7,17 @@ M.active = false
 local FLAT_TEXTURE = "Interface/TargetingFrame/UI-StatusBar"
 local UPDATE_INTERVAL = 0.4
 
-local scanFrame
-local elapsedSinceScan = 0
-local skinnedBars = {}
-local hiddenRegions = {}
+local state = {
+  scanFrame = nil,
+  elapsedSinceScan = 0,
+  skinnedBars = {},
+  hiddenRegions = {},
+}
 
+-- Styling
 local function SaveAndHideRegion(region)
-  if not region or hiddenRegions[region] then return end
-  hiddenRegions[region] = {
+  if not region or state.hiddenRegions[region] then return end
+  state.hiddenRegions[region] = {
     alpha = region.GetAlpha and region:GetAlpha() or 1,
     shown = region.IsShown and region:IsShown() or false,
   }
@@ -23,19 +26,19 @@ local function SaveAndHideRegion(region)
 end
 
 local function RestoreHiddenRegions()
-  for region, state in pairs(hiddenRegions) do
+  for region, regionState in pairs(state.hiddenRegions) do
     if region then
-      if region.SetAlpha and state.alpha ~= nil then
-        region:SetAlpha(state.alpha)
+      if region.SetAlpha and regionState.alpha ~= nil then
+        region:SetAlpha(regionState.alpha)
       end
       if region.SetShown then
-        region:SetShown(state.shown == true)
-      elseif state.shown and region.Show then
+        region:SetShown(regionState.shown == true)
+      elseif regionState.shown and region.Show then
         region:Show()
       end
     end
   end
-  wipe(hiddenRegions)
+  wipe(state.hiddenRegions)
 end
 
 local function ApplyTextFont(fs, db)
@@ -54,9 +57,9 @@ local function ApplyBarStyle(bar, db)
   if not bar then return end
   if not bar.SetStatusBarTexture then return end
 
-  if not skinnedBars[bar] then
+  if not state.skinnedBars[bar] then
     local textureObj = bar.GetStatusBarTexture and bar:GetStatusBarTexture() or nil
-    skinnedBars[bar] = {
+    state.skinnedBars[bar] = {
       texture = textureObj and textureObj.GetTexture and textureObj:GetTexture() or nil,
       colorR = select(1, bar:GetStatusBarColor()),
       colorG = select(2, bar:GetStatusBarColor()),
@@ -103,6 +106,7 @@ local function ApplyBarStyle(bar, db)
   SaveAndHideRegion(bar.Glow)
 end
 
+-- Scan
 local function IsStatusBarFrame(frame)
   return frame and frame.GetObjectType and frame:GetObjectType() == "StatusBar"
 end
@@ -134,25 +138,25 @@ local function ScanCooldownViewerBars()
 end
 
 local function RestoreBars()
-  for bar, state in pairs(skinnedBars) do
-    if bar and state then
+  for bar, barState in pairs(state.skinnedBars) do
+    if bar and barState then
       if bar.SetStatusBarTexture then
-        bar:SetStatusBarTexture(state.texture or FLAT_TEXTURE)
+        bar:SetStatusBarTexture(barState.texture or FLAT_TEXTURE)
       end
       if bar.SetStatusBarColor then
-        bar:SetStatusBarColor(state.colorR or 1, state.colorG or 1, state.colorB or 1, state.colorA or 1)
+        bar:SetStatusBarColor(barState.colorR or 1, barState.colorG or 1, barState.colorB or 1, barState.colorA or 1)
       end
-      if bar.bg and state.bgTexture then
-        bar.bg:SetTexture(state.bgTexture)
-        if state.bgR then
-          bar.bg:SetVertexColor(state.bgR, state.bgG or 1, state.bgB or 1, state.bgA or 1)
+      if bar.bg and barState.bgTexture then
+        bar.bg:SetTexture(barState.bgTexture)
+        if barState.bgR then
+          bar.bg:SetVertexColor(barState.bgR, barState.bgG or 1, barState.bgB or 1, barState.bgA or 1)
         end
       elseif bar.bg and bar.bg.Hide then
         bar.bg:Hide()
       end
     end
   end
-  wipe(skinnedBars)
+  wipe(state.skinnedBars)
 end
 
 function M:Apply()
@@ -163,16 +167,16 @@ function M:Apply()
   end
 
   M.active = true
-  if not scanFrame then
-    scanFrame = CreateFrame("Frame")
+  if not state.scanFrame then
+    state.scanFrame = CreateFrame("Frame")
   end
 
-  elapsedSinceScan = 0
-  scanFrame:SetScript("OnUpdate", function(_, elapsed)
+  state.elapsedSinceScan = 0
+  state.scanFrame:SetScript("OnUpdate", function(_, elapsed)
     if not M.active then return end
-    elapsedSinceScan = elapsedSinceScan + (elapsed or 0)
-    if elapsedSinceScan < UPDATE_INTERVAL then return end
-    elapsedSinceScan = 0
+    state.elapsedSinceScan = state.elapsedSinceScan + (elapsed or 0)
+    if state.elapsedSinceScan < UPDATE_INTERVAL then return end
+    state.elapsedSinceScan = 0
     ScanCooldownViewerBars()
   end)
 
@@ -181,8 +185,8 @@ end
 
 function M:Disable()
   M.active = false
-  if scanFrame then
-    scanFrame:SetScript("OnUpdate", nil)
+  if state.scanFrame then
+    state.scanFrame:SetScript("OnUpdate", nil)
   end
   RestoreBars()
   RestoreHiddenRegions()
