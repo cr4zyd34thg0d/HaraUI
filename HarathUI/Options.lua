@@ -75,14 +75,18 @@ local ApplyDropdownFont = Theme.ApplyDropdownFont
 local RightAlignDropdownText = Theme.RightAlignDropdownText
 local ApplyDarkBackdrop = Widgets.ApplyDarkBackdrop
 local MakeSection = Widgets.MakeSection
+local MakeGlassCard = Widgets.MakeGlassCard
+local MakeAccentDivider = Widgets.MakeAccentDivider
 local Title = Widgets.Title
 local Small = Widgets.Small
 local MakeButton = Widgets.MakeButton
 local MakeCheckbox = Widgets.MakeCheckbox
+local ApplyToggleSkin = Widgets.ApplyToggleSkin
 local MakeSlider = Widgets.MakeSlider
 local Round2 = Widgets.Round2
 local OpenColorPickerRGB = Widgets.OpenColorPickerRGB
 local MakeColorSwatch = Widgets.MakeColorSwatch
+local MakeValueChip = Widgets.MakeValueChip
 
 local CHECKBOX_GAP = -2
 local CAST_CHECKBOX_GAP = CHECKBOX_GAP
@@ -585,81 +589,9 @@ function NS:InitOptions()
     do
     local castEnable = MakeModuleHeader(pages.cast, "castbar")
 
-    -- Layout constants for easier tuning.
-    local castLeftX = 18
-    local castRightX = 240
-    local castEnableY = -96
-    local castToggleGap = CAST_CHECKBOX_GAP
-
-    local showIcon = MakeCheckbox(pages.cast, "Show Spell Icon", "Show the spell icon on the left.")
-    showIcon:SetPoint("LEFT", castEnable, "RIGHT", 160, 0)
-    showIcon:SetChecked(db.castbar.showIcon)
-    showIcon:SetScript("OnClick", function()
-      db.castbar.showIcon = showIcon:GetChecked()
-      NS:ApplyAll()
-    end)
-
-    local previewBtn = MakeButton(pages.cast, "Preview Cast Bar", 160, 24)
-    previewBtn:SetPoint("TOPLEFT", castLeftX, castEnableY - 32)
-    previewBtn:SetScript("OnClick", function()
-      if NS.Modules and NS.Modules.castbar and NS.Modules.castbar.Preview then
-        NS.Modules.castbar:Preview()
-      end
-    end)
-
-    local shield = MakeCheckbox(pages.cast, "Show Interrupt Shield", "Shield icon on uninterruptible casts.")
-    shield:SetPoint("TOPLEFT", showIcon, "TOPLEFT", 0, -32)
-    shield:SetChecked(db.castbar.showShield)
-    shield:SetScript("OnClick", function()
-      db.castbar.showShield = shield:GetChecked()
-      NS:ApplyAll()
-    end)
-
-    local latency = MakeCheckbox(pages.cast, "Show Latency Spark", "Latency spark at the bar edge (best-effort).")
-    latency:SetPoint("LEFT", shield, "RIGHT", 160, 0)
-    latency:SetChecked(db.castbar.showLatencySpark)
-    latency:SetScript("OnClick", function()
-      db.castbar.showLatencySpark = latency:GetChecked()
-      NS:ApplyAll()
-    end)
-
-    local scale = MakeSlider(pages.cast, "Scale", 0.6, 1.8, 0.05)
-    scale:SetPoint("TOPLEFT", previewBtn, "BOTTOMLEFT", 0, BUTTON_TO_SLIDER_GAP)
-    scale:SetValue(db.castbar.scale or 1.0)
-    scale:SetLabelValue(db.castbar.scale or 1.0, "%.2f")
-    scale:SetScript("OnValueChanged", function(_, v)
-      v = Round2(v)
-      db.castbar.scale = v
-      scale:SetLabelValue(v, "%.2f")
-      NS:ApplyAll()
-    end)
-
-    local width = MakeSlider(pages.cast, "Width", 220, 640, 10)
-    width:SetPoint("TOPLEFT", scale, "BOTTOMLEFT", 0, SLIDER_GAP)
-    width:SetValue(db.castbar.width or 320)
-    width:SetLabelValue(db.castbar.width or 320, "%.0f")
-    width:SetScript("OnValueChanged", function(_, v)
-      v = math.floor(v + 0.5)
-      db.castbar.width = v
-      width:SetLabelValue(v, "%.0f")
-      NS:ApplyAll()
-    end)
-
-    local height = MakeSlider(pages.cast, "Height", 12, 32, 1)
-    height:SetPoint("TOPLEFT", width, "BOTTOMLEFT", 0, SLIDER_GAP)
-    height:SetValue(db.castbar.height or 16)
-    height:SetLabelValue(db.castbar.height or 16, "%.0f")
-    height:SetScript("OnValueChanged", function(_, v)
-      v = math.floor(v + 0.5)
-      db.castbar.height = v
-      height:SetLabelValue(v, "%.0f")
-      NS:ApplyAll()
-    end)
-
-    -- toggles moved above sliders
-
     if not db.castbar.barTexture then db.castbar.barTexture = "Interface/TargetingFrame/UI-StatusBar" end
     if not db.castbar.barColor then db.castbar.barColor = { r = 0.5, g = 0.5, b = 1.0 } end
+    if not db.castbar.textColor then db.castbar.textColor = { r = 1, g = 1, b = 1 } end
 
     local textures = {
       { name = "Flat",     path = "Interface/TargetingFrame/UI-StatusBar" },
@@ -667,6 +599,177 @@ function NS:InitOptions()
       { name = "White",    path = "Interface/Buttons/WHITE8x8" },
     }
 
+    local tabRow = CreateFrame("Frame", nil, pages.cast)
+    tabRow:SetPoint("TOPLEFT", 18, -96)
+    tabRow:SetPoint("TOPRIGHT", -18, -96)
+    tabRow:SetHeight(26)
+
+    local tabDivider = MakeAccentDivider(pages.cast)
+    tabDivider:SetPoint("TOPLEFT", tabRow, "BOTTOMLEFT", 0, -4)
+    tabDivider:SetPoint("TOPRIGHT", tabRow, "BOTTOMRIGHT", 0, -4)
+
+    local cards = {
+      general = MakeGlassCard(pages.cast, "General"),
+      sizing = MakeGlassCard(pages.cast, "Sizing"),
+      visuals = MakeGlassCard(pages.cast, "Visuals"),
+      advanced = MakeGlassCard(pages.cast, "Advanced"),
+    }
+    for _, card in pairs(cards) do
+      card:SetPoint("TOPLEFT", 18, -136)
+      card:SetPoint("TOPRIGHT", -18, -136)
+      card:SetPoint("BOTTOMLEFT", 18, 18)
+      card:SetPoint("BOTTOMRIGHT", -18, 18)
+    end
+
+    local function BuildSliderRow(parent, labelText, minv, maxv, step, initial, fmt, coerce, onValue)
+      local row = CreateFrame("Frame", nil, parent)
+      row:SetHeight(34)
+
+      row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+      row.label:SetPoint("LEFT", 0, 0)
+      row.label:SetWidth(96)
+      row.label:SetJustifyH("LEFT")
+      row.label:SetText(labelText)
+      ApplyUIFont(row.label, 12, "OUTLINE", { 0.93, 0.93, 0.95 })
+
+      local slider = MakeSlider(row, labelText, minv, maxv, step)
+      if slider.Label then slider.Label:Hide() end
+      if slider.Text then slider.Text:Hide() end
+      slider:ClearAllPoints()
+      slider:SetWidth(330)
+      slider:SetPoint("LEFT", row.label, "RIGHT", 10, 0)
+      slider:SetValue(initial)
+
+      local chip = MakeValueChip(row, 62, 20)
+      chip:SetPoint("LEFT", slider, "RIGHT", 14, 0)
+      chip:SetValue(initial, fmt)
+
+      slider:SetScript("OnValueChanged", function(_, raw)
+        local value = coerce and coerce(raw) or raw
+        chip:SetValue(value, fmt)
+        onValue(value)
+      end)
+
+      row.slider = slider
+      row.chip = chip
+      return row
+    end
+
+    -- General card controls.
+    castEnable:ClearAllPoints()
+    castEnable:SetParent(cards.general.content)
+    castEnable:SetPoint("TOPLEFT", 6, -4)
+    ApplyToggleSkin(castEnable)
+
+    local showIcon = MakeCheckbox(cards.general.content, "Show Spell Icon", "Show the spell icon on the left.")
+    showIcon:SetPoint("TOPLEFT", 330, -4)
+    showIcon:SetChecked(db.castbar.showIcon)
+    showIcon:SetScript("OnClick", function()
+      db.castbar.showIcon = showIcon:GetChecked()
+      NS:ApplyAll()
+    end)
+    ApplyToggleSkin(showIcon)
+
+    local shield = MakeCheckbox(cards.general.content, "Show Interrupt Shield", "Shield icon on uninterruptible casts.")
+    shield:SetPoint("TOPLEFT", 6, -40)
+    shield:SetChecked(db.castbar.showShield)
+    shield:SetScript("OnClick", function()
+      db.castbar.showShield = shield:GetChecked()
+      NS:ApplyAll()
+    end)
+    ApplyToggleSkin(shield)
+
+    local latency = MakeCheckbox(cards.general.content, "Show Latency Spark", "Latency spark at the bar edge (best-effort).")
+    latency:SetPoint("TOPLEFT", 330, -40)
+    latency:SetChecked(db.castbar.showLatencySpark)
+    latency:SetScript("OnClick", function()
+      db.castbar.showLatencySpark = latency:GetChecked()
+      NS:ApplyAll()
+    end)
+    ApplyToggleSkin(latency)
+
+    local previewBtn = MakeButton(cards.general.content, "Preview Cast Bar", 170, 24)
+    previewBtn:SetPoint("TOPLEFT", 6, -86)
+    previewBtn:SetScript("OnClick", function()
+      if NS.Modules and NS.Modules.castbar and NS.Modules.castbar.Preview then
+        NS.Modules.castbar:Preview()
+      end
+    end)
+
+    local generalDivider = MakeAccentDivider(cards.general.content)
+    generalDivider:SetPoint("TOPLEFT", 0, -124)
+    generalDivider:SetPoint("TOPRIGHT", 0, -124)
+
+    -- Sizing card controls.
+    local scale = BuildSliderRow(
+      cards.sizing.content,
+      "Scale",
+      0.6,
+      1.8,
+      0.05,
+      db.castbar.scale or 1.0,
+      "%.2f",
+      Round2,
+      function(v)
+        db.castbar.scale = v
+        NS:ApplyAll()
+      end
+    )
+    scale:SetPoint("TOPLEFT", 6, -10)
+    scale:SetPoint("TOPRIGHT", -6, -10)
+
+    local width = BuildSliderRow(
+      cards.sizing.content,
+      "Width",
+      220,
+      640,
+      10,
+      db.castbar.width or 320,
+      "%.0f",
+      function(v) return math.floor(v + 0.5) end,
+      function(v)
+        db.castbar.width = v
+        NS:ApplyAll()
+      end
+    )
+    width:SetPoint("TOPLEFT", scale, "BOTTOMLEFT", 0, -14)
+    width:SetPoint("TOPRIGHT", scale, "BOTTOMRIGHT", 0, -14)
+
+    local height = BuildSliderRow(
+      cards.sizing.content,
+      "Height",
+      12,
+      32,
+      1,
+      db.castbar.height or 16,
+      "%.0f",
+      function(v) return math.floor(v + 0.5) end,
+      function(v)
+        db.castbar.height = v
+        NS:ApplyAll()
+      end
+    )
+    height:SetPoint("TOPLEFT", width, "BOTTOMLEFT", 0, -14)
+    height:SetPoint("TOPRIGHT", width, "BOTTOMRIGHT", 0, -14)
+
+    local textSize = BuildSliderRow(
+      cards.sizing.content,
+      "Text Size",
+      8,
+      20,
+      1,
+      db.castbar.textSize or 11,
+      "%.0f",
+      function(v) return math.floor(v + 0.5) end,
+      function(v)
+        db.castbar.textSize = v
+        NS:ApplyAll()
+      end
+    )
+    textSize:SetPoint("TOPLEFT", height, "BOTTOMLEFT", 0, -14)
+    textSize:SetPoint("TOPRIGHT", height, "BOTTOMRIGHT", 0, -14)
+
+    -- Visuals card controls.
     local function GetCastBarColor()
       return db.castbar.barColor
     end
@@ -674,11 +777,10 @@ function NS:InitOptions()
       db.castbar.barColor = { r = r, g = g, b = b }
       NS:ApplyAll()
     end
-    local colorLabel, colorSwatch = MakeColorSwatch(pages.cast, "Bar Color", GetCastBarColor, SetCastBarColor)
-    colorLabel:SetPoint("LEFT", width, "RIGHT", 30, 0)
-    colorSwatch:SetPoint("LEFT", colorLabel, "RIGHT", 10, 0)
+    local colorLabel, colorSwatch = MakeColorSwatch(cards.visuals.content, "Bar Color", GetCastBarColor, SetCastBarColor)
+    colorLabel:SetPoint("TOPLEFT", 6, -10)
+    colorSwatch:SetPoint("LEFT", colorLabel, "RIGHT", 12, 0)
 
-    if not db.castbar.textColor then db.castbar.textColor = { r = 1, g = 1, b = 1 } end
     local function GetCastTextColor()
       return db.castbar.textColor
     end
@@ -686,28 +788,38 @@ function NS:InitOptions()
       db.castbar.textColor = { r = r, g = g, b = b }
       NS:ApplyAll()
     end
-    local textColorLabel, textColorSwatch = MakeColorSwatch(pages.cast, "Text Color", GetCastTextColor, SetCastTextColor)
-    textColorLabel:SetPoint("TOPLEFT", colorLabel, "BOTTOMLEFT", 0, -14)
-    textColorSwatch:SetPoint("LEFT", colorLabel, "RIGHT", 10, -26)
+    local textColorLabel, textColorSwatch = MakeColorSwatch(cards.visuals.content, "Text Color", GetCastTextColor, SetCastTextColor)
+    textColorLabel:SetPoint("TOPLEFT", colorLabel, "BOTTOMLEFT", 0, -20)
+    textColorSwatch:SetPoint("LEFT", textColorLabel, "RIGHT", 12, 0)
 
-    local textSize = MakeSlider(pages.cast, "Text Size", 8, 20, 1)
-    textSize:SetPoint("TOPLEFT", height, "BOTTOMLEFT", 0, SLIDER_GAP)
-    textSize:SetValue(db.castbar.textSize or 11)
-    textSize:SetLabelValue(db.castbar.textSize or 11, "%.0f")
-    textSize:SetScript("OnValueChanged", function(_, v)
-      v = math.floor(v + 0.5)
-      db.castbar.textSize = v
-      textSize:SetLabelValue(v, "%.0f")
-      NS:ApplyAll()
-    end)
+    local visualsDivider = MakeAccentDivider(cards.visuals.content)
+    visualsDivider:SetPoint("TOPLEFT", 0, -74)
+    visualsDivider:SetPoint("TOPRIGHT", 0, -74)
 
-    local texLabel = pages.cast:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    texLabel:SetPoint("TOPLEFT", textSize, "BOTTOMLEFT", 0, GROUP_GAP)
+    local texLabel = cards.visuals.content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    texLabel:SetPoint("TOPLEFT", 6, -100)
     texLabel:SetText("Bar Texture")
     ApplyUIFont(texLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
 
-    local texDD = CreateFrame("Frame", "HarathUI_CastBarTextureDropdown", pages.cast, "UIDropDownMenuTemplate")
-    texDD:SetPoint("TOPLEFT", texLabel, "BOTTOMLEFT", -16, -6)
+    local texWrap = CreateFrame("Frame", nil, cards.visuals.content, "BackdropTemplate")
+    texWrap:SetPoint("TOPLEFT", texLabel, "BOTTOMLEFT", 0, -8)
+    texWrap:SetSize(230, 32)
+    texWrap:SetBackdrop({
+      bgFile = "Interface/Buttons/WHITE8x8",
+      edgeFile = "Interface/Buttons/WHITE8x8",
+      edgeSize = 1,
+      insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    texWrap:SetBackdropColor(0.08, 0.09, 0.11, 0.88)
+    texWrap:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.35)
+    RegisterTheme(function(c)
+      if texWrap and texWrap.SetBackdropBorderColor then
+        texWrap:SetBackdropBorderColor(c[1], c[2], c[3], 0.35)
+      end
+    end)
+
+    local texDD = CreateFrame("Frame", "HarathUI_CastBarTextureDropdown", cards.visuals.content, "UIDropDownMenuTemplate")
+    texDD:SetPoint("TOPLEFT", texWrap, "TOPLEFT", -14, 4)
     UIDropDownMenu_SetWidth(texDD, 180)
 
     local function GetTextureName(path)
@@ -737,7 +849,100 @@ function NS:InitOptions()
     end)
 
     ApplyDropdownFont(texDD, 12, { 0.9, 0.9, 0.9 })
+    RightAlignDropdownText(texDD)
     RefreshTex()
+
+    -- Advanced placeholder card.
+    local advancedText = Small(cards.advanced.content, "Reserved for future Cast Bar options.")
+    advancedText:SetPoint("TOPLEFT", 6, -10)
+    advancedText:SetTextColor(0.78, 0.78, 0.80)
+
+    local castTabs = {}
+    local tabOrder = { "general", "sizing", "visuals", "advanced" }
+    local tabLabels = {
+      general = "General",
+      sizing = "Sizing",
+      visuals = "Visuals",
+      advanced = "Advanced",
+    }
+
+    local function ApplyTabStyle(btn, selected)
+      if selected then
+        btn:SetBackdropColor(0.16, 0.13, 0.09, 0.94)
+        btn:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.92)
+        btn.label:SetTextColor(ORANGE[1], ORANGE[2], ORANGE[3])
+        btn.accent:Show()
+      else
+        btn:SetBackdropColor(0.08, 0.09, 0.11, 0.82)
+        btn:SetBackdropBorderColor(0.54, 0.56, 0.62, 0.28)
+        btn.label:SetTextColor(0.86, 0.86, 0.89)
+        btn.accent:Hide()
+      end
+    end
+
+    local function ShowCastTab(key)
+      if not cards[key] then key = "general" end
+      for cardKey, card in pairs(cards) do
+        card:SetShown(cardKey == key)
+      end
+      for tabKey, tab in pairs(castTabs) do
+        tab._selected = (tabKey == key)
+        ApplyTabStyle(tab, tab._selected)
+      end
+    end
+
+    local previous
+    for _, key in ipairs(tabOrder) do
+      local tabKey = key
+      local tab = CreateFrame("Button", nil, tabRow, "BackdropTemplate")
+      tab:SetSize(110, 24)
+      if previous then
+        tab:SetPoint("LEFT", previous, "RIGHT", 8, 0)
+      else
+        tab:SetPoint("LEFT", tabRow, "LEFT", 0, 0)
+      end
+      tab:SetBackdrop({
+        bgFile = "Interface/Buttons/WHITE8x8",
+        edgeFile = "Interface/Buttons/WHITE8x8",
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+      })
+
+      tab.accent = tab:CreateTexture(nil, "OVERLAY")
+      tab.accent:SetPoint("BOTTOMLEFT", 5, 1)
+      tab.accent:SetPoint("BOTTOMRIGHT", -5, 1)
+      tab.accent:SetHeight(1)
+      tab.accent:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 0.95)
+      RegisterTheme(function(c)
+        if tab.accent and tab.accent.SetColorTexture then
+          tab.accent:SetColorTexture(c[1], c[2], c[3], 0.95)
+        end
+        ApplyTabStyle(tab, tab._selected)
+      end)
+
+      tab.label = tab:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+      tab.label:SetPoint("CENTER", 0, 0)
+      tab.label:SetText(tabLabels[tabKey] or tabKey)
+      ApplyUIFont(tab.label, 11, "OUTLINE", { 0.86, 0.86, 0.89 })
+
+      tab:SetScript("OnEnter", function(self)
+        if self._selected then return end
+        self:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.58)
+        self.label:SetTextColor(ORANGE[1], ORANGE[2], ORANGE[3])
+      end)
+      tab:SetScript("OnLeave", function(self)
+        if self._selected then return end
+        ApplyTabStyle(self, false)
+      end)
+      tab:SetScript("OnClick", function()
+        ShowCastTab(tabKey)
+      end)
+
+      castTabs[tabKey] = tab
+      previous = tab
+    end
+
+    ShowCastTab("general")
   end
 
   -- =========================================================
