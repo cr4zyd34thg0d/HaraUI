@@ -382,6 +382,16 @@ local function SetupBehaviour(parent)
   end
   table.insert(allFrames, friendlyInInstancesDropdown)
 
+  local friendlyFontOverride = addonTable.CustomiseDialog.Components.GetCheckbox(container, addonTable.Locales.FRIENDLY_NAME_ONLY_FONT_OVERRIDE, 28, function(value)
+    addonTable.Config.Set(addonTable.Config.Options.FRIENDLY_NAME_ONLY_FONT_OVERRIDE, value)
+    addonTable.CallbackRegistry:TriggerEvent("RefreshStateChange", {
+      [addonTable.Constants.RefreshReason.ShowBehaviour] = true,
+    })
+  end)
+  friendlyFontOverride:SetPoint("TOP", allFrames[#allFrames], "BOTTOM", 0, 0)
+  friendlyFontOverride:SetValue(addonTable.Config.Get(addonTable.Config.Options.FRIENDLY_NAME_ONLY_FONT_OVERRIDE))
+  table.insert(allFrames, friendlyFontOverride)
+
   local targetScaleSlider = addonTable.CustomiseDialog.Components.GetSlider(container, addonTable.Locales.ON_TARGET_SCALE, 1, 500, function(value) return ("%d%%"):format(value) end, function(value)
     addonTable.Config.Set(addonTable.Config.Options.TARGET_SCALE, value / 100)
   end)

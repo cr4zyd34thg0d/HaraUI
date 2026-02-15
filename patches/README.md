@@ -1,22 +1,21 @@
-﻿# Local Patch Profiles
+# Local Patch Profiles
 
 This repo keeps local compatibility patches that can be reapplied after upstream addon updates.
 
 ## Patch names
 
-- `platynator-no-friendly`
-  - Removes Platynator's friendly nameplate functionality and UI controls.
-  - Prevents Platynator from toggling global `nameplateShowAll`.
-  - Keeps enemy nameplate functionality.
-  - Includes the rect nil-width safety fix in `Platynator/Core/Initialize.lua`.
-  - Sanitizes imported profiles to strip/disable incompatible friendly settings.
+- `platynator-tahoma-override`
+  - Adds a "Overwrite to Tahoma" checkbox under the "Show friendly in instances" dropdown.
+  - When enabled, the friendly "Name only (players)" font uses Tahoma Bold instead of the profile's default.
+  - Adds a "Name Only (No Guild)" built-in style using Tahoma Bold.
+  - No upstream functionality is removed — all original friendly nameplate features remain intact.
 
 ## Reapply command
 
 From repo root:
 
 ```powershell
-.\scripts\reapply-local-patches.ps1 -Patch platynator-no-friendly
+.\scripts\reapply-local-patches.ps1 -Patch platynator-tahoma-override
 ```
 
 ## Useful options
@@ -26,10 +25,10 @@ From repo root:
 .\scripts\reapply-local-patches.ps1 -List
 
 # Verify patch state only (no file edits)
-.\scripts\reapply-local-patches.ps1 -Patch platynator-no-friendly -VerifyOnly
+.\scripts\reapply-local-patches.ps1 -Patch platynator-tahoma-override -VerifyOnly
 
 # Dry run only (checks if patch can apply)
-.\scripts\reapply-local-patches.ps1 -Patch platynator-no-friendly -DryRun
+.\scripts\reapply-local-patches.ps1 -Patch platynator-tahoma-override -DryRun
 ```
 
 ## Workflow after upstream update

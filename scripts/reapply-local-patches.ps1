@@ -1,5 +1,5 @@
-﻿param(
-  [string]$Patch = 'platynator-no-friendly',
+param(
+  [string]$Patch = 'platynator-tahoma-override',
   [switch]$List,
   [switch]$DryRun,
   [switch]$VerifyOnly
@@ -10,26 +10,20 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $patchMap = @{
-  'platynator-no-friendly' = 'patches/platynator-no-friendly.patch'
+  'platynator-tahoma-override' = 'patches/platynator-tahoma-override.patch'
 }
 
-function Test-PlatynatorNoFriendlyPatch {
+function Test-PlatynatorTahomaOverridePatch {
   param([string]$Root)
 
   $checks = @(
-    @{ Path = 'Platynator/Display/Initialize.lua'; Pattern = 'SetCVar\("nameplateShowAll"'; ExpectPresent = $false; Note = 'No global nameplateShowAll writes' },
-    @{ Path = 'Platynator/Display/Initialize.lua'; Pattern = 'NamePlateType\.Friendly'; ExpectPresent = $false; Note = 'No friendly hit-test edits' },
-    @{ Path = 'Platynator/Display/Initialize.lua'; Pattern = 'SetNamePlateFriendly'; ExpectPresent = $false; Note = 'No friendly size/click-through edits' },
-    @{ Path = 'Platynator/Display/Initialize.lua'; Pattern = 'if not UnitCanAttack\("player", unit\) then'; ExpectPresent = $true; Note = 'Friendly units are skipped on install/hook' },
-    @{ Path = 'Platynator/CustomiseDialog/Main.lua'; Pattern = 'friendlyInInstancesDropdown'; ExpectPresent = $false; Note = 'No friendly in-instance UI control' },
-    @{ Path = 'Platynator/CustomiseDialog/Main.lua'; Pattern = 'ENABLE_FRIENDLY_NAMEPLATES'; ExpectPresent = $false; Note = 'No friendly module checkbox UI' },
-    @{ Path = 'Platynator/Core/Initialize.lua'; Pattern = 'baseWidth = asset\.width or asset\.height or 0'; ExpectPresent = $true; Note = 'Rect calculation nil-width fix is present' },
-    @{ Path = 'Platynator/Display/Widgets.lua'; Pattern = 'local function GetBarBackgroundDetails\('; ExpectPresent = $true; Note = 'Bar texture fallback helper is present' },
-    @{ Path = 'Platynator/Display/Widgets.lua'; Pattern = 'Interface/AddOns/Platynator/Assets/Special/white\.png'; ExpectPresent = $true; Note = 'Bar texture nil-asset fallback is present' },
-    @{ Path = 'Platynator/Display/Widgets.lua'; Pattern = 'local absorbDetails = GetBarBackgroundDetails\('; ExpectPresent = $true; Note = 'Absorb texture fallback is present' },
-    @{ Path = 'Platynator/CustomiseDialog/ImportExport.lua'; Pattern = 'local function SanitizeImportedProfile'; ExpectPresent = $true; Note = 'Imported profile sanitizer is present' },
-    @{ Path = 'Platynator/CustomiseDialog/ImportExport.lua'; Pattern = 'import\.show_friendly_in_instances_1 = "never"'; ExpectPresent = $true; Note = 'Imported friendly-instances settings are disabled' },
-    @{ Path = 'Platynator/CustomiseDialog/ImportExport.lua'; Pattern = 'SanitizeImportedProfile\(import\)'; ExpectPresent = $true; Note = 'Profile import path applies sanitizer' }
+    @{ Path = 'Platynator/Core/Config.lua'; Pattern = 'FRIENDLY_NAME_ONLY_FONT_OVERRIDE'; ExpectPresent = $true; Note = 'Config option for font override is present' },
+    @{ Path = 'Platynator/Locales.lua'; Pattern = 'FRIENDLY_NAME_ONLY_FONT_OVERRIDE.*Overwrite to Tahoma'; ExpectPresent = $true; Note = 'Locale string for font override is present' },
+    @{ Path = 'Platynator/CustomiseDialog/Main.lua'; Pattern = 'friendlyFontOverride'; ExpectPresent = $true; Note = 'Checkbox UI for font override is present' },
+    @{ Path = 'Platynator/Display/Initialize.lua'; Pattern = 'FRIENDLY_NAME_ONLY_FONT_OVERRIDE'; ExpectPresent = $true; Note = 'Font override logic in UpdateFriendlyFont is present' },
+    @{ Path = 'Platynator/Display/Initialize.lua'; Pattern = 'Tahoma Bold'; ExpectPresent = $true; Note = 'Tahoma Bold font reference is present' },
+    @{ Path = 'Platynator/Design.lua'; Pattern = '_name-only-no-guild'; ExpectPresent = $true; Note = 'Name Only (No Guild) style is present' },
+    @{ Path = 'Platynator/Locales.lua'; Pattern = 'NAME_ONLY_NO_GUILD'; ExpectPresent = $true; Note = 'Locale string for Name Only (No Guild) is present' }
   )
 
   $ok = $true
@@ -69,8 +63,8 @@ if (-not $patchMap.ContainsKey($Patch)) {
 }
 
 if ($VerifyOnly) {
-  if ($Patch -eq 'platynator-no-friendly') {
-    if (Test-PlatynatorNoFriendlyPatch -Root $repoRoot) {
+  if ($Patch -eq 'platynator-tahoma-override') {
+    if (Test-PlatynatorTahomaOverridePatch -Root $repoRoot) {
       exit 0
     }
     exit 1
@@ -115,8 +109,8 @@ try {
 
   Write-Host "Applied patch profile: $Patch" -ForegroundColor Green
 
-  if ($Patch -eq 'platynator-no-friendly') {
-    if (-not (Test-PlatynatorNoFriendlyPatch -Root $repoRoot)) {
+  if ($Patch -eq 'platynator-tahoma-override') {
+    if (-not (Test-PlatynatorTahomaOverridePatch -Root $repoRoot)) {
       Write-Host 'Patch applied, but verification failed. Inspect files before release.' -ForegroundColor Red
       exit 1
     }

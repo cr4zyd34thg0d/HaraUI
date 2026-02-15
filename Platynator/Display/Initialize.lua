@@ -770,8 +770,18 @@ function addonTable.Display.ManagerMixin:UpdateFriendlyFont()
     end
     C_CVar.SetCVar("nameplateUseClassColorForFriendlyPlayerUnitNames", addonTable.Display.Utilities.IsInRelevantInstance() and self.friendlyNameOnlyClassColors and "1" or "0")
     if scale then
-      ChangeFont(SystemFont_NamePlate_Outlined, _G[addonTable.CurrentFont])
-      ChangeFont(SystemFont_NamePlate, _G[addonTable.CurrentFont])
+      local fontToUse = addonTable.CurrentFont
+      if addonTable.Config.Get(addonTable.Config.Options.FRIENDLY_NAME_ONLY_FONT_OVERRIDE) then
+        local overrideDesign = {font = {
+          asset = "Tahoma Bold",
+          outline = design.font.outline,
+          shadow = design.font.shadow,
+          slug = design.font.slug,
+        }}
+        fontToUse = addonTable.Core.GetFontByDesign(overrideDesign)
+      end
+      ChangeFont(SystemFont_NamePlate_Outlined, _G[fontToUse])
+      ChangeFont(SystemFont_NamePlate, _G[fontToUse])
 
       scale = scale * addonTable.Config.Get(addonTable.Config.Options.GLOBAL_SCALE) * design.scale
       local friendlyFontSize = _G[addonTable.CurrentFont]:GetFontHeight() * scale
