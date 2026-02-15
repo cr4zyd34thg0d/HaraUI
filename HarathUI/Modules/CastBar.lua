@@ -29,12 +29,20 @@ local state = {
   manualPreview = false,
   unlockPlaceholder = false,
   notInterruptible = false,
+  lagCache = nil,
+  lagCacheAt = 0,
+  events = nil,
 }
-local lagCache
-local lagCacheAt = 0
 local LAG_CACHE_INTERVAL = 0.2
 
 local FLAT_TEXTURE = "Interface/TargetingFrame/UI-StatusBar"
+local GetTime = GetTime
+local GetNetStats = GetNetStats
+local UnitCastingInfo = UnitCastingInfo
+local UnitChannelInfo = UnitChannelInfo
+local string_format = string.format
+local math_max = math.max
+local math_min = math.min
 
 local function IsEditModeActive()
   if EditModeManagerFrame and EditModeManagerFrame.IsEditModeActive then
@@ -206,8 +214,10 @@ local function OnUpdate()
 
   local db = NS:GetDB()
   if not db then return end
+  local castbar = db.castbar
 
-  local now = GetTime() * 1000
+  local nowSeconds = GetTime()
+  local now = nowSeconds * 1000
   local duration = state.endMS - state.startMS
   if duration <= 0 then return end
 
@@ -218,24 +228,23 @@ local function OnUpdate()
     progress = (now - state.startMS) / duration
   end
 
-  progress = math.max(0, math.min(1, progress))
+  progress = math_max(0, math_min(1, progress))
   f.bar:SetValue(progress)
 
-  local remain = math.max(0, (state.endMS - now) / 1000)
-  f.time:SetText(string.format("%.1f", remain))
+  local remain = math_max(0, (state.endMS - now) / 1000)
+  f.time:SetText(string_format("%.1f", remain))
 
   if f.spark then
-    if db.castbar.showLatencySpark then
-      local nowSeconds = GetTime()
-      if not lagCache or (nowSeconds - lagCacheAt) >= LAG_CACHE_INTERVAL then
+    if castbar.showLatencySpark then
+      if not state.lagCache or (nowSeconds - state.lagCacheAt) >= LAG_CACHE_INTERVAL then
         local _, _, _, lagHome = GetNetStats()
-        lagCache = (lagHome or 0) / 1000
-        lagCacheAt = nowSeconds
+        state.lagCache = (lagHome or 0) / 1000
+        state.lagCacheAt = nowSeconds
       end
-      local lag = lagCache or 0
+      local lag = state.lagCache or 0
       local dur = duration / 1000
-      local offset = (dur > 0) and math.min(lag / dur, 1) or 0
-      local pos = math.max(0, math.min(1, progress + offset))
+      local offset = (dur > 0) and math_min(lag / dur, 1) or 0
+      local pos = math_max(0, math_min(1, progress + offset))
       local w = f.bar:GetWidth()
       f.spark:ClearAllPoints()
       f.spark:SetPoint("CENTER", f.bar, "LEFT", w * pos, 0)
@@ -247,7 +256,7 @@ local function OnUpdate()
   end
 
   if f.shield then
-    f.shield:SetShown(db.castbar.showShield and state.notInterruptible)
+    f.shield:SetShown(castbar.showShield and state.notInterruptible)
   end
 
   if now >= state.endMS then
@@ -310,13 +319,13 @@ function M:Apply()
 
   f:SetScript("OnUpdate", OnUpdate)
 
-  if not M.events then
-    M.events = CreateFrame("Frame")
-    M.events:RegisterEvent("UNIT_SPELLCAST_START")
-    M.events:RegisterEvent("UNIT_SPELLCAST_STOP")
-    M.events:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
-    M.events:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
-    M.events:SetScript("OnEvent", function(_, event, unit)
+  if not state.events then
+    state.events = CreateFrame("Frame")
+    state.events:RegisterEvent("UNIT_SPELLCAST_START")
+    state.events:RegisterEvent("UNIT_SPELLCAST_STOP")
+    state.events:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+    state.events:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+    state.events:SetScript("OnEvent", function(_, event, unit)
       if not M.active then return end
       if unit ~= "player" then return end
       if event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
@@ -370,12 +379,12 @@ function M:Disable()
   if f then
     f:SetScript("OnUpdate", nil)
   end
-  if M.events then
-    M.events:UnregisterAllEvents()
-    M.events:SetScript("OnEvent", nil)
-    M.events:Hide()
-    M.events:SetParent(nil)
-    M.events = nil
+  if state.events then
+    state.events:UnregisterAllEvents()
+    state.events:SetScript("OnEvent", nil)
+    state.events:Hide()
+    state.events:SetParent(nil)
+    state.events = nil
   end
 
   -- Restore Blizzard cast bar
