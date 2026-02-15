@@ -16,6 +16,7 @@ SavedVariables.lua
 Constants.lua
 Core.lua
 Options.lua
+Core/GlobalsShim.lua
 
 Modules/Fonts.lua
 Modules/XPBar.lua

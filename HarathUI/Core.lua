@@ -773,9 +773,7 @@ local function HandleSlash(msg)
   Print("Commands: /hui (options) | lock | xp | cast | loot | summon | debug | version")
 end
 
-SLASH_HARATHUI1 = "/harathui"
-SLASH_HARATHUI2 = "/hui"
-SlashCmdList["HARATHUI"] = HandleSlash
+NS._huiHandleSlash = HandleSlash
 
 f:RegisterEvent("ADDON_LOADED")
 f:RegisterEvent("PLAYER_LOGIN")
