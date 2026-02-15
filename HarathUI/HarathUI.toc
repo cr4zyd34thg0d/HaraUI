@@ -30,6 +30,7 @@ Modules/CastBar.lua
 Modules/CharacterSheet.lua
 Modules/TrackedBars.lua
 Modules/FriendlyNameplates.lua
+Modules/RotationHelper.Keybinds.lua
 Modules/RotationHelper.lua
 Modules/MoveOptions.lua
 Modules/SmallerGameMenu.lua
