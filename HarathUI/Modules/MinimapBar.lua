@@ -17,6 +17,14 @@ local warmupTicker
 local CreateFrames
 local ApplyPopoutAlpha
 local HasClickScript
+local Refresh
+local HandleTabDragStart
+local HandleTabDragStop
+local HandleTabEnter
+local HandleTabLeave
+local HandleBarEnter
+local HandleBarLeave
+local HandleModuleEvent
 local ignoreNamePatterns = {
   "^MiniMapTracking",
   "^MiniMapTrackingButton",
@@ -782,6 +790,97 @@ local function ScheduleHide()
   end)
 end
 
+HandleTabDragStart = function()
+  local db = GetDB()
+  if db and db.locked then return end
+  holder:SetScript("OnUpdate", function()
+    if not db then return end
+    local uiw = UIParent:GetWidth()
+    local uih = UIParent:GetHeight()
+    local scale = UIParent:GetEffectiveScale()
+    local x, y = GetCursorPosition()
+    x = x / scale
+    y = y / scale
+    local left = x
+    local right = uiw - x
+    local top = uih - y
+    local bottom = y
+    local anchor
+    local snap = 60
+    if left <= snap then
+      anchor = "LEFT"
+    elseif right <= snap then
+      anchor = "RIGHT"
+    elseif top <= snap then
+      anchor = "TOP"
+    elseif bottom <= snap then
+      anchor = "BOTTOM"
+    else
+      local min = math.min(left, right, top, bottom)
+      if min == left then
+        anchor = "LEFT"
+      elseif min == right then
+        anchor = "RIGHT"
+      elseif min == top then
+        anchor = "TOP"
+      else
+        anchor = "BOTTOM"
+      end
+    end
+    local ox, oy = 0, 0
+    local hw = holder:GetWidth() / 2
+    local hh = holder:GetHeight() / 2
+    local xMax = math.max(0, (uiw / 2) - hw)
+    local yMax = math.max(0, (uih / 2) - hh)
+    if anchor == "LEFT" or anchor == "RIGHT" then
+      oy = Clamp(math.floor((y - uih / 2) + 0.5), -yMax, yMax)
+    else
+      ox = Clamp(math.floor((x - uiw / 2) + 0.5), -xMax, xMax)
+    end
+    db.anchor = anchor
+    db.x = ox
+    db.y = oy
+    UpdateOrientationFromAnchor(db)
+    NormalizeEdgePosition(db)
+    ApplyPosition()
+  end)
+end
+
+HandleTabDragStop = function()
+  holder:SetScript("OnUpdate", nil)
+  if NS.Modules and NS.Modules.minimapbar and NS.Modules.minimapbar.SnapToEdge then
+    NS.Modules.minimapbar:SnapToEdge()
+  end
+  LayoutButtons()
+  ApplyOrientation()
+end
+
+HandleTabEnter = function()
+  ShowBar(true)
+end
+
+HandleTabLeave = function()
+  ScheduleHide()
+end
+
+HandleBarEnter = function()
+  ShowBar()
+end
+
+HandleBarLeave = function()
+  ScheduleHide()
+end
+
+HandleModuleEvent = function(event)
+  if not M.active then return end
+  -- Invalidate button cache when new addons load
+  if event == "ADDON_LOADED" then
+    buttonCache = nil
+  end
+  Refresh()
+  StartWarmupRefresh()
+end
+
 CreateFrames = function()
   if holder then return end
   holder = CreateFrame("Frame", "HaraUI_MinimapBarHolder", UIParent, "BackdropTemplate")
@@ -828,73 +927,12 @@ CreateFrames = function()
   NS:ApplyDefaultFont(tab.text, 9)
   tab.text:SetAllPoints(tab.accent)
   tab:RegisterForDrag("LeftButton")
-  tab:SetScript("OnDragStart", function()
-    local db = GetDB()
-    if db and db.locked then return end
-    holder:SetScript("OnUpdate", function()
-      if not db then return end
-      local uiw = UIParent:GetWidth()
-      local uih = UIParent:GetHeight()
-      local scale = UIParent:GetEffectiveScale()
-      local x, y = GetCursorPosition()
-      x = x / scale
-      y = y / scale
-      local left = x
-      local right = uiw - x
-      local top = uih - y
-      local bottom = y
-      local anchor
-      local snap = 60
-      if left <= snap then
-        anchor = "LEFT"
-      elseif right <= snap then
-        anchor = "RIGHT"
-      elseif top <= snap then
-        anchor = "TOP"
-      elseif bottom <= snap then
-        anchor = "BOTTOM"
-      else
-        local min = math.min(left, right, top, bottom)
-        if min == left then
-          anchor = "LEFT"
-        elseif min == right then
-          anchor = "RIGHT"
-        elseif min == top then
-          anchor = "TOP"
-        else
-          anchor = "BOTTOM"
-        end
-      end
-      local ox, oy = 0, 0
-      local hw = holder:GetWidth() / 2
-      local hh = holder:GetHeight() / 2
-      local xMax = math.max(0, (uiw / 2) - hw)
-      local yMax = math.max(0, (uih / 2) - hh)
-      if anchor == "LEFT" or anchor == "RIGHT" then
-        oy = Clamp(math.floor((y - uih / 2) + 0.5), -yMax, yMax)
-      else
-        ox = Clamp(math.floor((x - uiw / 2) + 0.5), -xMax, xMax)
-      end
-      db.anchor = anchor
-      db.x = ox
-      db.y = oy
-      UpdateOrientationFromAnchor(db)
-      NormalizeEdgePosition(db)
-      ApplyPosition()
-    end)
-  end)
-  tab:SetScript("OnDragStop", function()
-    holder:SetScript("OnUpdate", nil)
-    if NS.Modules and NS.Modules.minimapbar and NS.Modules.minimapbar.SnapToEdge then
-      NS.Modules.minimapbar:SnapToEdge()
-    end
-    LayoutButtons()
-    ApplyOrientation()
-  end)
-  tab:SetScript("OnEnter", function() ShowBar(true) end)
-  tab:SetScript("OnLeave", ScheduleHide)
-  bar:SetScript("OnEnter", ShowBar)
-  bar:SetScript("OnLeave", ScheduleHide)
+  tab:SetScript("OnDragStart", HandleTabDragStart)
+  tab:SetScript("OnDragStop", HandleTabDragStop)
+  tab:SetScript("OnEnter", HandleTabEnter)
+  tab:SetScript("OnLeave", HandleTabLeave)
+  bar:SetScript("OnEnter", HandleBarEnter)
+  bar:SetScript("OnLeave", HandleBarLeave)
 
 end
 
@@ -937,7 +975,7 @@ ApplyPosition = function()
   lastOrientation = db.orientation
 end
 
-local function Refresh()
+Refresh = function()
   if not M.active then return end
   if InCombatLockdown and InCombatLockdown() then return end
   EnsureMinimapParent()
@@ -1041,13 +1079,7 @@ function M:Apply()
     self.eventFrame:RegisterEvent("ADDON_LOADED")
     self.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     self.eventFrame:SetScript("OnEvent", function(_, event)
-      if not M.active then return end
-      -- Invalidate button cache when new addons load
-      if event == "ADDON_LOADED" then
-        buttonCache = nil
-      end
-      Refresh()
-      StartWarmupRefresh()
+      HandleModuleEvent(event)
     end)
   end
   C_Timer.After(1, Refresh)
