@@ -19,6 +19,7 @@ local function Print(msg)
 end
 NS.Print = Print
 
+local DEBUG_ENABLED = false
 local DB_MIGRATION_VERSION = 1
 
 local function RunDBMigrations(dbRoot)
@@ -88,26 +89,33 @@ local function RunDBMigrations(dbRoot)
 end
 
 function NS:Debug(...)
-  local db = NS:GetDB()
-  if db and db.general.debug then
-    local args = {...}
-    local msg = ""
-    for i = 1, #args do
-      msg = msg .. tostring(args[i])
-      if i < #args then msg = msg .. " " end
-    end
-    Print("[Debug] " .. msg)
+  local debugEnabled = DEBUG_ENABLED
+  if not debugEnabled then
+    if not NS.db then return end
+    debugEnabled = NS.db.general and NS.db.general.debug
   end
+  if not debugEnabled then return end
+
+  local args = {...}
+  local msg = ""
+  for i = 1, #args do
+    msg = msg .. tostring(args[i])
+    if i < #args then msg = msg .. " " end
+  end
+  Print("[Debug] " .. msg)
 end
 
 function NS:GetDB()
+  if NS.db then
+    return NS.db
+  end
   local success, result = pcall(function()
     return HarathUI_DB and HarathUI_DB.profile
   end)
   if not success then
-    NS:Debug("Error accessing database:", result)
     return NS.DEFAULTS.profile
   end
+  NS.db = result
   return result
 end
 
@@ -134,6 +142,7 @@ function NS:InitDB()
     Print("Error loading settings, using defaults")
     HarathUI_DB.profile = DeepCopyDefaults({}, NS.DEFAULTS.profile)
   end
+  NS.db = HarathUI_DB.profile
 end
 
 NS.Modules = {}
