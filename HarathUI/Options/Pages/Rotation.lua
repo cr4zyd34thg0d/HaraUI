@@ -64,7 +64,7 @@ function NS.OptionsPages.BuildRotationPage(pages, content, MakeModuleHeader, Bui
       1,
       db.rotationhelper.width or 52,
       "%.0f",
-      function(v) return math.floor(v + 0.5) end,
+      NS.OptionsPages.CoerceInt,
       function(v)
         db.rotationhelper.width = v
         NS:ApplyAll()
@@ -81,7 +81,7 @@ function NS.OptionsPages.BuildRotationPage(pages, content, MakeModuleHeader, Bui
       1,
       db.rotationhelper.height or 52,
       "%.0f",
-      function(v) return math.floor(v + 0.5) end,
+      NS.OptionsPages.CoerceInt,
       function(v)
         db.rotationhelper.height = v
         NS:ApplyAll()

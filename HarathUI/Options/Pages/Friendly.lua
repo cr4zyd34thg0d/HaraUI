@@ -71,7 +71,7 @@ function NS.OptionsPages.BuildFriendlyPage(pages, content, MakeModuleHeader, Bui
       1,
       db.friendlyplates.fontSize or 12,
       "%.0f",
-      function(v) return math.floor(v + 0.5) end,
+      NS.OptionsPages.CoerceInt,
       function(v)
         db.friendlyplates.fontSize = v
         NS:ApplyAll()
@@ -89,7 +89,7 @@ function NS.OptionsPages.BuildFriendlyPage(pages, content, MakeModuleHeader, Bui
       1,
       db.friendlyplates.yOffset or 0,
       "%.0f",
-      function(v) return math.floor(v + 0.5) end,
+      NS.OptionsPages.CoerceInt,
       function(v)
         db.friendlyplates.yOffset = v
         NS:ApplyAll()

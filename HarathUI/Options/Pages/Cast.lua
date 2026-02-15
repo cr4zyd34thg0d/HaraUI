@@ -90,7 +90,7 @@ function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildSt
       10,
       db.castbar.width or 320,
       "%.0f",
-      function(v) return math.floor(v + 0.5) end,
+      NS.OptionsPages.CoerceInt,
       function(v)
         db.castbar.width = v
         NS:ApplyAll()
@@ -107,7 +107,7 @@ function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildSt
       1,
       db.castbar.height or 16,
       "%.0f",
-      function(v) return math.floor(v + 0.5) end,
+      NS.OptionsPages.CoerceInt,
       function(v)
         db.castbar.height = v
         NS:ApplyAll()
@@ -124,7 +124,7 @@ function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildSt
       1,
       db.castbar.textSize or 11,
       "%.0f",
-      function(v) return math.floor(v + 0.5) end,
+      NS.OptionsPages.CoerceInt,
       function(v)
         db.castbar.textSize = v
         NS:ApplyAll()

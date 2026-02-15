@@ -62,7 +62,7 @@ function NS.OptionsPages.BuildXPPage(pages, content, MakeModuleHeader, BuildStan
       10,
       db.xpbar.width or 520,
       "%.0f",
-      function(v) return math.floor(v + 0.5) end,
+      NS.OptionsPages.CoerceInt,
       function(v)
         db.xpbar.width = v
         NS:ApplyAll()
@@ -79,7 +79,7 @@ function NS.OptionsPages.BuildXPPage(pages, content, MakeModuleHeader, BuildStan
       1,
       db.xpbar.height or 12,
       "%.0f",
-      function(v) return math.floor(v + 0.5) end,
+      NS.OptionsPages.CoerceInt,
       function(v)
         db.xpbar.height = v
         NS:ApplyAll()

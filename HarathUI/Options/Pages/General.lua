@@ -2,6 +2,12 @@ local ADDON, NS = ...
 
 NS.OptionsPages = NS.OptionsPages or {}
 
+local floor = math.floor
+
+function NS.OptionsPages.CoerceInt(v)
+  return floor(v + 0.5)
+end
+
 function NS.OptionsPages.CreateBuildGeneralPageCards(db, ORANGE, MakeCheckbox, NS, UpdateNavIndicators, ApplyToggleSkin, MakeAccentDivider, MakeButton, MakeColorSwatch, SetThemeColor, Small)
   return function(cards)
     db.summons = db.summons or {}
