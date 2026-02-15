@@ -11,7 +11,17 @@ local pendingCVarApply = false
 local plates = {}
 local cvarCheckTicker
 local deferredUpdateTicket = 0
+local systemNameplateFontBackup
+local systemNameplateFontApplied = false
 M.active = false
+
+local NAMEPLATE_FONT_ALPHABETS = {
+  "roman",
+  "korean",
+  "simplifiedchinese",
+  "traditionalchinese",
+  "russian",
+}
 
 local function EnsureFriendlyDB(db)
   if not db then return nil end
@@ -199,6 +209,93 @@ local function StopCVarMonitor()
   end
 end
 
+local function IsDungeonOrRaidInstance()
+  if not IsInInstance or not GetInstanceInfo then return false end
+  local inInstance, instanceType = IsInInstance()
+  if not inInstance then return false end
+  return instanceType == "party" or instanceType == "raid"
+end
+
+local function CaptureNameplateFontFamilyState(fontFamily)
+  if not fontFamily or not fontFamily.GetFontObjectForAlphabet then return nil end
+  local saved = { alphabets = {} }
+  if fontFamily.GetShadowColor then
+    local r, g, b, a = fontFamily:GetShadowColor()
+    saved.shadowColor = { r, g, b, a }
+  end
+  if fontFamily.GetShadowOffset then
+    local x, y = fontFamily:GetShadowOffset()
+    saved.shadowOffset = { x, y }
+  end
+  for _, alphabet in ipairs(NAMEPLATE_FONT_ALPHABETS) do
+    local obj = fontFamily:GetFontObjectForAlphabet(alphabet)
+    if obj and obj.GetFont then
+      local path, size, flags = obj:GetFont()
+      saved.alphabets[alphabet] = { path = path, size = size, flags = flags }
+    end
+  end
+  return saved
+end
+
+local function ApplyNameplateFontFamily(fontFamily, path, flags)
+  if not fontFamily or not path or not fontFamily.GetFontObjectForAlphabet then return end
+  for _, alphabet in ipairs(NAMEPLATE_FONT_ALPHABETS) do
+    local obj = fontFamily:GetFontObjectForAlphabet(alphabet)
+    if obj and obj.SetFont and obj.GetFont then
+      local _, size = obj:GetFont()
+      obj:SetFont(path, size or 9, flags or "OUTLINE")
+    end
+  end
+  if fontFamily.SetShadowOffset then
+    fontFamily:SetShadowOffset(1, -1)
+  end
+  if fontFamily.SetShadowColor then
+    fontFamily:SetShadowColor(0, 0, 0, 1)
+  end
+end
+
+local function RestoreNameplateFontFamily(fontFamily, saved)
+  if not fontFamily or not saved or not saved.alphabets or not fontFamily.GetFontObjectForAlphabet then return end
+  for alphabet, fontData in pairs(saved.alphabets) do
+    local obj = fontFamily:GetFontObjectForAlphabet(alphabet)
+    if obj and obj.SetFont and fontData and fontData.path then
+      obj:SetFont(fontData.path, fontData.size or 9, fontData.flags)
+    end
+  end
+  if saved.shadowOffset and fontFamily.SetShadowOffset then
+    fontFamily:SetShadowOffset(saved.shadowOffset[1] or 0, saved.shadowOffset[2] or 0)
+  end
+  if saved.shadowColor and fontFamily.SetShadowColor then
+    fontFamily:SetShadowColor(saved.shadowColor[1] or 0, saved.shadowColor[2] or 0, saved.shadowColor[3] or 0, saved.shadowColor[4] or 1)
+  end
+end
+
+local function UpdateDungeonSystemNameplateFont(db)
+  if not db then return end
+  if not SystemFont_NamePlate or not SystemFont_NamePlate_Outlined then return end
+  if not SystemFont_NamePlate.GetFontObjectForAlphabet or not SystemFont_NamePlate_Outlined.GetFontObjectForAlphabet then return end
+
+  local shouldApply = M.active and IsDungeonOrRaidInstance()
+  if shouldApply then
+    if not systemNameplateFontBackup then
+      systemNameplateFontBackup = {
+        normal = CaptureNameplateFontFamilyState(SystemFont_NamePlate),
+        outlined = CaptureNameplateFontFamilyState(SystemFont_NamePlate_Outlined),
+      }
+    end
+    local fontPath = NS and NS.GetDefaultFontPath and NS:GetDefaultFontPath() or STANDARD_TEXT_FONT
+    local fontFlags = NS and NS.GetDefaultFontFlags and NS:GetDefaultFontFlags() or "OUTLINE"
+    ApplyNameplateFontFamily(SystemFont_NamePlate, fontPath, fontFlags)
+    ApplyNameplateFontFamily(SystemFont_NamePlate_Outlined, fontPath, fontFlags)
+    systemNameplateFontApplied = true
+  elseif systemNameplateFontApplied and systemNameplateFontBackup then
+    RestoreNameplateFontFamily(SystemFont_NamePlate, systemNameplateFontBackup.normal)
+    RestoreNameplateFontFamily(SystemFont_NamePlate_Outlined, systemNameplateFontBackup.outlined)
+    systemNameplateFontApplied = false
+    systemNameplateFontBackup = nil
+  end
+end
+
 local function IsPlayerUnit(unit)
   -- Check if it's any player (friendly or enemy), not an NPC
   return unit and UnitIsPlayer(unit)
@@ -216,7 +313,11 @@ end
 local function ApplyFont(fs, db)
   if not fs or not db then return end
   local size = db.friendlyplates.fontSize or 12
-  NS:ApplyDefaultFont(fs, size)
+  local fontPath = NS and NS.GetDefaultFontPath and NS:GetDefaultFontPath()
+  local fontFlags = NS and NS.GetDefaultFontFlags and NS:GetDefaultFontFlags() or "OUTLINE"
+  if fs.SetFont then
+    fs:SetFont(fontPath or STANDARD_TEXT_FONT, size, fontFlags)
+  end
 
   -- Ensure pixel-perfect rendering after font change
   if fs.SetSnapToPixelGrid then
@@ -423,6 +524,7 @@ function M:Refresh()
   local db = NS:GetDB()
   local fp = EnsureFriendlyDB(db)
   if not db or not fp or not fp.enabled then return end
+  UpdateDungeonSystemNameplateFont(db)
   for plate, f in pairs(plates) do
     local unit = f and f._huiUnit
     if unit then
@@ -442,6 +544,7 @@ function M:Apply()
   M.active = true
 
   ApplyFriendlyCVars()
+  UpdateDungeonSystemNameplateFont(db)
 
   if not eventFrame then
     eventFrame = CreateFrame("Frame")
@@ -464,6 +567,7 @@ function M:Apply()
 
     if event == "PLAYER_ENTERING_WORLD" then
       ApplyFriendlyCVars()
+      UpdateDungeonSystemNameplateFont(db)
       UpdateAllDeferred(db)
       -- Reapply CVars after a short delay to override Blizzard's instance settings
       C_Timer.After(0.5, function()
@@ -482,6 +586,7 @@ function M:Apply()
       -- Reapply CVars when entering instances (dungeons, raids, battlegrounds)
       -- Blizzard may reset CVars to instance-specific defaults
       ApplyFriendlyCVars()
+      UpdateDungeonSystemNameplateFont(db)
       UpdateAllDeferred(db)
       C_Timer.After(0.5, function()
         if M.active then
@@ -497,10 +602,12 @@ function M:Apply()
         ApplyFriendlyCVars()
         UpdateAllDeferred(db)
       end
+      UpdateDungeonSystemNameplateFont(db)
       return
     end
     if event == "CVAR_UPDATE" and IsWatchedCVar(arg1) then
       ApplyFriendlyCVars()
+      UpdateDungeonSystemNameplateFont(db)
       UpdateAllDeferred(db)
       return
     end
@@ -533,6 +640,7 @@ end
 function M:Disable()
   M.active = false
   StopCVarMonitor()
+  UpdateDungeonSystemNameplateFont(NS:GetDB())
   RestoreFriendlyCVars()
   pendingCVarApply = false
   friendlyCVarBackup = nil

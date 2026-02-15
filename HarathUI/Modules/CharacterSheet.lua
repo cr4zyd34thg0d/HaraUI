@@ -37,6 +37,7 @@ local S = {
   moduleEventFrame = nil,
   hookedShow = false,
   hookedHide = false,
+  hookedSizeChanged = false,
   hookedSubFrame = false,
   suppressSubFrameRefresh = false,
   liveUpdateQueued = false,
@@ -197,7 +198,9 @@ local CFG = {
 }
 CFG.PRIMARY_SHEET_WIDTH = math.floor((CFG.BASE_PRIMARY_SHEET_WIDTH * CFG.FRAME_RIGHT_EXPAND_FACTOR) + 0.5)
 CFG.PRIMARY_EXTRA_WIDTH = CFG.PRIMARY_SHEET_WIDTH - CFG.BASE_PRIMARY_SHEET_WIDTH
-CFG.CUSTOM_STATS_WIDTH = CFG.BASE_STATS_WIDTH + CFG.PRIMARY_EXTRA_WIDTH
+-- Keep stats panel near baseline width so frame expansion extends the main
+-- gear/model canvas instead of over-inflating the right stats column.
+CFG.CUSTOM_STATS_WIDTH = CFG.BASE_STATS_WIDTH
 
 local function SetCharacterSlotButtonsVisible(visible)
   for _, name in ipairs(CFG.CHARACTER_SLOT_BUTTON_NAMES) do
@@ -214,6 +217,16 @@ local function SetCharacterSlotButtonsVisible(visible)
       end
     end
   end
+end
+
+local function GetEffectiveCharacterFrameWidth()
+  if CharacterFrame and CharacterFrame.GetWidth then
+    local w = tonumber(CharacterFrame:GetWidth())
+    if w and w > 0 then
+      return w
+    end
+  end
+  return CFG.PRIMARY_SHEET_WIDTH
 end
 
 local function CaptureLayout(key, frame)
@@ -4416,6 +4429,7 @@ ApplyCustomCharacterLayout = function()
   local leftAbs = CharacterFrame.GetLeft and CharacterFrame:GetLeft() or nil
   local topAbs = CharacterFrame.GetTop and CharacterFrame:GetTop() or nil
   CharacterFrame:SetSize(CFG.PRIMARY_SHEET_WIDTH, CFG.CUSTOM_CHAR_HEIGHT)
+  local frameWidth = GetEffectiveCharacterFrameWidth()
   if leftAbs and topAbs and UIParent then
     CharacterFrame:ClearAllPoints()
     CharacterFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", leftAbs, topAbs)
@@ -4425,12 +4439,12 @@ ApplyCustomCharacterLayout = function()
   if inset then
     inset:ClearAllPoints()
     inset:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 8, -58)
-    inset:SetSize(CFG.PRIMARY_SHEET_WIDTH - 16, CFG.CUSTOM_CHAR_HEIGHT - 102)
+    inset:SetSize(frameWidth - 16, CFG.CUSTOM_CHAR_HEIGHT - 102)
   end
 
   local insetLeft = _G.CharacterFrameInsetLeft
-  -- Keep left/model region at established width; push all new width into right panel.
-  local leftWidth = CFG.BASE_PRIMARY_SHEET_WIDTH - CFG.BASE_STATS_WIDTH - CFG.CUSTOM_PANE_GAP - 36
+  -- Let frame expansion widen the left/model region; keep stats column compact.
+  local leftWidth = frameWidth - CFG.CUSTOM_STATS_WIDTH - CFG.CUSTOM_PANE_GAP - 36
   if leftWidth < 320 then
     leftWidth = 320
   end
@@ -4751,7 +4765,8 @@ local function ApplyChonkySlotLayout()
   local topY = -64
   local leftX = 14
   local statsWidth = math.max(140, math.floor((CFG.CUSTOM_STATS_WIDTH * 0.9) + 0.5))
-  local rightColumnX = CFG.PRIMARY_SHEET_WIDTH - statsWidth - 55
+  local frameWidth = GetEffectiveCharacterFrameWidth()
+  local rightColumnX = frameWidth - statsWidth - 55
 
   local leftSlots  = { head, neck, shoulder, back, chest, shirt, tabard, wrist }
   local rightSlots = { hands, waist, legs, feet, finger0, finger1, trinket0, trinket1 }
@@ -4792,7 +4807,8 @@ local function ApplyChonkyModelLayout()
   local boxWidth = 356
   local statsWidth = math.max(140, math.floor((CFG.CUSTOM_STATS_WIDTH * 0.9) + 0.5))
   local leftColumnX = 14
-  local rightColumnX = CFG.PRIMARY_SHEET_WIDTH - statsWidth - 55
+  local frameWidth = GetEffectiveCharacterFrameWidth()
+  local rightColumnX = frameWidth - statsWidth - 55
   local slotSize = CFG.SLOT_ICON_SIZE
   local leftColumnCenter = leftColumnX + (slotSize * 0.5)
   local rightColumnCenter = rightColumnX + (slotSize * 0.5)
@@ -6097,9 +6113,97 @@ function RP.VaultToNumber(v)
   return nil
 end
 
+function RP.GetWeeklyRewardTypeValue(name, fallback)
+  local t = Enum and Enum.WeeklyRewardChestThresholdType
+  local v = t and t[name]
+  if type(v) == "number" then
+    return v
+  end
+  return fallback
+end
+
+RP.WEEKLY_REWARD_TYPE = {
+  Raid = RP.GetWeeklyRewardTypeValue("Raid", 1),
+  Activities = RP.GetWeeklyRewardTypeValue("Activities", 2),
+  World = RP.GetWeeklyRewardTypeValue("World", 3),
+  RankedPvP = RP.GetWeeklyRewardTypeValue("RankedPvP", 4),
+}
+
+function RP.NormalizeVaultTrackType(activityType)
+  local t = RP.VaultToNumber(activityType)
+  if not t then return nil end
+  if t == RP.WEEKLY_REWARD_TYPE.Activities then return 2 end
+  if t == RP.WEEKLY_REWARD_TYPE.Raid then return 1 end
+  if t == RP.WEEKLY_REWARD_TYPE.World then return 3 end
+  if t == RP.WEEKLY_REWARD_TYPE.RankedPvP then return 3 end
+
+  -- Legacy fallback for older enum layouts.
+  if t == 2 then return 2 end
+  if t == 1 then return 1 end
+  if t == 3 or t == 4 then return 3 end
+  return nil
+end
+
+function RP.IsVaultPvPActivity(act)
+  if type(act) ~= "table" then return false end
+  local t = RP.VaultToNumber(act.type)
+  if not t then return false end
+  if t == RP.WEEKLY_REWARD_TYPE.RankedPvP then
+    return true
+  end
+  return RP.WEEKLY_REWARD_TYPE.RankedPvP == 4 and t == 4
+end
+
+function RP.GetVaultActivityRewards(act)
+  if type(act) ~= "table" or type(act.rewards) ~= "table" then
+    return {}
+  end
+  return act.rewards
+end
+
+function RP.GetVaultActivityThreshold(trackType, col, act)
+  if type(act) == "table" then
+    local threshold = RP.VaultToNumber(act.threshold) or RP.VaultToNumber(act.requiredProgress)
+    if threshold and threshold > 0 then
+      return math.floor(threshold + 0.5)
+    end
+  end
+  local fallback = RP.VAULT_THRESHOLDS_BY_TYPE[trackType]
+  return (fallback and fallback[col]) or 0
+end
+
 function RP.GetVaultActivityProgress(act)
   if type(act) ~= "table" then return 0 end
   return RP.VaultToNumber(act.progress) or RP.VaultToNumber(act.completedActivities) or RP.VaultToNumber(act.currentProgress) or 0
+end
+
+function RP.GetItemLevelFromHyperlink(hyperlink)
+  if type(hyperlink) ~= "string" or hyperlink == "" then return nil end
+  local ilvl = nil
+
+  if C_Item and C_Item.GetDetailedItemLevelInfo then
+    local ok, n = pcall(C_Item.GetDetailedItemLevelInfo, hyperlink)
+    if ok then
+      ilvl = RP.VaultToNumber(n)
+    end
+  end
+  if (not ilvl or ilvl <= 0) and GetDetailedItemLevelInfo then
+    local ok, n = pcall(GetDetailedItemLevelInfo, hyperlink)
+    if ok then
+      ilvl = RP.VaultToNumber(n)
+    end
+  end
+  if (not ilvl or ilvl <= 0) and GetItemInfo then
+    local ok, _, _, _, itemLevel = pcall(GetItemInfo, hyperlink)
+    if ok then
+      ilvl = RP.VaultToNumber(itemLevel)
+    end
+  end
+
+  if ilvl and ilvl > 0 then
+    return math.floor(ilvl + 0.5)
+  end
+  return nil
 end
 
 function RP.GetVaultActivityItemLevel(act)
@@ -6108,21 +6212,44 @@ function RP.GetVaultActivityItemLevel(act)
   if direct and direct > 100 then
     return math.floor(direct + 0.5)
   end
-  if C_WeeklyRewards and C_WeeklyRewards.GetActivityEncounterInfo and act.id then
-    local ok, info = pcall(C_WeeklyRewards.GetActivityEncounterInfo, act.id)
-    if ok and type(info) == "table" then
-      local n = RP.VaultToNumber(info.itemLevel) or RP.VaultToNumber(info.rewardItemLevel) or RP.VaultToNumber(info.ilvl)
-      if n and n > 100 then
-        return math.floor(n + 0.5)
+
+  if C_WeeklyRewards and C_WeeklyRewards.GetItemHyperlink then
+    for _, reward in ipairs(RP.GetVaultActivityRewards(act)) do
+      local itemDBID = reward and reward.itemDBID
+      if itemDBID then
+        local ok, hyperlink = pcall(C_WeeklyRewards.GetItemHyperlink, itemDBID)
+        if ok then
+          local ilvl = RP.GetItemLevelFromHyperlink(hyperlink)
+          if ilvl and ilvl > 100 then
+            return ilvl
+          end
+        end
       end
     end
   end
+
+  if C_WeeklyRewards and C_WeeklyRewards.GetExampleRewardItemHyperlinks and act.id then
+    local ok, hyperlink = pcall(C_WeeklyRewards.GetExampleRewardItemHyperlinks, act.id)
+    if ok then
+      local ilvl = RP.GetItemLevelFromHyperlink(hyperlink)
+      if ilvl and ilvl > 100 then
+        return ilvl
+      end
+    end
+  end
+
   return nil
 end
 
 function RP.GetVaultRaidDifficultyLabel(act)
   if type(act) ~= "table" then return "Raid" end
   local diff = RP.VaultToNumber(act.difficultyID) or RP.VaultToNumber(act.difficulty) or RP.VaultToNumber(act.level)
+  if diff and DifficultyUtil and DifficultyUtil.GetDifficultyName then
+    local name = DifficultyUtil.GetDifficultyName(diff)
+    if type(name) == "string" and name ~= "" then
+      return name
+    end
+  end
   local map = {
     [17] = "LFR",
     [14] = "Normal",
@@ -6147,6 +6274,12 @@ function RP.GetVaultHardestDifficultyLabel(trackType, act)
   end
 
   if trackType == 2 then
+    if C_WeeklyRewards and C_WeeklyRewards.GetDifficultyIDForActivityTier and act.activityTierID and DifficultyUtil and DifficultyUtil.ID then
+      local ok, difficultyID = pcall(C_WeeklyRewards.GetDifficultyIDForActivityTier, act.activityTierID)
+      if ok and difficultyID == DifficultyUtil.ID.DungeonHeroic then
+        return "Heroic"
+      end
+    end
     local lvl = RP.VaultToNumber(act.level) or RP.VaultToNumber(act.keystoneLevel) or RP.VaultToNumber(act.bestLevel) or RP.VaultToNumber(act.bestRunLevel) or RP.VaultToNumber(act.challengeLevel)
     if lvl and lvl > 0 then
       return ("+%d"):format(math.floor(lvl + 0.5))
@@ -6155,6 +6288,15 @@ function RP.GetVaultHardestDifficultyLabel(trackType, act)
   end
 
   if trackType == 3 then
+    if RP.IsVaultPvPActivity(act) and PVPUtil and PVPUtil.GetTierName then
+      local pvpTier = RP.VaultToNumber(act.level)
+      if pvpTier and pvpTier > 0 then
+        local tierName = PVPUtil.GetTierName(pvpTier)
+        if type(tierName) == "string" and tierName ~= "" then
+          return tierName
+        end
+      end
+    end
     local tier = RP.VaultToNumber(act.level) or RP.VaultToNumber(act.tier) or RP.VaultToNumber(act.tierID) or RP.VaultToNumber(act.difficulty) or RP.VaultToNumber(act.difficultyID)
     if tier and tier > 0 then
       return ("Tier %d"):format(math.floor(tier + 0.5))
@@ -6181,6 +6323,43 @@ RP.VAULT_TRACK_COLOR = {
   [2] = { 0.12, 0.04, 0.18, 0.74, 0.38, 0.22, 0.56, 0.90 },
   [3] = { 0.06, 0.11, 0.08, 0.74, 0.20, 0.40, 0.26, 0.88 },
 }
+RP.VAULT_UNLOCKED_ILVL_COLOR = { 1.00, 0.84, 0.22, 1.0 }
+
+function RP.ApplyVaultCardItemLevelStyle(card, complete, ilvl, fontPath, baseSize, outline)
+  if not (card and card.ilvl) then return end
+  local hasILvl = type(ilvl) == "number" and ilvl > 0
+  local normalSize = math.max(10, RP.VaultToNumber(baseSize) or 12)
+  local unlockedSize = normalSize + 6
+
+  card.ilvl:ClearAllPoints()
+  if complete and hasILvl then
+    card.ilvl:SetPoint("CENTER", card, "CENTER", 0, 0)
+    card.ilvl:SetJustifyH("CENTER")
+    card.ilvl:SetTextColor(
+      RP.VAULT_UNLOCKED_ILVL_COLOR[1],
+      RP.VAULT_UNLOCKED_ILVL_COLOR[2],
+      RP.VAULT_UNLOCKED_ILVL_COLOR[3],
+      RP.VAULT_UNLOCKED_ILVL_COLOR[4]
+    )
+    if card.ilvl.SetFont and fontPath then
+      card.ilvl:SetFont(fontPath, unlockedSize, outline)
+    end
+  else
+    card.ilvl:SetPoint("TOPRIGHT", card, "TOPRIGHT", -7, -6)
+    card.ilvl:SetJustifyH("RIGHT")
+    card.ilvl:SetTextColor(0.95, 0.95, 0.95, 1)
+    if card.ilvl.SetFont and fontPath then
+      card.ilvl:SetFont(fontPath, normalSize, outline)
+    end
+  end
+end
+
+function RP.GetVaultTrackLabel(trackType, act)
+  if trackType == 3 and RP.IsVaultPvPActivity(act) then
+    return "PvP"
+  end
+  return RP.VAULT_TRACK_NAME_BY_TYPE[trackType] or "Vault"
+end
 
 function RP.RefreshRightPanelHeaderAndAffixes(snapshotKey, sameSnapshotOwner)
   local currentRunText = "No active key"
@@ -6540,9 +6719,33 @@ end
 function RP.GetWeeklyVaultActivities()
   local acts = {}
   if C_WeeklyRewards and C_WeeklyRewards.GetActivities then
-    local t = C_WeeklyRewards.GetActivities()
-    if type(t) == "table" then
+    local ok, t = pcall(C_WeeklyRewards.GetActivities)
+    if ok and type(t) == "table" and #t > 0 then
       acts = t
+    else
+      local seenByID = {}
+      local typesToQuery = {
+        RP.WEEKLY_REWARD_TYPE.Activities,
+        RP.WEEKLY_REWARD_TYPE.Raid,
+        RP.WEEKLY_REWARD_TYPE.World,
+        RP.WEEKLY_REWARD_TYPE.RankedPvP,
+      }
+      for _, rewardType in ipairs(typesToQuery) do
+        local okType, entries = pcall(C_WeeklyRewards.GetActivities, rewardType)
+        if okType and type(entries) == "table" then
+          for _, act in ipairs(entries) do
+            local id = act and act.id
+            if id then
+              if not seenByID[id] then
+                seenByID[id] = true
+                acts[#acts + 1] = act
+              end
+            else
+              acts[#acts + 1] = act
+            end
+          end
+        end
+      end
     end
   end
   return acts
@@ -6552,16 +6755,28 @@ function RP.RenderVaultCards(acts)
   if not (S.rightPanel and S.rightPanel.vault and S.rightPanel.vault.cards) then
     return
   end
+  local liveDB = NS:GetDB()
+  local vaultFontPath, vaultFontSize, vaultOutline = GetConfiguredFont(liveDB)
   local byType = {
     [1] = {},
     [2] = {},
     [3] = {},
   }
   for _, act in ipairs(acts or {}) do
-    local t = act and act.type
-    if byType[t] then
-      byType[t][#byType[t] + 1] = act
+    local trackType = RP.NormalizeVaultTrackType(act and act.type)
+    if trackType and byType[trackType] then
+      byType[trackType][#byType[trackType] + 1] = act
     end
+  end
+  for _, list in pairs(byType) do
+    table.sort(list, function(a, b)
+      local ai = RP.VaultToNumber(a and a.index) or math.huge
+      local bi = RP.VaultToNumber(b and b.index) or math.huge
+      if ai ~= bi then return ai < bi end
+      local at = RP.VaultToNumber(a and a.threshold) or math.huge
+      local bt = RP.VaultToNumber(b and b.threshold) or math.huge
+      return at < bt
+    end)
   end
 
   for i, card in ipairs(S.rightPanel.vault.cards) do
@@ -6575,21 +6790,33 @@ function RP.RenderVaultCards(acts)
     card:SetBackdropColor(c[1], c[2], c[3], c[4])
     card:SetBackdropBorderColor(c[5], c[6], c[7], c[8])
 
-    local label = RP.VAULT_TRACK_NAME_BY_TYPE[trackType] or "Vault"
-    local target = (RP.VAULT_THRESHOLDS_BY_TYPE[trackType] and RP.VAULT_THRESHOLDS_BY_TYPE[trackType][col]) or 0
+    local label = RP.GetVaultTrackLabel(trackType, act)
+    local target = RP.GetVaultActivityThreshold(trackType, col, act)
     local progress = RP.GetVaultActivityProgress(act)
-    local complete = (target > 0 and progress >= target)
+    local progressDisplay = progress
+    if target > 0 then
+      progressDisplay = math.min(math.max(progress, 0), target)
+    end
+    local rewards = RP.GetVaultActivityRewards(act)
+    local hasRewards = #rewards > 0
+    local complete = hasRewards or (target > 0 and progress >= target)
 
     card.title:SetText(label)
-    card.progress:SetText(("%d / %d"):format(progress, target))
+    if target > 0 then
+      card.progress:SetText(("%d / %d"):format(progressDisplay, target))
+    elseif progress > 0 then
+      card.progress:SetText(("%d"):format(progress))
+    else
+      card.progress:SetText("-")
+    end
 
     local ilvl = RP.GetVaultActivityItemLevel(act)
     card.ilvl:SetText(ilvl and tostring(ilvl) or "")
     card.difficulty:SetText(RP.GetVaultHardestDifficultyLabel(trackType, act))
+    RP.ApplyVaultCardItemLevelStyle(card, complete, ilvl, vaultFontPath, vaultFontSize, vaultOutline)
 
     if complete then
       card.title:SetTextColor(0.35, 1, 0.5, 1)
-      card.ilvl:SetTextColor(0.35, 1, 0.5, 1)
       card.difficulty:SetTextColor(0.35, 1, 0.5, 1)
       card.progress:SetTextColor(0.35, 1, 0.5, 1)
       if card.overlay then card.overlay:Hide() end
@@ -6856,7 +7083,7 @@ function M:Apply()
 
   local function StartSlotEnforcer()
     if not S.slotEnforcer then return end
-    S.slotEnforceUntil = GetTime() + 0.6
+    S.slotEnforceUntil = GetTime() + 1.5
     S.slotEnforcer:Show()
   end
   local UpdateTickerState
@@ -6914,6 +7141,31 @@ function M:Apply()
       end
     end)
     S.hookedHide = true
+  end
+  if CharacterFrame and not S.hookedSizeChanged then
+    CharacterFrame:HookScript("OnSizeChanged", function(_, w, h)
+      if not M.active then return end
+      local liveDB = NS and NS.GetDB and NS:GetDB() or nil
+      if not (liveDB and liveDB.charsheet and liveDB.charsheet.styleStats) then return end
+      if not (CharacterFrame and CharacterFrame:IsShown()) then return end
+      if InCombatLockdown and InCombatLockdown() then return end
+
+      local cw = tonumber(w) or (CharacterFrame.GetWidth and CharacterFrame:GetWidth()) or 0
+      local ch = tonumber(h) or (CharacterFrame.GetHeight and CharacterFrame:GetHeight()) or 0
+      local widthDrift = math.abs(cw - CFG.PRIMARY_SHEET_WIDTH)
+      local heightDrift = math.abs(ch - CFG.CUSTOM_CHAR_HEIGHT)
+      if widthDrift <= 0.5 and heightDrift <= 0.5 then
+        return
+      end
+
+      ApplyCustomCharacterLayout()
+      ApplyChonkySlotLayout()
+      ApplyChonkyModelLayout()
+      UpdateCustomStatsFrame(liveDB)
+      UpdateCustomGearFrame(liveDB)
+      StartSlotEnforcer()
+    end)
+    S.hookedSizeChanged = true
   end
   local function RefreshForNativeSubframeSwitch(subFrameToken)
     if not M.active then return end
@@ -7026,6 +7278,22 @@ function M:Apply()
     if not (CharacterFrame and CharacterFrame:IsShown()) and S.rightPanel and S.rightPanel:IsShown() then
       HideRightPanel()
     end
+    if CharacterFrame and CharacterFrame:IsShown() and not (InCombatLockdown and InCombatLockdown()) then
+      local liveDB = NS and NS.GetDB and NS:GetDB() or nil
+      if liveDB and liveDB.charsheet and liveDB.charsheet.styleStats then
+        local cw = CharacterFrame.GetWidth and CharacterFrame:GetWidth() or 0
+        local ch = CharacterFrame.GetHeight and CharacterFrame:GetHeight() or 0
+        if math.abs((tonumber(cw) or 0) - CFG.PRIMARY_SHEET_WIDTH) > 0.5
+          or math.abs((tonumber(ch) or 0) - CFG.CUSTOM_CHAR_HEIGHT) > 0.5
+        then
+          ApplyCustomCharacterLayout()
+          ApplyChonkySlotLayout()
+          ApplyChonkyModelLayout()
+          UpdateCustomStatsFrame(liveDB)
+          UpdateCustomGearFrame(liveDB)
+        end
+      end
+    end
     S.elapsedSinceData = S.elapsedSinceData + (elapsed or 0)
     if S.elapsedSinceData >= DATA_REFRESH_INTERVAL then
       S.elapsedSinceData = 0
@@ -7085,6 +7353,10 @@ function M:Apply()
   SafeRegisterEvent(S.moduleEventFrame, "UPDATE_FACTION")
   SafeRegisterEvent(S.moduleEventFrame, "CURRENCY_DISPLAY_UPDATE")
   SafeRegisterEvent(S.moduleEventFrame, "CURRENCY_LIST_UPDATE")
+  SafeRegisterEvent(S.moduleEventFrame, "WEEKLY_REWARDS_UPDATE")
+  SafeRegisterEvent(S.moduleEventFrame, "WEEKLY_REWARDS_ITEM_CHANGED")
+  SafeRegisterEvent(S.moduleEventFrame, "CHALLENGE_MODE_MAPS_UPDATE")
+  SafeRegisterEvent(S.moduleEventFrame, "CHALLENGE_MODE_COMPLETED")
   SafeRegisterUnitEvent(S.moduleEventFrame, "UNIT_NAME_UPDATE", "player")
   SafeRegisterUnitEvent(S.moduleEventFrame, "UNIT_MAXHEALTH", "player")
   SafeRegisterUnitEvent(S.moduleEventFrame, "UNIT_MAXPOWER", "player")
@@ -7107,6 +7379,9 @@ function M:Apply()
       else
         wipe(S.inventoryTooltipCache)
       end
+    end
+    if event == "CHALLENGE_MODE_COMPLETED" and C_MythicPlus and C_MythicPlus.RequestMapInfo then
+      pcall(C_MythicPlus.RequestMapInfo)
     end
     if not (CharacterFrame and CharacterFrame:IsShown()) then return end
     local liveDB = NS:GetDB()

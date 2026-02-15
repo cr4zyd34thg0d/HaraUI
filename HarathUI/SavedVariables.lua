@@ -92,7 +92,7 @@ NS.DEFAULTS = {
 
     gamemenu = {
       enabled = true,
-      scale = 0.85,
+      scale = 0.70,
     },
 
     loot = {

@@ -529,11 +529,8 @@ end
 
 local function UpdateRect(design)
   local function GetRect(asset, scale, anchor)
-    local baseWidth = asset.width or asset.height or 0
-    local baseHeight = asset.height or asset.width or 0
-    local width = baseWidth * scale
-    local height = baseHeight * scale
-    anchor = anchor or {}
+    local width = asset.width * scale
+    local height = asset.height * scale
     local left, bottom
     if anchor[1] == "BOTTOMLEFT" then
       left = anchor[2] or 0
@@ -587,8 +584,7 @@ local function UpdateRect(design)
 
   for _, textDetails in ipairs(design.texts) do
     if textDetails.kind == "creatureName" then
-      local textWidth = (textDetails.maxWidth or 0) * addonTable.Assets.BarBordersSize.width
-      local rect = GetRect({width = textWidth, height = 10 * textDetails.scale}, 1, textDetails.anchor)
+      local rect = GetRect({width = textDetails.maxWidth * addonTable.Assets.BarBordersSize.width, height = 10 * textDetails.scale}, 1, textDetails.anchor)
       CacheSize(rect)
     end
   end
