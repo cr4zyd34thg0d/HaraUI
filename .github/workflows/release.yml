@@ -44,26 +44,15 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          # Find the previous tag (skip current)
-          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${TAG}$" | head -1)
-          if [ -z "$PREV_TAG" ]; then
-            # First tag ever — use all commits
-            RANGE="HEAD"
-          else
-            RANGE="${PREV_TAG}..HEAD"
-          fi
+          # Use the tagged commit's own message as the changelog.
+          # Strip the first line (subject) and Co-Authored-By, keep the body.
+          BODY=$(git log -1 --pretty=format:"%b" HEAD \
+            | grep -v "Co-Authored-By" \
+            | sed '/^$/d')
 
           {
             echo "body<<CHANGELOG_EOF"
-            echo "## What's Changed"
-            echo ""
-            git log "$RANGE" --pretty=format:"- %s" --no-merges \
-              | grep -v "Co-Authored-By" \
-              | grep -v "^$"
-            echo ""
-            echo ""
-            echo "**Full diff**: https://github.com/${{ github.repository }}/compare/${PREV_TAG:-HEAD~10}...${TAG}"
+            echo "$BODY"
             echo "CHANGELOG_EOF"
           } >> "$GITHUB_OUTPUT"
 
