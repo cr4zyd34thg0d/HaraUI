@@ -3,7 +3,7 @@
 :sparkles: A curated World of Warcraft UI bundle focused on clean gameplay UX, practical QoL modules, and battle-tested nameplate behavior.
 
 ![WoW Interface](https://img.shields.io/badge/WoW-12.0.1-1f6feb?style=for-the-badge)
-![HarathUI](https://img.shields.io/badge/HarathUI-1.5.8-f97316?style=for-the-badge)
+![HarathUI](https://img.shields.io/badge/HarathUI-2.0-f97316?style=for-the-badge)
 ![Platynator](https://img.shields.io/badge/Platynator-319-22c55e?style=for-the-badge)
 ![OPie](https://img.shields.io/badge/OPie-7.11.3-a855f7?style=for-the-badge)
 
@@ -17,7 +17,7 @@
 
 | Addon | Version | Interface | Author | Purpose |
 |-------|---------|-----------|--------|---------|
-| HarathUI | 1.5.8 | 120001 | Harath | Modular UI/QoL suite |
+| HarathUI | 2.0 | 120001 | Harath | Modular UI/QoL suite |
 | Platynator | 319 | 120001 | plusmouse | Highly customizable nameplates |
 | OPie | 7.11.3 | 120001 | foxlit | Radial action rings |
 
@@ -88,7 +88,7 @@ Patch docs: `patches/README.md`
 ### Stamp HarathUI release metadata
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\release-harathui.ps1 -Version 1.5.8 -GitVersion 1.5.8 -CommitRef HEAD
+powershell -ExecutionPolicy Bypass -File .\scripts\release-harathui.ps1 -Version 2.0 -GitVersion 2.0 -CommitRef HEAD
 ```
 
 This also updates `HarathUI/Generated/HostedVersion.lua` by default, using GitHub release/tag data for hosted version checks.
@@ -102,7 +102,7 @@ Optional flags:
 Low-level stamp example:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata.ps1 -Version 1.5.8 -GitVersion 1.5.8 -BuildCommit 56a5bb9 -LatestCommit 56a5bb9
+powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata.ps1 -Version 2.0 -GitVersion 2.0 -BuildCommit 56a5bb9 -LatestCommit 56a5bb9
 ```
 
 ## :spiral_notepad: Changelog
@@ -114,7 +114,7 @@ powershell -ExecutionPolicy Bypass -File .\HarathUI\tools\stamp-version-metadata
 - Switched game menu scaling to a resolution-aware model
 
 ### v1.2.1 (2026-02-14)
-- Updated HarathUI to `v1.5.8`
+- Updated HarathUI to `v2.0`
 - Resolved Currency tab account-transfer taint path by routing bottom Character/Rep/Currency buttons through native CharacterFrame tabs
 - Fixed bottom tab routing mismatch where Rep/Currency could open Blizzard Titles/Equipment panes
 

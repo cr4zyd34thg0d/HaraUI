@@ -62,41 +62,37 @@ local function MakeGlassCard(parent, title)
     edgeSize = 1,
     insets = { left = 1, right = 1, top = 1, bottom = 1 },
   })
-  card:SetBackdropColor(0.07, 0.08, 0.10, 0.62)
+  card:SetBackdropColor(0, 0, 0, 0.58)
   card:SetBackdropBorderColor(0.58, 0.60, 0.70, 0.22)
 
   card.bgGradient = card:CreateTexture(nil, "BACKGROUND")
   card.bgGradient:SetPoint("TOPLEFT", 1, -1)
   card.bgGradient:SetPoint("BOTTOMRIGHT", -1, 1)
   card.bgGradient:SetTexture("Interface/Buttons/WHITE8x8")
-  if card.bgGradient.SetGradientAlpha then
-    card.bgGradient:SetGradientAlpha("VERTICAL", 0.95, 0.95, 1.0, 0.16, 0.18, 0.20, 0.24, 0.04)
+  -- Reverse of the options panel gradient: purple at top -> black at bottom.
+  if card.bgGradient.SetGradient and CreateColor then
+    card.bgGradient:SetGradient(
+      "VERTICAL",
+      CreateColor(0.08, 0.02, 0.12, 0.46),
+      CreateColor(0, 0, 0, 0.62)
+    )
+  elseif card.bgGradient.SetGradientAlpha then
+    card.bgGradient:SetGradientAlpha("VERTICAL", 0.08, 0.02, 0.12, 0.46, 0, 0, 0, 0.62)
   else
-    card.bgGradient:SetColorTexture(0.95, 0.95, 1.0, 0.08)
+    card.bgGradient:SetColorTexture(0.08, 0.02, 0.12, 0.40)
   end
 
   card.innerTop = card:CreateTexture(nil, "ARTWORK")
   card.innerTop:SetPoint("TOPLEFT", 1, -1)
   card.innerTop:SetPoint("TOPRIGHT", -1, -1)
   card.innerTop:SetHeight(1)
-  card.innerTop:SetColorTexture(1, 1, 1, 0.14)
+  card.innerTop:SetColorTexture(1, 1, 1, 0.08)
 
   card.innerBottom = card:CreateTexture(nil, "ARTWORK")
   card.innerBottom:SetPoint("BOTTOMLEFT", 1, 1)
   card.innerBottom:SetPoint("BOTTOMRIGHT", -1, 1)
   card.innerBottom:SetHeight(1)
-  card.innerBottom:SetColorTexture(0, 0, 0, 0.25)
-
-  card.accent = card:CreateTexture(nil, "OVERLAY")
-  card.accent:SetPoint("TOPLEFT", 10, -1)
-  card.accent:SetPoint("TOPRIGHT", -10, -1)
-  card.accent:SetHeight(1)
-  card.accent:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 0.92)
-  RegisterTheme(function(c)
-    if card.accent and card.accent.SetColorTexture then
-      card.accent:SetColorTexture(c[1], c[2], c[3], 0.92)
-    end
-  end)
+  card.innerBottom:SetColorTexture(0, 0, 0, 0.30)
 
   if title and title ~= "" then
     card.title = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")

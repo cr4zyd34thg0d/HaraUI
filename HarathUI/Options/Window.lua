@@ -17,7 +17,7 @@ function NS:BuildOptionsWindow(BuildFullUI, db)
   -- POPOUT WINDOW
   -- =========================================================
   local window = CreateFrame("Frame", "HaraUIOptionsWindow", UIParent, "BackdropTemplate")
-  window:SetSize(900, 620)
+  window:SetSize(720, 620)
   window:SetPoint("CENTER")
   window:Hide()
   window:SetMovable(true)
@@ -45,6 +45,7 @@ function NS:BuildOptionsWindow(BuildFullUI, db)
   close:SetSize(28, 28)
   close:SetFrameStrata("FULLSCREEN_DIALOG")
   close:SetFrameLevel(window:GetFrameLevel() + 5)
+  window.closeButton = close
 
   close.bg = close:CreateTexture(nil, "BACKGROUND")
   close.bg:SetAllPoints(true)
