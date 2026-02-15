@@ -16,6 +16,7 @@ local ADDON, NS = ...
 local M = {}
 NS:RegisterModule("rotationhelper", M)
 M.active = false
+M.Keybinds = M.Keybinds or {}
 
 local frame
 local previewActive = false
@@ -23,7 +24,7 @@ local previewKey = "1"
 local previewIcon = "Interface\\Icons\\INV_Sword_04"
 local lastSpellTex
 local lastSpellKey
-local K = NS.RotationHelperKeybinds
+local K = M.Keybinds
 local function IsEnabled()
   local db = NS:GetDB()
   return db and db.rotationhelper and db.rotationhelper.enabled

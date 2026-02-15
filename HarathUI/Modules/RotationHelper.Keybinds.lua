@@ -1,7 +1,10 @@
 local ADDON, NS = ...
 
-NS.RotationHelperKeybinds = NS.RotationHelperKeybinds or {}
-local K = NS.RotationHelperKeybinds
+local modules = NS and NS.Modules
+local M = modules and modules.rotationhelper
+if not M then return end
+local K = M.Keybinds or {}
+M.Keybinds = K
 
 local LookupActionBySlot = {}
 
