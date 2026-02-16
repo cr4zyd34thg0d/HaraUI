@@ -67,6 +67,7 @@ NS.DEFAULTS = {
       enabled = true,
       hideArt = true,
       styleStats = true,
+      layoutDebug = false,
       showRightPanel = true,
       rightPanelDetached = false,
       rightPanelAnchor = "TOPLEFT",

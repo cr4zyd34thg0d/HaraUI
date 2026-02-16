@@ -15,6 +15,7 @@ Libs/LibSharedMedia-3.0/LibSharedMedia-3.0.lua
 SavedVariables.lua
 Constants.lua
 Shared/UIHelpers.lua
+Shared/Version.lua
 Core.lua
 Core/Compat.lua
 Core/VersionTracker.lua

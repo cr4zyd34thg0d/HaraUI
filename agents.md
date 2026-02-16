@@ -36,6 +36,7 @@ When you push a tag that matches `v*`, `.github/workflows/release.yml` executes:
 - Normal branch pushes (no tag) run `CI` only.
 - Normal branch pushes do not create a GitHub Release.
 - Normal branch pushes do not upload to CurseForge.
+- Normal branch pushes show addon version `2.0.2-dev` at runtime from code when TOC metadata still contains `@project-version@`.
 
 ## How to Release
 
@@ -78,7 +79,11 @@ git push origin v2.0.3
 
 - Source of truth is the git tag used for release.
 - `HaraUI/HaraUI.toc` intentionally stores `## Version: @project-version@` in source control.
+- `.github/workflows/ci.yml` fails if `HaraUI/HaraUI.toc` is hardcoded to any value other than `@project-version@`.
 - The packaged artifact gets the concrete tag value during the release workflow.
+- Runtime version display uses `HaraUI/Shared/Version.lua`:
+  - returns packaged metadata version when token was replaced in release artifacts
+  - returns `2.0.2-dev` when running from a dev checkout with unresolved `@project-version@`
 
 ## Legacy Script Status
 
@@ -94,3 +99,4 @@ git push origin v2.0.3
 | `.github/workflows/release.yml` | Tag-triggered package + GitHub Release + CurseForge upload |
 | `.pkgmeta`                      | Packager layout and ignore rules |
 | `HaraUI/HaraUI.toc`             | TOC manifest with `@project-version@` token |
+| `HaraUI/Shared/Version.lua`     | Runtime version resolver (`2.0.2-dev` for dev checkouts) |

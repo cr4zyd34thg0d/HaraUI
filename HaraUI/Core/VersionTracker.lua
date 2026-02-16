@@ -78,7 +78,15 @@ local function GetVersionBroadcastChannels()
 end
 
 local function GetLocalBuildInfo()
-  local installed = NS.GetAddonMetadataField("Version")
+  local installed = nil
+  if NS.GetVersionString then
+    installed = NS.GetVersionString()
+  elseif NS.GetAddonMetadataField then
+    installed = NS.GetAddonMetadataField("Version")
+  end
+  if type(installed) ~= "string" or installed == "" then
+    installed = NS.DEV_VERSION or "2.0.2-dev"
+  end
   return {
     installed = installed,
   }
@@ -238,7 +246,7 @@ local function PrintOutOfDateNotice()
     if source == "addon-comms" and info and info.peerName then
       detail = (" (seen from %s)"):format(tostring(info.peerName))
     end
-    NS.Print(("Update available: installed v%s, latest v%s%s."):format(tostring(installed), tostring(latest), detail))
+    NS.Print(("Update available: installed %s, latest %s%s."):format(tostring(installed), tostring(latest), detail))
     versionTracker.warnedOutdated = true
   end
 end

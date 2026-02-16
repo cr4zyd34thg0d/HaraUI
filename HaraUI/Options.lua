@@ -26,6 +26,24 @@ local function GetAddonMetadataField(field)
   return nil
 end
 
+local DEV_VERSION = "2.0.2-dev"
+local VERSION_TOKEN = "@project-version@"
+
+local function GetVersionString()
+  if NS and NS.GetVersionString then
+    return NS.GetVersionString()
+  end
+
+  local version = GetAddonMetadataField("Version")
+  if type(version) ~= "string" or version == "" then
+    return DEV_VERSION
+  end
+  if version:find(VERSION_TOKEN, 1, true) then
+    return DEV_VERSION
+  end
+  return version
+end
+
 local function GetVersionStatus(info)
   if NS and NS.GetVersionStatus then
     return NS.GetVersionStatus(info)
@@ -44,7 +62,7 @@ local function GetVersionInfo()
   if NS and NS.GetVersionInfo then
     return NS.GetVersionInfo()
   end
-  local installed = GetAddonMetadataField("Version")
+  local installed = GetVersionString()
   local latest = installed
   local cmp = nil
   local status = GetVersionStatus({
@@ -215,8 +233,8 @@ function NS:InitOptions()
         local source = tostring(info and info.source or "unknown")
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine("Version Status", ORANGE[1], ORANGE[2], ORANGE[3])
-        GameTooltip:AddLine(("Installed: v%s"):format(tostring(info and info.installed or "unknown")), 0.95, 0.95, 0.95)
-        GameTooltip:AddLine(("Latest: v%s"):format(tostring(info and info.latest or "n/a")), 0.95, 0.95, 0.95)
+        GameTooltip:AddLine(("Installed: %s"):format(tostring(info and info.installed or "unknown")), 0.95, 0.95, 0.95)
+        GameTooltip:AddLine(("Latest: %s"):format(tostring(info and info.latest or "n/a")), 0.95, 0.95, 0.95)
         if info and info.peerName then
           GameTooltip:AddLine(("Peer: %s"):format(tostring(info.peerName)), 0.85, 0.85, 0.85)
         end
@@ -245,7 +263,7 @@ function NS:InitOptions()
       local installed = info and info.installed or nil
       local status = (info and (info.status or GetVersionStatus(info))) or "unknown"
 
-      navVersion:SetText("v" .. tostring(installed or "dev"))
+      navVersion:SetText(tostring(installed or DEV_VERSION))
 
       navGitIndicator:Show()
       if status == "out-of-date" then

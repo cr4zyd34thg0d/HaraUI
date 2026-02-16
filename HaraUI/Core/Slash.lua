@@ -51,6 +51,26 @@ local function HandleSlash(msg)
     NS.Print("Debug: " .. (db.general.debug and "On" or "Off"))
     return
   end
+  if msg == "layoutdebug" or msg == "charsheetdebug" then
+    local db = NS:GetDB()
+    db.charsheet = db.charsheet or {}
+    db.charsheet.layoutDebug = not (db.charsheet.layoutDebug == true)
+    NS.Print("Character layout debug: " .. (db.charsheet.layoutDebug and "On" or "Off"))
+    local mod = NS.Modules and NS.Modules.charsheet
+    if db.charsheet.layoutDebug and mod and mod.DebugLayoutSnapshot then
+      mod:DebugLayoutSnapshot("slash-toggle")
+    end
+    return
+  end
+  if msg == "layoutsnap" or msg == "charsheetsnap" then
+    local mod = NS.Modules and NS.Modules.charsheet
+    if mod and mod.DebugLayoutSnapshot then
+      mod:DebugLayoutSnapshot("slash")
+    else
+      NS.Print("Character layout module is not ready.")
+    end
+    return
+  end
   if msg == "version" then
     local info = NS.GetVersionInfo and NS.GetVersionInfo() or nil
     if not info then
@@ -62,7 +82,7 @@ local function HandleSlash(msg)
     local source = tostring(info.source or "unknown")
     local peerName = tostring(info.peerName or "n/a")
     local status = (info.status or (NS.GetVersionStatus and NS.GetVersionStatus(info)) or "unknown")
-    NS.Print(("Version status: %s (installed v%s, latest v%s; source=%s; peer=%s)"):format(
+    NS.Print(("Version status: %s (installed %s, latest %s; source=%s; peer=%s)"):format(
       status,
       installed,
       latest,
@@ -71,7 +91,7 @@ local function HandleSlash(msg)
     ))
     return
   end
-  NS.Print("Commands: /hui (options) | lock | xp | cast | loot | summon | debug | version")
+  NS.Print("Commands: /hui (options) | lock | xp | cast | loot | summon | debug | layoutdebug | layoutsnap | version")
 end
 
 NS._huiHandleSlash = HandleSlash

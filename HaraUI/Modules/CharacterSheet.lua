@@ -39,6 +39,8 @@ local S = {
   hookedHide = false,
   hookedSizeChanged = false,
   hookedSubFrame = false,
+  hookedPaperDollItemsShow = false,
+  hookedPaperDollUpdateItems = false,
   suppressSubFrameRefresh = false,
   liveUpdateQueued = false,
   liveUpdateIncludeRightPanel = false,
@@ -46,8 +48,6 @@ local S = {
   pendingLootSpecID = nil,
   refreshInProgress = false,
   refreshQueuedAfterCurrent = false,
-  lastRefreshFrame = nil,
-  lastStatsUpdateFrame = nil,
   deferredNativeVisRefreshQueued = false,
   elapsedSinceData = 0,
   portalSpellCache = {},
@@ -59,11 +59,17 @@ local S = {
   pendingSecureUpdate = false,
   pendingRightPanelHide = false,
   modeSwitchGuardDepth = 0,
+  nativePaneApplyInProgress = false,
+  nativePaneLastMode = nil,
+  nativePaneLastApplyAt = 0,
   openToken = 0,
+  characterUIRetryPending = false,
 }
 
 local DATA_REFRESH_INTERVAL = 2.0
 local EVENT_DEBOUNCE_INTERVAL = 0.06
+local NATIVE_PANE_REAPPLY_INTERVAL = 0.20
+local CHARACTER_LAYOUT_DEBUG = false
 local ShowAffixTooltip
 local ShowDungeonPortalTooltip
 local UpdateCustomStatsFrame
@@ -71,6 +77,9 @@ local UpdateCustomGearFrame
 local ApplyCoreCharacterFontAndName
 local RestorePaperDollSidebarButtons
 local ApplyCustomCharacterLayout
+local ApplyChonkySlotLayout
+local ApplyChonkyModelLayout
+local RefreshActionButtonStyle
 local ShowNativeCharacterMode
 local SyncCustomModeToNativePanel
 local HasAccountCurrencyTransferSupport
@@ -124,6 +133,112 @@ local function RunWithModeSwitchGuard(fn)
   return r1, r2, r3, r4, r5
 end
 
+local function IsLayoutDebugEnabled()
+  if CHARACTER_LAYOUT_DEBUG then
+    return true
+  end
+  local db = NS and NS.GetDB and NS:GetDB() or nil
+  return db and db.charsheet and db.charsheet.layoutDebug == true
+end
+
+local function LayoutDebugPrint(...)
+  if not IsLayoutDebugEnabled() then return end
+  local parts = {}
+  for i = 1, select("#", ...) do
+    parts[#parts + 1] = tostring(select(i, ...))
+  end
+  local text = table.concat(parts, " ")
+  if NS and NS.Print then
+    NS.Print("[CharacterLayout] " .. text)
+  end
+end
+
+local function LayoutDebugPrintAlways(...)
+  local parts = {}
+  for i = 1, select("#", ...) do
+    parts[#parts + 1] = tostring(select(i, ...))
+  end
+  local text = table.concat(parts, " ")
+  if NS and NS.Print then
+    NS.Print("[CharacterLayout] " .. text)
+  end
+end
+
+local function DescribeFramePoint(frame)
+  if not frame or not frame.GetPoint then
+    return "nil"
+  end
+  local p, rel, rp, x, y = frame:GetPoint(1)
+  local relName = rel and rel.GetName and rel:GetName() or tostring(rel)
+  return ("%s -> %s (%s) [%s,%s]"):format(
+    tostring(p or "nil"),
+    tostring(relName or "nil"),
+    tostring(rp or "nil"),
+    tostring(x or 0),
+    tostring(y or 0)
+  )
+end
+
+local function DescribeFrameSize(frame)
+  if not frame or not frame.GetWidth or not frame.GetHeight then
+    return "nil"
+  end
+  return ("%.1fx%.1f"):format(frame:GetWidth() or 0, frame:GetHeight() or 0)
+end
+
+local function DumpCharacterLayoutSnapshot(label, force)
+  local printer = force and LayoutDebugPrintAlways or LayoutDebugPrint
+  local finger0 = _G.CharacterFinger0Slot
+  local statsPane = _G.CharacterStatsPane
+  local insetRight = _G.CharacterFrameInsetRight
+  local rightProxy = S.insetRightProxy
+  local leftProxy = S.insetLeftProxy
+  local itemsPane = _G.PaperDollItemsFrame
+  local paperPane = _G.PaperDollFrame
+  local customStats = S.customStatsFrame
+  local sidebar = customStats and customStats.sidebarBar or nil
+  printer(tostring(label or "snapshot"))
+  printer("finger0:", DescribeFramePoint(finger0))
+  printer("insetRight:", DescribeFramePoint(insetRight), DescribeFrameSize(insetRight))
+  printer("rightProxy:", DescribeFramePoint(rightProxy), DescribeFrameSize(rightProxy))
+  printer("leftProxy:", DescribeFramePoint(leftProxy), DescribeFrameSize(leftProxy))
+  printer("statsPane:", DescribeFramePoint(statsPane), DescribeFrameSize(statsPane))
+  printer("customStats:", DescribeFramePoint(customStats), DescribeFrameSize(customStats))
+  printer("sidebar:", DescribeFramePoint(sidebar), DescribeFrameSize(sidebar))
+  printer("paper:", DescribeFramePoint(paperPane), DescribeFrameSize(paperPane))
+  printer("items:", DescribeFramePoint(itemsPane), DescribeFrameSize(itemsPane))
+end
+
+local function ReapplyPersistentCharacterLayout(reason)
+  if not M.active then return end
+  if IN_NATIVE_VIS_SWITCH > 0 then
+    QueueDeferredRefreshAfterNativeVisSwitch()
+    return
+  end
+  if InCombatLockdown and InCombatLockdown() then
+    return
+  end
+  if not CharacterFrame then return end
+  local db = NS and NS.GetDB and NS:GetDB() or nil
+  if not (db and db.charsheet and db.charsheet.styleStats) then return end
+
+  LayoutDebugPrint("layout pass:", tostring(reason or "unknown"))
+  DumpCharacterLayoutSnapshot("before " .. tostring(reason or "unknown"), false)
+
+  ApplyCustomCharacterLayout()
+  ApplyChonkySlotLayout()
+  ApplyChonkyModelLayout()
+  UpdateCustomStatsFrame(db)
+  UpdateCustomGearFrame(db)
+
+  DumpCharacterLayoutSnapshot("after " .. tostring(reason or "unknown"), false)
+  if IsLayoutDebugEnabled() and C_Timer and C_Timer.After then
+    C_Timer.After(0.10, function()
+      DumpCharacterLayoutSnapshot("post+0.10 " .. tostring(reason or "unknown"), false)
+    end)
+  end
+end
+
 local CFG = {
   CUSTOM_CHAR_HEIGHT = 675,
   BASE_PRIMARY_SHEET_WIDTH = 820,
@@ -155,7 +270,7 @@ local CFG = {
   STATS_MODE_BUTTON_HEIGHT = 30,
   STATS_MODE_BUTTON_GAP = 6,
   STATS_SIDEBAR_BUTTON_COUNT = 4,
-  STATS_SIDEBAR_BUTTON_SIZE = 28,
+  STATS_SIDEBAR_BUTTON_SIZE = 34,
   STATS_SIDEBAR_BUTTON_GAP = 4,
   STATS_MODE_BUTTON_PAD_Y = 8,
   STATS_MODE_LIST_ROW_HEIGHT = 26,
@@ -280,6 +395,40 @@ local function GetEffectiveCharacterFrameWidth()
     end
   end
   return CFG.PRIMARY_SHEET_WIDTH
+end
+
+local function GetEffectiveStatsPaneWidth()
+  local w = nil
+  if S.insetRightProxy and S.insetRightProxy.GetWidth then
+    w = tonumber(S.insetRightProxy:GetWidth())
+    if w and w > 0 then
+      w = w - 16
+    end
+  end
+  if _G.CharacterStatsPane and _G.CharacterStatsPane.GetWidth then
+    local paneW = tonumber(_G.CharacterStatsPane:GetWidth())
+    if (not w or w <= 0) and paneW and paneW > 0 then
+      w = paneW
+    end
+  end
+  if (not w or w <= 0) and _G.CharacterFrameInsetRight and _G.CharacterFrameInsetRight.GetWidth then
+    local insetRightW = tonumber(_G.CharacterFrameInsetRight:GetWidth())
+    if insetRightW and insetRightW > 0 then
+      w = insetRightW - 16
+    end
+  end
+  if (not w or w <= 0) and CharacterFrame and CharacterFrame.GetWidth and S.insetLeftProxy and S.insetLeftProxy.GetWidth then
+    local cw = tonumber(CharacterFrame:GetWidth()) or 0
+    local lw = tonumber(S.insetLeftProxy:GetWidth()) or 0
+    local derived = cw - lw - 16
+    if derived > 0 then
+      w = derived
+    end
+  end
+  if w and w > 0 then
+    return math.max(140, math.floor(w + 0.5))
+  end
+  return math.max(140, CFG.CUSTOM_STATS_WIDTH)
 end
 
 local function CaptureLayout(key, frame)
@@ -763,6 +912,22 @@ local function SetPaperDollSidebarButtonsMouseEnabled(enabled)
     if btn then
       if btn.EnableMouse then
         btn:EnableMouse(shouldEnable)
+      end
+    end
+  end
+end
+
+local function SetPaperDollSidebarButtonsVisible(visible)
+  local shouldShow = visible == true
+  for i = 1, 8 do
+    local btn = GetSidebarTabButton(i)
+    if btn then
+      if shouldShow then
+        if btn.SetAlpha then btn:SetAlpha(1) end
+        if btn.Show then btn:Show() end
+      else
+        if btn.SetAlpha then btn:SetAlpha(0) end
+        if btn.Hide then btn:Hide() end
       end
     end
   end
@@ -1636,19 +1801,170 @@ local function EnsureCustomStatsFrame()
   S.customStatsFrame.modeList.actions:SetHeight(22)
   S.customStatsFrame.modeList.actions:Hide()
 
-  local function DoEquipmentSetAction(action)
+  S.customStatsFrame.modeList.actionFeedback = S.customStatsFrame.modeList:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  S.customStatsFrame.modeList.actionFeedback:SetPoint("TOPLEFT", S.customStatsFrame.modeList.actions, "BOTTOMLEFT", 2, -3)
+  S.customStatsFrame.modeList.actionFeedback:SetPoint("TOPRIGHT", S.customStatsFrame.modeList.actions, "BOTTOMRIGHT", -2, -3)
+  S.customStatsFrame.modeList.actionFeedback:SetJustifyH("CENTER")
+  S.customStatsFrame.modeList.actionFeedback:SetTextColor(0.95, 0.95, 0.95, 1)
+  S.customStatsFrame.modeList.actionFeedback:SetText("")
+  S.customStatsFrame.modeList.actionFeedback:Hide()
+
+  local ACTION_BUTTON_STYLE = {
+    normal = {
+      bg = { 0.05, 0.02, 0.08, 0.90 },
+      border = { 0.26, 0.18, 0.36, 0.95 },
+      text = { 0.95, 0.95, 0.95, 1.00 },
+    },
+    hover = {
+      bg = { 0.08, 0.03, 0.11, 0.94 },
+      border = { 0.44, 0.28, 0.60, 0.98 },
+      text = { 1.00, 0.95, 0.85, 1.00 },
+    },
+    pressed = {
+      bg = { 0.12, 0.05, 0.16, 0.98 },
+      border = { 0.96, 0.64, 0.14, 1.00 },
+      text = { 1.00, 0.90, 0.70, 1.00 },
+    },
+    disabled = {
+      bg = { 0.03, 0.02, 0.05, 0.85 },
+      border = { 0.14, 0.11, 0.20, 0.88 },
+      text = { 0.55, 0.55, 0.55, 1.00 },
+    },
+    success = {
+      bg = { 0.08, 0.15, 0.08, 0.98 },
+      border = { 0.36, 0.92, 0.50, 1.00 },
+      text = { 0.82, 1.00, 0.88, 1.00 },
+    },
+    fail = {
+      bg = { 0.16, 0.05, 0.05, 0.98 },
+      border = { 0.94, 0.34, 0.34, 1.00 },
+      text = { 1.00, 0.76, 0.76, 1.00 },
+    },
+  }
+
+  local function ApplyActionButtonStyle(btn, styleKey)
+    if not btn then return end
+    local style = ACTION_BUTTON_STYLE[styleKey] or ACTION_BUTTON_STYLE.normal
+    if btn.SetBackdropColor then
+      btn:SetBackdropColor(style.bg[1], style.bg[2], style.bg[3], style.bg[4])
+    end
+    if btn.SetBackdropBorderColor then
+      btn:SetBackdropBorderColor(style.border[1], style.border[2], style.border[3], style.border[4])
+    end
+    if btn.text and btn.text.SetTextColor then
+      btn.text:SetTextColor(style.text[1], style.text[2], style.text[3], style.text[4])
+    end
+  end
+
+  RefreshActionButtonStyle = function(btn)
+    if not btn then return end
+    if btn._flashStyle then
+      ApplyActionButtonStyle(btn, btn._flashStyle)
+      return
+    end
+    if not (btn.IsEnabled and btn:IsEnabled()) then
+      ApplyActionButtonStyle(btn, "disabled")
+      return
+    end
+    if btn._isPressed then
+      ApplyActionButtonStyle(btn, "pressed")
+    elseif btn._isHover then
+      ApplyActionButtonStyle(btn, "hover")
+    else
+      ApplyActionButtonStyle(btn, "normal")
+    end
+  end
+
+  local function FlashActionButtonResult(btn, ok)
+    if not btn then return end
+    btn._flashToken = (btn._flashToken or 0) + 1
+    local token = btn._flashToken
+    btn._flashStyle = ok and "success" or "fail"
+    RefreshActionButtonStyle(btn)
+    if C_Timer and C_Timer.After then
+      C_Timer.After(0.18, function()
+        if not btn or btn._flashToken ~= token then return end
+        btn._flashStyle = nil
+        RefreshActionButtonStyle(btn)
+      end)
+    else
+      btn._flashStyle = nil
+      RefreshActionButtonStyle(btn)
+    end
+  end
+
+  local function ShowEquipmentActionFeedback(text, ok)
+    local modeList = S.customStatsFrame and S.customStatsFrame.modeList
+    local fs = modeList and modeList.actionFeedback or nil
+    if not fs then return end
+    local msg = tostring(text or "")
+    if msg == "" then
+      fs:SetText("")
+      fs:Hide()
+      return
+    end
+    if ok then
+      fs:SetTextColor(0.45, 1.00, 0.62, 1.00)
+    else
+      fs:SetTextColor(1.00, 0.55, 0.55, 1.00)
+    end
+    fs:SetText(msg)
+    fs:Show()
+
+    modeList._actionFeedbackToken = (modeList._actionFeedbackToken or 0) + 1
+    local token = modeList._actionFeedbackToken
+    if C_Timer and C_Timer.After then
+      C_Timer.After(1.20, function()
+        local curModeList = S.customStatsFrame and S.customStatsFrame.modeList or nil
+        if not curModeList or curModeList._actionFeedbackToken ~= token then return end
+        if curModeList.actionFeedback then
+          curModeList.actionFeedback:SetText("")
+          curModeList.actionFeedback:Hide()
+        end
+      end)
+    end
+  end
+
+  local function DoEquipmentSetAction(action, sourceButton)
+    local function ResolveSetName(setID)
+      if not (setID and C_EquipmentSet and C_EquipmentSet.GetEquipmentSetInfo) then return nil end
+      local name = C_EquipmentSet.GetEquipmentSetInfo(setID)
+      if type(name) == "string" and name ~= "" then
+        return name
+      end
+      return nil
+    end
+
     if S.customStatsFrame.activeMode ~= 5 then return end
-    if not C_EquipmentSet then return end
+    if not C_EquipmentSet then
+      if sourceButton then
+        FlashActionButtonResult(sourceButton, false)
+      end
+      ShowEquipmentActionFeedback("Equipment sets are unavailable on this client.", false)
+      return
+    end
     if InCombatLockdown and InCombatLockdown() then
       if NS and NS.Print then
         NS.Print("Cannot manage equipment sets in combat.")
       end
+      if sourceButton then
+        FlashActionButtonResult(sourceButton, false)
+      end
+      ShowEquipmentActionFeedback("Cannot manage sets while in combat.", false)
       return
     end
+
     local selected = S.customStatsFrame.modeSelectedSetID
+    local selectedName = ResolveSetName(selected)
+    local okAction = false
+    local feedbackText = nil
+
     if action == "equip" then
       if selected and C_EquipmentSet.UseEquipmentSet then
-        pcall(C_EquipmentSet.UseEquipmentSet, selected)
+        okAction = pcall(C_EquipmentSet.UseEquipmentSet, selected)
+        feedbackText = okAction and ("Equipped " .. (selectedName or "set")) or "Equip failed."
+      else
+        feedbackText = "Select a set first."
       end
     elseif action == "save" then
       if selected then
@@ -1661,15 +1977,19 @@ local function EnsureCustomStatsFrame()
               icon = existingIcon
             end
           end
-          saved = pcall(C_EquipmentSet.SaveEquipmentSet, selected, icon)
+          saved = pcall(C_EquipmentSet.SaveEquipmentSet, selected, icon) == true
         end
         if not saved and C_EquipmentSet.ModifyEquipmentSet and C_EquipmentSet.GetEquipmentSetInfo then
           -- Fallback for clients where SaveEquipmentSet is unavailable.
           local existingName, existingIcon = C_EquipmentSet.GetEquipmentSetInfo(selected)
           if type(existingName) == "string" and existingName ~= "" then
-            pcall(C_EquipmentSet.ModifyEquipmentSet, selected, existingName, existingIcon)
+            saved = pcall(C_EquipmentSet.ModifyEquipmentSet, selected, existingName, existingIcon) == true
           end
         end
+        okAction = saved
+        feedbackText = okAction and ("Saved " .. (selectedName or "set")) or "Save failed."
+      else
+        feedbackText = "Select a set first."
       end
     elseif action == "new" then
       if C_EquipmentSet.CreateEquipmentSet and C_EquipmentSet.GetEquipmentSetIDs then
@@ -1679,13 +1999,33 @@ local function EnsureCustomStatsFrame()
         if GetInventoryItemTexture then
           icon = GetInventoryItemTexture("player", 16) or icon
         end
-        pcall(C_EquipmentSet.CreateEquipmentSet, name, icon)
+        okAction = pcall(C_EquipmentSet.CreateEquipmentSet, name, icon)
+        feedbackText = okAction and ("Created " .. name) or "Create failed."
+      else
+        feedbackText = "Create is unavailable."
       end
     elseif action == "delete" then
       if selected and C_EquipmentSet.DeleteEquipmentSet then
-        pcall(C_EquipmentSet.DeleteEquipmentSet, selected)
-        S.customStatsFrame.modeSelectedSetID = nil
+        okAction = pcall(C_EquipmentSet.DeleteEquipmentSet, selected)
+        if okAction then
+          S.customStatsFrame.modeSelectedSetID = nil
+        end
+        feedbackText = okAction and ("Deleted " .. (selectedName or "set")) or "Delete failed."
+      else
+        feedbackText = "Select a set first."
       end
+    else
+      feedbackText = "Unknown action."
+    end
+
+    if sourceButton then
+      FlashActionButtonResult(sourceButton, okAction)
+    end
+    ShowEquipmentActionFeedback(feedbackText, okAction)
+    if PlaySound then
+      local soundKit = okAction and (SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or 856)
+        or (SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF or 857)
+      pcall(PlaySound, soundKit, "SFX")
     end
     if UpdateCustomStatsFrame and NS and NS.GetDB then
       UpdateCustomStatsFrame(NS:GetDB())
@@ -1709,9 +2049,34 @@ local function EnsureCustomStatsFrame()
     b.text:SetText(label)
     b.text:SetTextColor(0.95, 0.95, 0.95, 1)
     b._actionKey = key
-    b:SetScript("OnClick", function(self)
-      DoEquipmentSetAction(self._actionKey)
+    b:SetScript("OnEnter", function(self)
+      self._isHover = true
+      RefreshActionButtonStyle(self)
     end)
+    b:SetScript("OnLeave", function(self)
+      self._isHover = false
+      self._isPressed = false
+      RefreshActionButtonStyle(self)
+    end)
+    b:SetScript("OnMouseDown", function(self)
+      if self.IsEnabled and not self:IsEnabled() then return end
+      self._isPressed = true
+      RefreshActionButtonStyle(self)
+    end)
+    b:SetScript("OnMouseUp", function(self)
+      self._isPressed = false
+      RefreshActionButtonStyle(self)
+    end)
+    b:SetScript("OnClick", function(self)
+      DoEquipmentSetAction(self._actionKey, self)
+    end)
+    b:HookScript("OnEnable", function(self)
+      RefreshActionButtonStyle(self)
+    end)
+    b:HookScript("OnDisable", function(self)
+      RefreshActionButtonStyle(self)
+    end)
+    RefreshActionButtonStyle(b)
     return b
   end
 
@@ -1806,6 +2171,7 @@ local function EnsureCustomStatsFrame()
   local function UpdateSidebarButtonVisuals(frame)
     if not frame or not frame.sidebarButtons then return end
     local liveDB = NS and NS.GetDB and NS:GetDB() or nil
+    local rightCollapsed = liveDB and liveDB.charsheet and liveDB.charsheet.rightPanelCollapsed == true
     local selectedByMode = {
       [1] = 1, -- stats
       [4] = 2, -- titles
@@ -1816,9 +2182,15 @@ local function EnsureCustomStatsFrame()
       if btn and btn.SetBackdropBorderColor then
         if i == selected then
           btn:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.98)
+        elseif i == 4 and rightCollapsed then
+          btn:SetBackdropBorderColor(0.90, 0.12, 0.12, 0.95)
         else
           btn:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
         end
+      end
+      -- Update button 4 tooltip to reflect current state
+      if i == 4 and btn then
+        btn.tooltipText = rightCollapsed and "Show Mythic Window" or "Hide Mythic Window"
       end
     end
   end
@@ -1965,9 +2337,7 @@ local function EnsureCustomStatsFrame()
 
     btn:SetScript("OnEnter", function(self)
       if self and self.SetBackdropBorderColor then
-        if self.sidebarIndex ~= 4 then
-          self:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.98)
-        end
+        self:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.98)
       end
       local text = self and self.tooltipText or nil
       if text and text ~= "" and GameTooltip then
@@ -2161,6 +2531,14 @@ local function ApplyCustomStatsFont(db)
   if S.customStatsFrame.modeList then
     if S.customStatsFrame.modeList.header and S.customStatsFrame.modeList.header.SetFont then
       S.customStatsFrame.modeList.header:SetFont(fontPath, size + 2, outline)
+    end
+    if S.customStatsFrame.modeList.actionFeedback and S.customStatsFrame.modeList.actionFeedback.SetFont then
+      S.customStatsFrame.modeList.actionFeedback:SetFont(fontPath, math.max(9, size - 1), outline)
+    end
+    for _, btn in ipairs(S.customStatsFrame.modeList.actionButtons or {}) do
+      if btn and btn.text and btn.text.SetFont then
+        btn.text:SetFont(fontPath, math.max(9, size - 1), outline)
+      end
     end
     for _, row in ipairs(S.customStatsFrame.modeList.rows or {}) do
       local rowFontSize = size
@@ -2981,10 +3359,7 @@ M.SwitchMode = function(mode, source, opts)
     end
 
     if mode == 1 then
-      local liveDB = NS and NS.GetDB and NS:GetDB() or nil
-      if liveDB and liveDB.charsheet then
-        liveDB.charsheet.rightPanelCollapsed = false
-      end
+      -- rightPanelCollapsed is intentionally NOT reset here so the toggle persists
     end
 
     if C_Timer and C_Timer.After then
@@ -3149,16 +3524,48 @@ local function FlushPendingRightPanelHide()
   HideRightPanel(true)
 end
 
+local function IsNativePaneModeShown(mode)
+  if mode == 2 then
+    local rep = _G.ReputationFrame
+    return rep and rep.IsShown and rep:IsShown()
+  end
+  if mode == 3 then
+    local token = GetCurrencyPaneFrame and GetCurrencyPaneFrame() or nil
+    return token and token.IsShown and token:IsShown()
+  end
+  return false
+end
+
+local function ApplyNativePaneModeThrottled(mode, applyFn)
+  if type(applyFn) ~= "function" then
+    return false
+  end
+
+  -- Currency/Reputation switches can fire multiple hooks/events in a burst.
+  -- Collapse redundant re-applies while the pane is already visible.
+  if S.nativePaneApplyInProgress then
+    return false
+  end
+
+  local now = (GetTime and GetTime()) or 0
+  local recentlyApplied = (S.nativePaneLastMode == mode) and ((now - (S.nativePaneLastApplyAt or 0)) < NATIVE_PANE_REAPPLY_INTERVAL)
+  if recentlyApplied and IsNativePaneModeShown(mode) then
+    return false
+  end
+
+  S.nativePaneApplyInProgress = true
+  local ok, err = pcall(applyFn)
+  S.nativePaneApplyInProgress = false
+  if not ok then
+    error(err, 0)
+  end
+
+  S.nativePaneLastMode = mode
+  S.nativePaneLastApplyAt = (GetTime and GetTime()) or now
+  return true
+end
+
 UpdateCustomStatsFrame = function(db)
-  if IN_NATIVE_VIS_SWITCH > 0 then
-    QueueDeferredRefreshAfterNativeVisSwitch()
-    return
-  end
-  local statsUpdateFrame = GetFrameCount and GetFrameCount() or nil
-  if statsUpdateFrame and S.lastStatsUpdateFrame == statsUpdateFrame then
-    return
-  end
-  S.lastStatsUpdateFrame = statsUpdateFrame
   local frame = EnsureCustomStatsFrame()
   if not frame then return end
   if not CharacterFrame then return end
@@ -3175,8 +3582,8 @@ UpdateCustomStatsFrame = function(db)
     ApplyCustomCharacterLayout()
   end
 
-  -- Right-anchor so it tracks frame width changes automatically after tab transitions.
-  local statsWidth = math.max(140, math.floor((CFG.CUSTOM_STATS_WIDTH * 0.9) + 0.5))
+  -- Keep right-anchored custom stats pane sizing predictable across mode switches.
+  local statsWidth = GetEffectiveStatsPaneWidth()
   frame:ClearAllPoints()
   frame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -8, -52)
   frame:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -8, 52)
@@ -3272,11 +3679,13 @@ UpdateCustomStatsFrame = function(db)
     for _, secFrame in ipairs(frame.sections or {}) do
       if secFrame then secFrame:Hide() end
     end
-    LeaveCurrencyPaneMode()
-    ApplyReputationPaneMode(db)
+    ApplyNativePaneModeThrottled(2, function()
+      LeaveCurrencyPaneMode()
+      ApplyReputationPaneMode(db)
+      ApplyCustomCharacterLayout()
+    end)
     if frame.modeBar then frame.modeBar:Show() end
     if frame.sidebarBar then frame.sidebarBar:Hide() end
-    ApplyCustomCharacterLayout()
     frame:Hide()
     return
   elseif mode == 3 then
@@ -3311,12 +3720,14 @@ UpdateCustomStatsFrame = function(db)
     for _, secFrame in ipairs(frame.sections or {}) do
       if secFrame then secFrame:Hide() end
     end
-    LeaveReputationPaneMode()
-    ApplyCurrencyPaneMode(db)
+    ApplyNativePaneModeThrottled(3, function()
+      LeaveReputationPaneMode()
+      ApplyCurrencyPaneMode(db)
+      -- Re-assert final custom size/anchors after blank-mode native toggles.
+      ApplyCustomCharacterLayout()
+    end)
     if frame.modeBar then frame.modeBar:Show() end
     if frame.sidebarBar then frame.sidebarBar:Hide() end
-    -- Re-assert final custom size/anchors after all blank-mode toggles.
-    ApplyCustomCharacterLayout()
     frame:Hide()
     return
   else
@@ -3414,20 +3825,20 @@ UpdateCustomStatsFrame = function(db)
     if frame.modeList.actionButtons then
       local hasSelection = frame.modeSelectedSetID ~= nil
       for _, b in ipairs(frame.modeList.actionButtons) do
-        if b and b._actionKey ~= "new" then
-          b:SetEnabled(modeIndex == 5 and hasSelection)
-          if b.text and b.text.SetTextColor then
-            if modeIndex == 5 and hasSelection then
-              b.text:SetTextColor(0.95, 0.95, 0.95, 1)
-            else
-              b.text:SetTextColor(0.55, 0.55, 0.55, 1)
-            end
+        if b then
+          local shouldEnable = (modeIndex == 5) and (b._actionKey == "new" or hasSelection)
+          b:SetEnabled(shouldEnable)
+          if type(RefreshActionButtonStyle) == "function" then
+            RefreshActionButtonStyle(b)
           end
-        elseif b and b.text and b.text.SetTextColor then
-          b:SetEnabled(modeIndex == 5)
-          b.text:SetTextColor(modeIndex == 5 and 0.95 or 0.55, modeIndex == 5 and 0.95 or 0.55, modeIndex == 5 and 0.95 or 0.55, 1)
         end
       end
+    end
+
+    if frame.modeList.actionFeedback and modeIndex ~= 5 then
+      frame.modeList.actionFeedback:SetText("")
+      frame.modeList.actionFeedback:Hide()
+      frame.modeList._actionFeedbackToken = (frame.modeList._actionFeedbackToken or 0) + 1
     end
   end
 
@@ -3631,8 +4042,10 @@ UpdateCustomStatsFrame = function(db)
     local showCustomSidebar = (mode ~= 2 and mode ~= 3)
     frame.sidebarBar:SetShown(showCustomSidebar)
     SetPaperDollSidebarButtonsMouseEnabled(not showCustomSidebar)
+    SetPaperDollSidebarButtonsVisible(not showCustomSidebar)
   else
     SetPaperDollSidebarButtonsMouseEnabled(true)
+    SetPaperDollSidebarButtonsVisible(true)
   end
   frame:Show()
 end
@@ -4571,38 +4984,69 @@ ApplyCustomCharacterLayout = function()
   end
 
   local insetLeft = _G.CharacterFrameInsetLeft
-  -- Let frame expansion widen the left/model region; keep stats column compact.
-  local leftWidth = frameWidth - CFG.CUSTOM_STATS_WIDTH - CFG.CUSTOM_PANE_GAP - 36
+  -- Reserve extra room for the right stats/titles/equipment pane so the
+  -- right slot column and section panels can move left together.
+  local statsReserve = math.floor((CFG.CUSTOM_STATS_WIDTH * 1.20) + 0.5)
+  local leftWidth = frameWidth - statsReserve - CFG.CUSTOM_PANE_GAP - 36
   if leftWidth < 320 then
     leftWidth = 320
   end
-  if insetLeft then
-    insetLeft:ClearAllPoints()
-    insetLeft:SetPoint("TOPLEFT", inset or CharacterFrame, "TOPLEFT", 0, 0)
-    insetLeft:SetPoint("BOTTOMLEFT", inset or CharacterFrame, "BOTTOMLEFT", 0, 0)
-    insetLeft:SetWidth(leftWidth)
+  local leftAnchor = insetLeft
+  if not leftAnchor then
+    if not S.insetLeftProxy then
+      S.insetLeftProxy = CreateFrame("Frame", "HaraUICharacterInsetLeftProxy", CharacterFrame)
+    end
+    leftAnchor = S.insetLeftProxy
+  end
+  if leftAnchor then
+    if leftAnchor.SetParent then
+      leftAnchor:SetParent(inset or CharacterFrame)
+    end
+    leftAnchor:ClearAllPoints()
+    leftAnchor:SetPoint("TOPLEFT", inset or CharacterFrame, "TOPLEFT", 0, 0)
+    leftAnchor:SetPoint("BOTTOMLEFT", inset or CharacterFrame, "BOTTOMLEFT", 0, 0)
+    leftAnchor:SetWidth(leftWidth)
   end
 
   local insetRight = _G.CharacterFrameInsetRight
-  if insetRight then
+  if not S.insetRightProxy then
+    S.insetRightProxy = CreateFrame("Frame", "HaraUICharacterInsetRightProxy", CharacterFrame)
+  end
+  local rightAnchor = S.insetRightProxy or insetRight
+  if rightAnchor then
+    if rightAnchor.SetParent then
+      rightAnchor:SetParent(inset or CharacterFrame)
+    end
+    rightAnchor:ClearAllPoints()
+    rightAnchor:SetPoint("TOPLEFT", leftAnchor or inset or CharacterFrame, "TOPRIGHT", 4, 0)
+    rightAnchor:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -4, 44)
+  end
+  if insetRight and insetRight ~= rightAnchor then
+    if insetRight.SetParent then
+      insetRight:SetParent(inset or CharacterFrame)
+    end
     insetRight:ClearAllPoints()
-    insetRight:SetPoint("TOPLEFT", insetLeft or inset or CharacterFrame, "TOPRIGHT", 4, 0)
-    insetRight:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -4, 44)
+    if insetRight.SetAllPoints then
+      insetRight:SetAllPoints(rightAnchor)
+    else
+      insetRight:SetPoint("TOPLEFT", rightAnchor, "TOPLEFT", 0, 0)
+      insetRight:SetPoint("BOTTOMRIGHT", rightAnchor, "BOTTOMRIGHT", 0, 0)
+    end
   end
 
   local paper = _G.PaperDollFrame
   if paper then
     paper:ClearAllPoints()
-    paper:SetPoint("TOPLEFT", insetLeft or inset or CharacterFrame, "TOPLEFT", 0, 0)
-    paper:SetPoint("BOTTOMRIGHT", insetLeft or inset or CharacterFrame, "BOTTOMRIGHT", 0, 0)
+    paper:SetPoint("TOPLEFT", leftAnchor or inset or CharacterFrame, "TOPLEFT", 0, 0)
+    paper:SetPoint("BOTTOMRIGHT", leftAnchor or inset or CharacterFrame, "BOTTOMRIGHT", 0, 0)
     paper:SetWidth(leftWidth)
   end
 
   local stats = _G.CharacterStatsPane
   if stats then
     stats:ClearAllPoints()
-    stats:SetPoint("TOPLEFT", insetRight or inset or CharacterFrame, "TOPLEFT", 13, -3)
-    stats:SetPoint("BOTTOMRIGHT", insetRight or inset or CharacterFrame, "BOTTOMRIGHT", -3, 2)
+    stats:SetPoint("TOPLEFT", rightAnchor or inset or CharacterFrame, "TOPLEFT", 13, -3)
+    stats:SetPoint("BOTTOMRIGHT", rightAnchor or inset or CharacterFrame, "BOTTOMRIGHT", -3, 2)
   end
 
   local tab1 = _G.CharacterFrameTab1
@@ -4840,7 +5284,7 @@ local function StylePaperDollSlots()
   end
 end
 
-local function ApplyChonkySlotLayout()
+ApplyChonkySlotLayout = function()
   local anchor = CharacterFrame
   if not anchor then return end
 
@@ -4892,7 +5336,7 @@ local function ApplyChonkySlotLayout()
   local stride = CFG.SLOT_ICON_SIZE + vpad
   local topY = -64
   local leftX = 14
-  local statsWidth = math.max(140, math.floor((CFG.CUSTOM_STATS_WIDTH * 0.9) + 0.5))
+  local statsWidth = GetEffectiveStatsPaneWidth()
   local frameWidth = GetEffectiveCharacterFrameWidth()
   local rightColumnX = frameWidth - statsWidth - 55
 
@@ -4926,14 +5370,14 @@ local function ApplyChonkySlotLayout()
   offHand:SetPoint("TOPLEFT", mainHand, "TOPLEFT", pairGapX, 0)
 end
 
-local function ApplyChonkyModelLayout()
+ApplyChonkyModelLayout = function()
   local model = _G.CharacterModelScene
   if not model then return end
 
   local fill = EnsureModelFillFrame()
   local boxTop, boxBottom = -84, 46
   local boxWidth = 356
-  local statsWidth = math.max(140, math.floor((CFG.CUSTOM_STATS_WIDTH * 0.9) + 0.5))
+  local statsWidth = GetEffectiveStatsPaneWidth()
   local leftColumnX = 14
   local frameWidth = GetEffectiveCharacterFrameWidth()
   local rightColumnX = frameWidth - statsWidth - 55
@@ -7036,10 +7480,6 @@ end
 
 function M:Refresh()
   if not M.active then return end
-  if IN_NATIVE_VIS_SWITCH > 0 then
-    QueueDeferredRefreshAfterNativeVisSwitch()
-    return
-  end
   local db = NS:GetDB()
   if not db then return end
   if not CharacterFrame then return end
@@ -7047,11 +7487,6 @@ function M:Refresh()
     S.refreshQueuedAfterCurrent = true
     return
   end
-  local refreshFrame = GetFrameCount and GetFrameCount() or nil
-  if refreshFrame and S.lastRefreshFrame == refreshFrame then
-    return
-  end
-  S.lastRefreshFrame = refreshFrame
   S.refreshInProgress = true
   SyncCustomModeToNativePanel()
 
@@ -7191,6 +7626,18 @@ function M:Apply()
   if not IsAddonLoadedCompat("Blizzard_CharacterUI") then
     LoadAddonCompat("Blizzard_CharacterUI")
   end
+  if not CharacterFrame then
+    if not S.characterUIRetryPending and C_Timer and C_Timer.After then
+      S.characterUIRetryPending = true
+      C_Timer.After(0.1, function()
+        S.characterUIRetryPending = false
+        if not M.active then return end
+        M:Apply()
+      end)
+    end
+    return
+  end
+  S.characterUIRetryPending = false
 
   -- Build custom panes ahead of first open to avoid first-show hitching.
   if db.charsheet and db.charsheet.styleStats and CharacterFrame then
@@ -7223,10 +7670,39 @@ function M:Apply()
     S.slotEnforceUntil = GetTime() + 1.5
     S.slotEnforcer:Show()
   end
+  local function QueueLayoutReapply(reason)
+    if C_Timer and C_Timer.After then
+      C_Timer.After(0, function()
+        ReapplyPersistentCharacterLayout(reason)
+      end)
+    else
+      ReapplyPersistentCharacterLayout(reason)
+    end
+  end
+  local function EnsurePaperDollLayoutHooks()
+    if not S.hookedPaperDollItemsShow then
+      local itemsFrame = _G.PaperDollItemsFrame or _G.PaperDollFrame
+      if itemsFrame and itemsFrame.HookScript then
+        itemsFrame:HookScript("OnShow", function()
+          QueueLayoutReapply("PaperDollItemsFrame.OnShow")
+        end)
+        S.hookedPaperDollItemsShow = true
+      end
+    end
+    if not S.hookedPaperDollUpdateItems and hooksecurefunc and type(_G.PaperDollFrame_UpdateItems) == "function" then
+      hooksecurefunc("PaperDollFrame_UpdateItems", function()
+        if not (CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()) then return end
+        QueueLayoutReapply("PaperDollFrame_UpdateItems")
+      end)
+      S.hookedPaperDollUpdateItems = true
+    end
+  end
+  EnsurePaperDollLayoutHooks()
   local UpdateTickerState
 
   if CharacterFrame and not S.hookedShow then
     CharacterFrame:HookScript("OnShow", function()
+      EnsurePaperDollLayoutHooks()
       if IN_NATIVE_VIS_SWITCH > 0 then
         QueueDeferredRefreshAfterNativeVisSwitch()
         return
@@ -7254,7 +7730,7 @@ function M:Apply()
           end
           SyncCustomModeToNativePanel()
           M:Refresh()
-          ApplyCustomCharacterLayout()
+          ReapplyPersistentCharacterLayout("CharacterFrame.OnShow")
           StartSlotEnforcer()
           if M._deferredNativeModeMirror ~= nil then
             M._QueueDeferredNativeModeMirror()
@@ -7318,13 +7794,7 @@ function M:Apply()
             return
           end
           if not (M.active and CharacterFrame and CharacterFrame:IsShown()) then return end
-          local freshDB = NS and NS.GetDB and NS:GetDB() or nil
-          if not (freshDB and freshDB.charsheet and freshDB.charsheet.styleStats) then return end
-          ApplyCustomCharacterLayout()
-          ApplyChonkySlotLayout()
-          ApplyChonkyModelLayout()
-          UpdateCustomStatsFrame(freshDB)
-          UpdateCustomGearFrame(freshDB)
+          ReapplyPersistentCharacterLayout("CharacterFrame.OnSizeChanged")
           StartSlotEnforcer()
         end)
       end)
@@ -7467,11 +7937,7 @@ function M:Apply()
         if math.abs((tonumber(cw) or 0) - CFG.PRIMARY_SHEET_WIDTH) > 0.5
           or math.abs((tonumber(ch) or 0) - CFG.CUSTOM_CHAR_HEIGHT) > 0.5
         then
-          ApplyCustomCharacterLayout()
-          ApplyChonkySlotLayout()
-          ApplyChonkyModelLayout()
-          UpdateCustomStatsFrame(liveDB)
-          UpdateCustomGearFrame(liveDB)
+          ReapplyPersistentCharacterLayout("Ticker.SizeDrift")
         end
       end
     end
@@ -7572,6 +8038,22 @@ function M:Apply()
 
   self:Refresh()
   UpdateTickerState(false)
+end
+
+function M:DebugLayoutSnapshot(reason)
+  local label = tostring(reason or "manual")
+  LayoutDebugPrintAlways("manual snapshot:", label)
+  if not M.active then
+    LayoutDebugPrintAlways("module inactive; apply may be blocked by settings.")
+  end
+  DumpCharacterLayoutSnapshot("manual-before " .. label, true)
+  ReapplyPersistentCharacterLayout("manual " .. label)
+  DumpCharacterLayoutSnapshot("manual-after " .. label, true)
+  if C_Timer and C_Timer.After then
+    C_Timer.After(0.10, function()
+      DumpCharacterLayoutSnapshot("manual-post+0.10 " .. label, true)
+    end)
+  end
 end
 
 function M:Disable()
