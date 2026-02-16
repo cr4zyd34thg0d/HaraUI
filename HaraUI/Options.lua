@@ -44,6 +44,15 @@ local function GetVersionString()
   return version
 end
 
+local function GetDisplayVersionString(version)
+  local text = type(version) == "string" and version or ""
+  if text == "" then
+    text = DEV_VERSION
+  end
+  -- Keep release/beta/alpha tags intact; only strip local dev suffix.
+  return (text:gsub("%-dev$", ""))
+end
+
 local function GetVersionStatus(info)
   if NS and NS.GetVersionStatus then
     return NS.GetVersionStatus(info)
@@ -233,8 +242,8 @@ function NS:InitOptions()
         local source = tostring(info and info.source or "unknown")
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine("Version Status", ORANGE[1], ORANGE[2], ORANGE[3])
-        GameTooltip:AddLine(("Installed: %s"):format(tostring(info and info.installed or "unknown")), 0.95, 0.95, 0.95)
-        GameTooltip:AddLine(("Latest: %s"):format(tostring(info and info.latest or "n/a")), 0.95, 0.95, 0.95)
+        GameTooltip:AddLine(("Installed: %s"):format(GetDisplayVersionString(info and info.installed or "unknown")), 0.95, 0.95, 0.95)
+        GameTooltip:AddLine(("Latest: %s"):format(GetDisplayVersionString(info and info.latest or "n/a")), 0.95, 0.95, 0.95)
         if info and info.peerName then
           GameTooltip:AddLine(("Peer: %s"):format(tostring(info.peerName)), 0.85, 0.85, 0.85)
         end
@@ -263,7 +272,7 @@ function NS:InitOptions()
       local installed = info and info.installed or nil
       local status = (info and (info.status or GetVersionStatus(info))) or "unknown"
 
-      navVersion:SetText(tostring(installed or DEV_VERSION))
+      navVersion:SetText(GetDisplayVersionString(installed or DEV_VERSION))
 
       navGitIndicator:Show()
       if status == "out-of-date" then
