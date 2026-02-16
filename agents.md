@@ -10,6 +10,7 @@
 ## Release Pipeline (Tags Only)
 
 When you push a tag that matches `v*`, `.github/workflows/release.yml` executes:
+- Valid release tags are enforced as `vX.Y.Z`, `vX.Y.Z-beta`, or `vX.Y.Z-alpha`.
 
 1. Parse tag metadata and map tag to release type (`release`, `beta`, `alpha`).
 2. Package with `BigWigsMods/packager@v2` using `.pkgmeta`.
@@ -22,14 +23,15 @@ When you push a tag that matches `v*`, `.github/workflows/release.yml` executes:
    - The same generated notes body is used for both GitHub Release and CurseForge.
 5. Create GitHub Release for the tag and attach the generated zip.
 6. Upload the same zip to CurseForge with the same release notes.
+7. Normalize artifact filename to `HaraUI-V<version>.zip` (example: `HaraUI-V2.0.3-alpha.zip`).
 
 ### Tag -> Release Type Mapping
 
 | Tag pattern            | Release type | Example           |
 |------------------------|--------------|-------------------|
 | `v2.0.3`               | `release`    | Stable release    |
-| `v2.0.3-beta.1`        | `beta`       | Beta pre-release  |
-| `v2.0.3-alpha.1`       | `alpha`      | Alpha dev build   |
+| `v2.0.3-beta`          | `beta`       | Beta pre-release  |
+| `v2.0.3-alpha`         | `alpha`      | Alpha dev build   |
 
 ## Safe Push Behavior
 
@@ -55,10 +57,10 @@ git status
 git tag v2.0.3
 
 # Beta
-git tag v2.0.3-beta.1
+git tag v2.0.3-beta
 
 # Alpha
-git tag v2.0.3-alpha.1
+git tag v2.0.3-alpha
 ```
 
 3. Push the tag:

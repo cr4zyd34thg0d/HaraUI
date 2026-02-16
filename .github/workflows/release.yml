@@ -27,12 +27,15 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           VERSION="${TAG#v}"
 
-          if [[ "$TAG" == *-alpha* ]]; then
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha$ ]]; then
             RELEASE_TYPE="alpha"
-          elif [[ "$TAG" == *-beta* ]]; then
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta$ ]]; then
             RELEASE_TYPE="beta"
-          else
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             RELEASE_TYPE="release"
+          else
+            echo "::error::Tag format must be vX.Y.Z, vX.Y.Z-beta, or vX.Y.Z-alpha (example: v2.0.3-alpha)"
+            exit 1
           fi
 
           echo "tag=$TAG"               >> "$GITHUB_OUTPUT"
@@ -134,14 +137,22 @@ jobs:
             echo "::error::No zip found in .release/"
             exit 1
           fi
-          echo "path=$ZIP"               >> "$GITHUB_OUTPUT"
-          echo "name=$(basename "$ZIP")" >> "$GITHUB_OUTPUT"
+
+          # Keep release artifact naming stable across packager output changes.
+          VERSION="${{ steps.meta.outputs.version }}"
+          CANONICAL=".release/HaraUI-V${VERSION}.zip"
+          if [ "$ZIP" != "$CANONICAL" ]; then
+            mv "$ZIP" "$CANONICAL"
+          fi
+
+          echo "path=$CANONICAL"               >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$CANONICAL")" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          name: HaraUI ${{ steps.meta.outputs.tag }}
+          name: HaraUI v${{ steps.meta.outputs.version }}
           body: ${{ steps.changelog.outputs.body }}
           prerelease: ${{ steps.meta.outputs.release_type != 'release' }}
           files: ${{ steps.zip.outputs.path }}
@@ -157,3 +168,45 @@ jobs:
           release_type: ${{ steps.meta.outputs.release_type }}
           changelog: ${{ steps.changelog.outputs.body }}
           changelog_type: markdown
+
+  sync_readme_version:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Update README version references
+        id: readme
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          BADGE_VERSION="${VERSION//-/--}"
+
+          sed -E -i "s#^\!\[HaraUI\]\(https://img\.shields\.io/badge/HaraUI-[^)]*\)#![HaraUI](https://img.shields.io/badge/HaraUI-${BADGE_VERSION}-f97316?style=for-the-badge)#" README.md
+          sed -E -i "s#^- \*\*Bundle Release:\*\* \`v[^`]+\` \(rolling main\)#- **Bundle Release:** \`v${VERSION}\` (rolling main)#" README.md
+          sed -E -i "s#^\| HaraUI \| [^|]+ \|#| HaraUI | ${VERSION} |#" README.md
+
+          if git diff --quiet -- README.md; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit README update
+        if: steps.readme.outputs.changed == 'true'
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "docs: bump README version to v${VERSION}"
+          git push origin main
