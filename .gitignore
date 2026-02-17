@@ -13,14 +13,6 @@
 # Only include tracked project roots.
 !/HaraUI/
 !/HaraUI/**
-!/OPie/
-!/OPie/**
-!/Platynator/
-!/Platynator/**
-!/patches/
-!/patches/**
-!/scripts/
-!/scripts/**
 
 # Never track nested repo metadata if present inside addon folder.
 /HaraUI/.git/
