@@ -4,8 +4,6 @@
 
 ![WoW Interface](https://img.shields.io/badge/WoW-12.0.1-1f6feb?style=for-the-badge)
 ![HaraUI](https://img.shields.io/badge/HaraUI-2.0-f97316?style=for-the-badge)
-![Platynator](https://img.shields.io/badge/Platynator-319-22c55e?style=for-the-badge)
-![OPie](https://img.shields.io/badge/OPie-7.11.3-a855f7?style=for-the-badge)
 
 ## :school_satchel: Bundle Overview
 
@@ -18,8 +16,6 @@
 | Addon | Version | Interface | Author | Purpose |
 |-------|---------|-----------|--------|---------|
 | HaraUI | 2.0 | 120001 | Harath | Modular UI/QoL suite |
-| Platynator | 319 | 120001 | plusmouse | Highly customizable nameplates |
-| OPie | 7.11.3 | 120001 | foxlit | Radial action rings |
 
 ## :jigsaw: HaraUI Feature Highlights
 
@@ -53,12 +49,6 @@
 - `/hui debug` -> toggle debug mode
 - `/hui version` -> show version details
 
-### OPie
-- `/opie` -> open configuration
-- `/opie rings` -> ring customization
-
-Docs: https://www.townlong-yak.com/addons/opie
-
 ## :rocket: Installation
 
 Copy addon folders into:
@@ -70,20 +60,6 @@ World of Warcraft/_retail_/Interface/AddOns/
 Then run `/reload` in-game.
 
 ## :wrench: Local Development Workflows
-
-### Reapply local compatibility patches
-
-```powershell
-.\scripts\reapply-local-patches.ps1 -Patch platynator-no-friendly
-```
-
-Patch docs: `patches/README.md`
-
-### Full Platynator refresh flow
-
-```powershell
-.\scripts\update-platynator.ps1 -SourcePath "C:\path\to\Platynator"
-```
 
 ### Stamp HaraUI release metadata
 
@@ -108,7 +84,6 @@ powershell -ExecutionPolicy Bypass -File .\HaraUI\tools\stamp-version-metadata.p
 ## :spiral_notepad: Changelog
 
 ### v1.2.2 (2026-02-15)
-- Updated Platynator to `v319`
 - Improved dungeon/raid friendly name font behavior for HaraUI-friendly plates
 - Expanded CharacterSheet vault and layout logic for better live data handling
 - Switched game menu scaling to a resolution-aware model
