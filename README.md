@@ -1,15 +1,13 @@
 # HaraUI
 
-:sparkles: A curated World of Warcraft UI bundle focused on clean gameplay UX, practical QoL modules, and battle-tested nameplate behavior.
+:sparkles: A curated World of Warcraft UI focused on clean gameplay UX, practical QoL modules, and battle-tested nameplate behavior.
 
 ![WoW Interface](https://img.shields.io/badge/WoW-12.0.1-1f6feb?style=for-the-badge)
 ![HaraUI](https://img.shields.io/badge/HaraUI-2.0-f97316?style=for-the-badge)
 
-## :school_satchel: Bundle Overview
+## :school_satchel: Overview
 
 - **Target Patch:** WoW `12.0.1` (Interface `120001`)
-- **Bundle Release:** `v1.2.2` (rolling main)
-- **Focus:** fast setup, modern defaults, and modular control
 
 ### :package: Included Addons
 
@@ -17,85 +15,77 @@
 |-------|---------|-----------|--------|---------|
 | HaraUI | 2.0 | 120001 | Harath | Modular UI/QoL suite |
 
-## :jigsaw: HaraUI Feature Highlights
+## :jigsaw: Current Feature Set
 
 ### :gear: Core UI Modules
-- :orange_circle: **XP/Rep Bar** with session text, rate text, and max-level behavior options
-- :large_blue_circle: **Custom Cast Bar** with icon, shield, latency spark, texture/color controls
-- :gift: **Loot Toasts** for items, currencies, and money
-- :compass: **Minimap Button Bar** with orientation, sizing, and popout controls
-- :chart_with_downwards_trend: **Smaller Game Menu** with resolution-aware scaling
-
-### :shield: Combat & Utility
-- :label: **Friendly Player Nameplates** with class color support, font sizing, and dungeon/raid-friendly font handling
-- :dart: **Rotation Helper Frame** (compact keybind indicator panel)
-- :white_check_mark: **Auto Accept Summons**
-- :receipt: **Tracked Bars Skinning** for Blizzard Cooldown Viewer bars
-- :id: **Spell ID Tooltip Toggle**
-- :busts_in_silhouette: **Copy BattleTag** from Friends dropdown
+- :orange_circle: **XP / Reputation Bar**: swaps between XP and watched reputation, with session tracking, rate text, and ETA support.
+- :large_blue_circle: **Custom Cast Bar**: player cast bar with icon, interrupt shield, latency spark, and visual tuning controls.
+- :gift: **Loot Toasts**: compact notifications for items, currencies, and money with clean stacking behavior.
+- :compass: **Minimap Button Bar**: gathers minimap buttons into a movable bar with orientation and popout behavior controls.
+- :chart_with_downwards_trend: **Smaller Game Menu**: applies compact Escape menu scaling with resolution-aware behavior.
+- :world_map: **Move Options Window**: allows dragging Blizzard Settings/Options for cleaner screen placement.
 
 ### :bricks: Character Sheet (HaraChonk)
-- :bust_in_silhouette: Expanded custom character frame layout
-- :bar_chart: Styled stats and gear presentation
-- :world_map: Mythic+ / vault-focused right panel with richer activity rendering
-- :art: Font/theme integration across custom frame elements
+- :bust_in_silhouette: **Expanded Character Layout**: larger character frame footprint with dedicated right-side panel space.
+- :bar_chart: **Stats and Gear Presentation**: custom stat and equipment presentation for faster reading.
+- :world_map: **Mythic+ and Vault Panel**: integrated dungeon run details and Great Vault progress snapshot.
+- :money_with_wings: **Currency and Reputation Integration**: unified tab behavior and layout polish across Character, Reputation, and Currency views.
+- :art: **Visual Skinning Pass**: consistent borders, textures, and typography across Character Sheet elements.
+
+### :crossed_swords: Combat and Utility
+- :label: **Friendly Player Nameplates**: class-color and font handling for friendly units, tuned for dungeon and raid readability.
+- :dart: **Rotation Helper**: compact keybind helper panel for quick combat decision support.
+- :white_check_mark: **Auto Accept Summons**: accepts party/raid summons when enabled.
+- :receipt: **Tracked Bars Skinning**: skins Blizzard Cooldown Viewer tracked bars to match HaraUI visuals.
+- :id: **Spell ID Tooltips**: appends spell IDs to tooltips for debugging and setup precision.
+- :busts_in_silhouette: **Copy BattleTag**: adds a quick copy action in the Friends dropdown.
+
+### :art: Personalization and Control
+- :lock: **Unlock Frames (Move Mode)**: drag and save positions for movable module frames.
+- :paintbrush: **Theme Accent Color**: one accent color applied across options and module visuals.
+- :satellite: **Minimap Launcher Button**: optional LibDBIcon launcher for quick access.
+- :control_knobs: **Unified Options Window**: organized module pages with toggles, previews, sliders, and advanced controls.
 
 ## :keyboard: Slash Commands
 
 ### HaraUI
-- `/hui` -> open options
+- `/hui` or `/haraui` -> open options
 - `/hui lock` -> toggle Move Mode
 - `/hui xp | cast | loot | summon` -> toggle module quickly
 - `/hui debug` -> toggle debug mode
+- `/hui layoutdebug` -> toggle Character Sheet layout debug mode
+- `/hui layoutsnap` -> print Character Sheet layout snapshot
 - `/hui version` -> show version details
 
 ## :rocket: Installation
 
-Copy addon folders into:
+[![CurseForge](https://img.shields.io/badge/Download-CurseForge-F16436?style=for-the-badge&logo=curseforge&logoColor=white)](https://www.curseforge.com/wow/addons/haraui)
+
+1. Download the latest build from CurseForge.
+2. Extract the `HaraUI` folder into:
 
 ```text
 World of Warcraft/_retail_/Interface/AddOns/
 ```
 
-Then run `/reload` in-game.
+3. Run `/reload` in-game.
 
-## :wrench: Local Development Workflows
+## :spiral_notepad: Changelog (Recent)
 
-### Stamp HaraUI release metadata
+### v1.2.2 - 2026-02-15
+- **Changed:** Improved dungeon and raid friendly-name font behavior for HaraUI plates.
+- **Changed:** Expanded Character Sheet vault and layout logic for better live data handling.
+- **Changed:** Switched game menu scaling to a resolution-aware model.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\release-haraui.ps1 -Version 2.0 -GitVersion 2.0 -CommitRef HEAD
-```
+### v1.2.1 - 2026-02-14
+- **Changed:** Updated HaraUI to `v2.0`.
+- **Fixed:** Resolved Currency tab account-transfer taint path by routing bottom Character/Rep/Currency buttons through native CharacterFrame tabs.
+- **Fixed:** Corrected bottom tab routing where Reputation/Currency could open Blizzard Titles/Equipment panes.
 
-This also updates `HaraUI/Generated/HostedVersion.lua` by default, using GitHub release/tag data for hosted version checks.
+### v1.2.0 - 2026-02-11
+- **Changed:** Updated HaraUI to `v1.4.1` for major module expansion.
+- **Added:** HaraChonk character/player frame replacement (Character Sheet module).
+- **Added:** Tracked Bars skinning module.
+- **Added:** Auto Accept Summons module.
+- **Added:** Spell ID toggle in General settings.
 
-Optional flags:
-- `-SkipGitHubHostedSync`
-- `-RequireGitHubHostedSync`
-- `-GitHubOwner`, `-GitHubRepo`
-- `-GitHubToken` (or `GITHUB_TOKEN` env var)
-
-Low-level stamp example:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\HaraUI\tools\stamp-version-metadata.ps1 -Version 2.0 -GitVersion 2.0 -BuildCommit 56a5bb9 -LatestCommit 56a5bb9
-```
-
-## :spiral_notepad: Changelog
-
-### v1.2.2 (2026-02-15)
-- Improved dungeon/raid friendly name font behavior for HaraUI-friendly plates
-- Expanded CharacterSheet vault and layout logic for better live data handling
-- Switched game menu scaling to a resolution-aware model
-
-### v1.2.1 (2026-02-14)
-- Updated HaraUI to `v2.0`
-- Resolved Currency tab account-transfer taint path by routing bottom Character/Rep/Currency buttons through native CharacterFrame tabs
-- Fixed bottom tab routing mismatch where Rep/Currency could open Blizzard Titles/Equipment panes
-
-### v1.2.0 (2026-02-11)
-- Updated HaraUI to `v1.4.1` for significant module additions
-- Added HaraChonk character/player frame replacement (Character Sheet module)
-- Added Tracked Bars skinning module
-- Added Auto Accept Summons module
-- Added Spell ID toggle to General settings
