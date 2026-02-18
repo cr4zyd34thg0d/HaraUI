@@ -27,7 +27,7 @@ local function GetAddonMetadataField(field)
 end
 
 local DEV_VERSION = "2.0.2-dev"
-local VERSION_TOKEN = "@project-version@"
+local VERSION_TOKEN = "v2.0.2-alpha.1"
 
 local function GetVersionString()
   if NS and NS.GetVersionString then

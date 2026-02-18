@@ -15,6 +15,10 @@ NS.DEFAULTS = {
       closeStyle = "round",
     },
 
+    debug = {
+      currencyLayout = false,
+    },
+
     xpbar = {
       enabled = true,
       width = 520,
@@ -67,7 +71,6 @@ NS.DEFAULTS = {
       enabled = true,
       hideArt = true,
       styleStats = true,
-      layoutDebug = false,
       showRightPanel = true,
       rightPanelDetached = false,
       rightPanelAnchor = "TOPLEFT",
@@ -75,6 +78,9 @@ NS.DEFAULTS = {
       rightPanelY = 0,
       rightPanelOffsetX = 8,
       rightPanelOffsetY = 0,
+      frameAnchor = nil,
+      frameX = 0,
+      frameY = 0,
       stripeAlpha = 0.22,
       font = "Tahoma Bold",
       fontSize = 12,

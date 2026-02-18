@@ -12,11 +12,60 @@ local Title = Widgets.Title
 local Small = Widgets.Small
 local MakeButton = Widgets.MakeButton
 
+local function ToOnOff(flag)
+  return flag and "yes" or "no"
+end
+
+local function IsInOpenUIPanels(window)
+  local list = rawget(_G, "OpenUIPanels")
+  if type(list) ~= "table" then
+    return false
+  end
+
+  for k, v in pairs(list) do
+    if k == window or v == window then
+      return true
+    end
+  end
+  return false
+end
+
+local function DebugOptionsWindowIntegration(window, source)
+  if not (NS and NS.Print) then
+    return
+  end
+
+  local globalName = "HaraUIOptionsWindow"
+  local globalExists = _G and _G[globalName] ~= nil
+  local inUIPanelWindows = type(UIPanelWindows) == "table" and UIPanelWindows[globalName] ~= nil
+  local inOpenUIPanels = IsInOpenUIPanels(window)
+  local inUISpecialFrames = false
+  if type(UISpecialFrames) == "table" then
+    for _, name in ipairs(UISpecialFrames) do
+      if name == globalName then
+        inUISpecialFrames = true
+        break
+      end
+    end
+  end
+
+  NS.Print(
+    ("Options toggle [%s]: _G[%s]=%s UIPanelWindows=%s UIParentPanelManager(OpenUIPanels)=%s UISpecialFrames=%s"):format(
+      tostring(source or "unknown"),
+      globalName,
+      ToOnOff(globalExists),
+      ToOnOff(inUIPanelWindows),
+      ToOnOff(inOpenUIPanels),
+      ToOnOff(inUISpecialFrames)
+    )
+  )
+end
+
 function NS:BuildOptionsWindow(BuildFullUI, db)
   -- =========================================================
   -- POPOUT WINDOW
   -- =========================================================
-  local window = CreateFrame("Frame", "HaraUIOptionsWindow", UIParent, "BackdropTemplate")
+  local window = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
   window:SetSize(720, 620)
   window:SetPoint("CENTER")
   window:Hide()
@@ -208,23 +257,33 @@ function NS:BuildOptionsWindow(BuildFullUI, db)
   function NS:OpenOptionsWindow()
     window:Show()
     window:Raise()
-    if SettingsPanel then SettingsPanel:Hide() end
-    if SettingsFrame then SettingsFrame:Hide() end
-    if InterfaceOptionsFrame then InterfaceOptionsFrame:Hide() end
-    if GameMenuFrame then GameMenuFrame:Hide() end
+  end
+  function NS:CloseOptionsWindow()
+    window:Hide()
+  end
+  function NS:ToggleOptionsWindow(source)
+    DebugOptionsWindowIntegration(window, source or "toggle")
+    if window:IsShown() then
+      NS:CloseOptionsWindow()
+      return false
+    end
+    NS:OpenOptionsWindow()
+    return true
   end
   window:EnableKeyboard(true)
   window:SetScript("OnKeyDown", function(self, key)
     if key == "ESCAPE" then
-      window:Hide()
-      if GameMenuFrame then GameMenuFrame:Hide() end
+      if NS.CloseOptionsWindow then
+        NS:CloseOptionsWindow()
+      else
+        window:Hide()
+      end
       self:SetPropagateKeyboardInput(false)
     else
       -- Allow all other keys (slash, enter, etc.) to pass through to chat
       self:SetPropagateKeyboardInput(true)
     end
   end)
-  tinsert(UISpecialFrames, "HaraUIOptionsWindow")
 
   -- =========================================================
   -- BLIZZARD SETTINGS INTEGRATION (Minimal Panel)
@@ -251,7 +310,9 @@ function NS:BuildOptionsWindow(BuildFullUI, db)
     Settings.RegisterAddOnCategory(category)
     local categoryID = category:GetID()
     function NS:OpenOptions()
-      if NS.OpenOptionsWindow then
+      if NS.ToggleOptionsWindow then
+        NS:ToggleOptionsWindow("open_options.settings")
+      elseif NS.OpenOptionsWindow then
         NS:OpenOptionsWindow()
       else
         Settings.OpenToCategory(categoryID)
@@ -259,7 +320,9 @@ function NS:BuildOptionsWindow(BuildFullUI, db)
     end
   else
     function NS:OpenOptions()
-      if NS.OpenOptionsWindow then
+      if NS.ToggleOptionsWindow then
+        NS:ToggleOptionsWindow("open_options.legacy")
+      elseif NS.OpenOptionsWindow then
         NS:OpenOptionsWindow()
       elseif InterfaceOptionsFrame_OpenToCategory then
         InterfaceOptionsFrame_OpenToCategory(panel)

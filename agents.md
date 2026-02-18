@@ -102,3 +102,31 @@ git push origin v2.0.3
 | `.pkgmeta`                      | Packager layout and ignore rules |
 | `HaraUI/HaraUI.toc`             | TOC manifest with `@project-version@` token |
 | `HaraUI/Shared/Version.lua`     | Runtime version resolver (`2.0.2-dev` for dev checkouts) |
+
+## MANDATORY GIT CHECKPOINT AFTER EVERY STEP (NO EXCEPTIONS)
+
+When you finish a step:
+Also print: `git show <FULL_SHA> --stat`
+
+1. Show: `git status --porcelain`
+2. Stage only touched files: `git add <paths>`
+3. Commit locally with a clear message: `refactor(step N): <summary>`
+4. Print a checkpoint block in THIS EXACT FORMAT:
+
+```text
+# Commits
+| # | Hash | Files | Rollback |
+|---|------|-------|----------|
+| 1 | <FULL_SHA> | <file1>, <file2>, ... | git revert <FULL_SHA> |
+
+Committed: <FULL_SHA>
+Restore: git reset --hard <FULL_SHA>
+Backup: git revert <FULL_SHA>
+Link: https://github.com/cr4zyd34thg0d/HaraUI/commit/<FULL_SHA>
+```
+
+Rules:
+- Do not abbreviate SHAs.
+- Do not amend commits.
+- Do not push unless I say "push".
+- If nothing changed, do not commit.

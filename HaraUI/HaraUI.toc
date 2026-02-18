@@ -38,6 +38,15 @@ Core/GlobalsShim.lua
 Modules/Fonts.lua
 Modules/XPBar.lua
 Modules/CastBar.lua
+Modules/CharacterSheet/Core.lua
+Modules/CharacterSheet/Coordinator.lua
+Modules/CharacterSheet/Layout.lua
+Modules/CharacterSheet/Data.lua
+Modules/CharacterSheet/Skin.lua
+Modules/CharacterSheet/RightPanel.lua
+Modules/CharacterSheet/GearDisplay.lua
+Modules/CharacterSheet/StatsPanel.lua
+Modules/CharacterSheet/Guards.lua
 Modules/CharacterSheet.lua
 Modules/TrackedBars.lua
 Modules/FriendlyNameplates.lua
@@ -49,3 +58,4 @@ Modules/LootToasts.lua
 Modules/MinimapBar.lua
 Modules/Summons.lua
 Modules/CopyBattleTag.lua
+

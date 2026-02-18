@@ -60,7 +60,7 @@
     Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>  
 - ci: add GitHub Actions release workflow  
     Tag-triggered pipeline (v*) that:  
-    1. Packages addon via BigWigsMods/packager (replaces @project-version@)  
+    1. Packages addon via BigWigsMods/packager (replaces v2.0.2-alpha.1)  
     2. Creates a GitHub Release with the zip attached  
     3. Uploads the same zip to CurseForge  
     Release type mapping: v2.0.3 => release, -beta.N => beta, -alpha.N => alpha  
@@ -69,9 +69,9 @@
     Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>  
 - ci: add .pkgmeta and TOC version token for packager  
     - Rewrite .pkgmeta: use move-folders to flatten HarathUI/ nesting,  
-      remove plain-copy so @project-version@ token gets replaced,  
+      remove plain-copy so v2.0.2-alpha.1 token gets replaced,  
       ignore all non-addon directories  
-    - Replace hardcoded "2.0" in HarathUI.toc with @project-version@  
+    - Replace hardcoded "2.0" in HarathUI.toc with v2.0.2-alpha.1  
       (BigWigsMods packager substitutes the git tag at build time)  
     - Update .gitignore to allow .pkgmeta and .github/ tracking  
     Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>  

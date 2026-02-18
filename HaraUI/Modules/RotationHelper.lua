@@ -28,6 +28,10 @@ local lastSpellTex
 local lastSpellKey
 local lastKeybindCacheVersion
 local K = M.Keybinds
+local LOCKED_FRAME_STRATA = "LOW"
+local LOCKED_FRAME_LEVEL = 1
+local UNLOCKED_FRAME_STRATA = "DIALOG"
+local UNLOCKED_FRAME_LEVEL = 120
 local function IsEnabled()
   local db = NS:GetDB()
   return db and db.rotationhelper and db.rotationhelper.enabled
@@ -51,6 +55,18 @@ end
 local function IsFramesUnlocked()
   local db = NS:GetDB()
   return db and db.general and db.general.framesLocked == false
+end
+
+local function ApplyLayeringForLockState(locked)
+  if not frame then return end
+  local strata = locked and LOCKED_FRAME_STRATA or UNLOCKED_FRAME_STRATA
+  local level = locked and LOCKED_FRAME_LEVEL or UNLOCKED_FRAME_LEVEL
+  if frame.SetFrameStrata then
+    frame:SetFrameStrata(strata)
+  end
+  if frame.SetFrameLevel then
+    frame:SetFrameLevel(level)
+  end
 end
 
 local function ShowUnlockPlaceholder()
@@ -120,8 +136,7 @@ local function Create()
   frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
   frame:SetSize(52, 52)
   frame:SetPoint("CENTER", UIParent, "CENTER", 0, -120)
-  frame:SetFrameStrata("FULLSCREEN_DIALOG")
-  frame:SetFrameLevel(200)
+  ApplyLayeringForLockState(true)
 
   -- Pixel-perfect background (1px border)
   frame.bg = frame:CreateTexture(nil, "BACKGROUND")
@@ -164,6 +179,7 @@ end
 
 function M:SetLocked(locked)
   if not M.active or not frame or not frame._huiMover then return end
+  ApplyLayeringForLockState(locked)
   if locked then
     frame:EnableMouse(false)
     frame._huiMover:Hide()

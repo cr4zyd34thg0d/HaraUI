@@ -5,6 +5,28 @@ NS.OptionsPages = NS.OptionsPages or {}
 function NS.OptionsPages.BuildFriendlyPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, MakeColorSwatch, BuildStandardSliderRow, Small, db)
   pages.friendly = CreateFrame("Frame", nil, content); pages.friendly:SetAllPoints(true)
   do
+    local function IsPlatynatorInstalled()
+      if C_AddOns and C_AddOns.DoesAddOnExist then
+        local ok, exists = pcall(C_AddOns.DoesAddOnExist, "Platynator")
+        if ok and exists ~= nil then
+          return exists == true
+        end
+      end
+      if C_AddOns and C_AddOns.GetAddOnMetadata then
+        local ok, title = pcall(C_AddOns.GetAddOnMetadata, "Platynator", "Title")
+        if ok and type(title) == "string" and title ~= "" then
+          return true
+        end
+      end
+      if GetAddOnInfo then
+        local ok, name = pcall(GetAddOnInfo, "Platynator")
+        if ok and name then
+          return true
+        end
+      end
+      return false
+    end
+
     local friendlyEnable = MakeModuleHeader(pages.friendly, "friendlyplates")
 
     if not db.friendlyplates.nameColor then
@@ -99,6 +121,20 @@ function NS.OptionsPages.BuildFriendlyPage(pages, content, MakeModuleHeader, Bui
     local advancedText = Small(cards.advanced.content, "Reserved for future Friendly Nameplates options.")
     advancedText:SetPoint("TOPLEFT", 6, -10)
     advancedText:SetTextColor(0.78, 0.78, 0.80)
+
+    local platynatorStatus = Small(cards.advanced.content, "")
+    platynatorStatus:SetPoint("TOPLEFT", advancedText, "BOTTOMLEFT", 0, -10)
+    local function UpdatePlatynatorStatus()
+      if IsPlatynatorInstalled() then
+        platynatorStatus:SetText("Platynator: detected")
+        platynatorStatus:SetTextColor(0.20, 0.88, 0.32)
+      else
+        platynatorStatus:SetText("Platynator: not detected")
+        platynatorStatus:SetTextColor(0.92, 0.24, 0.24)
+      end
+    end
+    UpdatePlatynatorStatus()
+    pages.friendly:HookScript("OnShow", UpdatePlatynatorStatus)
 
   end
 end

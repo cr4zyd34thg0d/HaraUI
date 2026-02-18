@@ -165,48 +165,54 @@ function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildSt
     texLabel:SetText("Bar Texture")
     ApplyUIFont(texLabel, ORANGE_SIZE, "OUTLINE", ORANGE)
 
-    local texDD = CreateFrame("Frame", "HaraUI_CastBarTextureDropdown", cards.visuals.content, "UIDropDownMenuTemplate")
+    local texDD = CreateFrame("Button", nil, cards.visuals.content, "BackdropTemplate")
     texDD:ClearAllPoints()
-    texDD:SetPoint("TOPLEFT", texLabel, "BOTTOMLEFT", -16, -2)
-    UIDropDownMenu_SetWidth(texDD, 186)
+    texDD:SetPoint("TOPLEFT", texLabel, "BOTTOMLEFT", 0, -6)
+    texDD:SetSize(186, 24)
+    texDD:SetBackdrop({
+      bgFile = "Interface/Buttons/WHITE8x8",
+      edgeFile = "Interface/Buttons/WHITE8x8",
+      edgeSize = 1,
+      insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    texDD:SetBackdropColor(0.07, 0.08, 0.11, 0.92)
+    texDD:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.92)
 
-    -- Modernize the dropdown itself instead of wrapping it in an extra box.
-    local texDDName = texDD:GetName()
-    local ddLeft = texDDName and _G[texDDName .. "Left"]
-    local ddMiddle = texDDName and _G[texDDName .. "Middle"]
-    local ddRight = texDDName and _G[texDDName .. "Right"]
-    local ddButton = texDDName and _G[texDDName .. "Button"]
-    local ddButtonNormal = texDDName and _G[texDDName .. "ButtonNormalTexture"]
+    local texDDText = texDD:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    texDDText:SetPoint("LEFT", 10, 0)
+    texDDText:SetPoint("RIGHT", -22, 0)
+    texDDText:SetJustifyH("LEFT")
+    ApplyUIFont(texDDText, 12, "OUTLINE", { 0.9, 0.9, 0.9 })
 
-    local function StyleCastTextureDropdown(c)
+    local texDDArrow = texDD:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    texDDArrow:SetPoint("RIGHT", -8, 0)
+    texDDArrow:SetText("v")
+    ApplyUIFont(texDDArrow, 11, "OUTLINE", { ORANGE[1], ORANGE[2], ORANGE[3] })
+
+    local texDDMenu = CreateFrame("Frame", nil, texDD, "BackdropTemplate")
+    texDDMenu:SetPoint("TOPLEFT", texDD, "BOTTOMLEFT", 0, -2)
+    texDDMenu:SetPoint("TOPRIGHT", texDD, "BOTTOMRIGHT", 0, -2)
+    texDDMenu:SetHeight(2)
+    texDDMenu:SetFrameStrata("TOOLTIP")
+    texDDMenu:SetBackdrop({
+      bgFile = "Interface/Buttons/WHITE8x8",
+      edgeFile = "Interface/Buttons/WHITE8x8",
+      edgeSize = 1,
+      insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    texDDMenu:SetBackdropColor(0.07, 0.08, 0.11, 0.96)
+    texDDMenu:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.92)
+    texDDMenu:Hide()
+
+    local function ApplyCastTextureDropdownTheme(c)
       local accent = c or ORANGE
-      if ddLeft then
-        ddLeft:SetTexture("Interface/Buttons/WHITE8x8")
-        ddLeft:SetVertexColor(0.07, 0.08, 0.11, 0.92)
-      end
-      if ddMiddle then
-        ddMiddle:SetTexture("Interface/Buttons/WHITE8x8")
-        ddMiddle:SetVertexColor(0.07, 0.08, 0.11, 0.92)
-      end
-      if ddRight then
-        ddRight:SetTexture("Interface/Buttons/WHITE8x8")
-        ddRight:SetVertexColor(0.07, 0.08, 0.11, 0.92)
-      end
-
-      if ddButton and ddButton.GetHighlightTexture then
-        local hl = ddButton:GetHighlightTexture()
-        if hl then
-          hl:SetTexture("Interface/Buttons/WHITE8x8")
-          hl:SetVertexColor(1, 1, 1, 0.06)
-        end
-      end
-      if ddButtonNormal and ddButtonNormal.SetVertexColor then
-        ddButtonNormal:SetVertexColor(accent[1], accent[2], accent[3], 0.95)
-      end
+      texDD:SetBackdropBorderColor(accent[1], accent[2], accent[3], 0.92)
+      texDDArrow:SetTextColor(accent[1], accent[2], accent[3], 1)
+      texDDMenu:SetBackdropBorderColor(accent[1], accent[2], accent[3], 0.92)
     end
-    StyleCastTextureDropdown(ORANGE)
+    ApplyCastTextureDropdownTheme(ORANGE)
     RegisterTheme(function(c)
-      StyleCastTextureDropdown(c)
+      ApplyCastTextureDropdownTheme(c)
     end)
 
     local function GetTextureName(path)
@@ -216,30 +222,64 @@ function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildSt
       return path
     end
 
-    local function RefreshTex()
-      UIDropDownMenu_SetSelectedValue(texDD, db.castbar.barTexture)
-      UIDropDownMenu_SetText(texDD, GetTextureName(db.castbar.barTexture))
+    local function RefreshTexLabel()
+      texDDText:SetText(GetTextureName(db.castbar.barTexture))
     end
 
-    UIDropDownMenu_Initialize(texDD, function(self, level)
-      for _, t in ipairs(textures) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = t.name
-        info.checked = (db.castbar.barTexture == t.path)
-        info.func = function()
-          db.castbar.barTexture = t.path
-          RefreshTex()
-          NS:ApplyAll()
-        end
-        UIDropDownMenu_AddButton(info, level)
+    local rows = {}
+    local ROW_HEIGHT = 20
+    local MENU_PAD_TOP = -4
+    local MENU_PAD_BOTTOM = 4
+    for i, t in ipairs(textures) do
+      local row = CreateFrame("Button", nil, texDDMenu)
+      row:SetPoint("TOPLEFT", texDDMenu, "TOPLEFT", 4, MENU_PAD_TOP - ((i - 1) * ROW_HEIGHT))
+      row:SetPoint("TOPRIGHT", texDDMenu, "TOPRIGHT", -4, MENU_PAD_TOP - ((i - 1) * ROW_HEIGHT))
+      row:SetHeight(ROW_HEIGHT)
+
+      row.bg = row:CreateTexture(nil, "BACKGROUND")
+      row.bg:SetAllPoints(true)
+      row.bg:SetColorTexture(1, 1, 1, 0.0)
+
+      row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+      row.text:SetPoint("LEFT", 8, 0)
+      row.text:SetPoint("RIGHT", -8, 0)
+      row.text:SetJustifyH("LEFT")
+      row.text:SetText(t.name)
+      ApplyUIFont(row.text, 12, "OUTLINE", { 0.9, 0.9, 0.9 })
+
+      row:SetScript("OnEnter", function(self)
+        self.bg:SetColorTexture(1, 1, 1, 0.08)
+      end)
+      row:SetScript("OnLeave", function(self)
+        self.bg:SetColorTexture(1, 1, 1, 0.0)
+      end)
+      row:SetScript("OnClick", function()
+        db.castbar.barTexture = t.path
+        RefreshTexLabel()
+        texDDMenu:Hide()
+        NS:ApplyAll()
+      end)
+
+      rows[#rows + 1] = row
+    end
+    texDDMenu:SetHeight((#rows * ROW_HEIGHT) + math.abs(MENU_PAD_TOP) + MENU_PAD_BOTTOM)
+
+    texDD:SetScript("OnClick", function()
+      if texDDMenu:IsShown() then
+        texDDMenu:Hide()
+      else
+        texDDMenu:Show()
+        texDDMenu:Raise()
       end
     end)
+    texDD:SetScript("OnHide", function()
+      texDDMenu:Hide()
+    end)
+    cards.visuals.content:HookScript("OnHide", function()
+      texDDMenu:Hide()
+    end)
 
-    ApplyDropdownFont(texDD, 12, { 0.9, 0.9, 0.9 })
-    if UIDropDownMenu_JustifyText then
-      UIDropDownMenu_JustifyText(texDD, "LEFT")
-    end
-    RefreshTex()
+    RefreshTexLabel()
 
     -- Advanced placeholder card.
     local advancedText = Small(cards.advanced.content, "Reserved for future Cast Bar options.")

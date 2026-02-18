@@ -4,7 +4,11 @@ local function HandleSlash(msg)
   msg = (msg or ""):lower()
 
   if msg == "" or msg == "options" or msg == "config" then
-    if NS.OpenOptions then NS:OpenOptions() end
+    if NS.ToggleOptionsWindow then
+      NS:ToggleOptionsWindow("slash")
+    elseif NS.OpenOptions then
+      NS:OpenOptions()
+    end
     return
   end
 
