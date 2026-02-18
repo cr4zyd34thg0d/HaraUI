@@ -202,6 +202,7 @@ local UPGRADE_TRACK_COLORS = {
 local _hiddenRegions = {}
 local _slotSkins = {}
 local _tooltipCache = {}
+local _gemIconCache = {}
 local _nativeTabSkins = setmetatable({}, { __mode = "k" })
 
 ---------------------------------------------------------------------------
@@ -1296,6 +1297,7 @@ end
 
 function Skin.InvalidateTooltipCache()
 	wipe(_tooltipCache)
+	wipe(_gemIconCache)
 end
 
 function Skin.ParseEnchantName(itemLink)
@@ -1620,8 +1622,12 @@ function Skin.GetGemInfo(invID, itemLink)
 			gemName, gemLink = _G.GetItemGem(itemLink, i)
 		end
 		if gemLink then
-			-- select(10, GetItemInfo) returns the item icon texture
-			local gemIcon = select(10, GetItemInfo(gemLink))
+			local gemIcon = _gemIconCache[gemLink]
+			if gemIcon == nil then
+				gemIcon = select(10, GetItemInfo(gemLink)) or false
+				_gemIconCache[gemLink] = gemIcon
+			end
+			gemIcon = gemIcon or nil
 			sockets[#sockets + 1] = {
 				name = gemName,
 				link = gemLink,
