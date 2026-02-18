@@ -85,8 +85,15 @@ local function IsMinimapOrAncestor(frame)
   return false
 end
 
-local function EnsureMinimapParent()
+local function EnsureMinimapParent(retries)
   if not Minimap then return end
+  if InCombatLockdown() then
+    retries = (retries or 0)
+    if retries < 3 and C_Timer and C_Timer.After then
+      C_Timer.After(0.5, function() EnsureMinimapParent(retries + 1) end)
+    end
+    return
+  end
   local wantParent = MinimapCluster or UIParent
   if Minimap.GetParent and Minimap:GetParent() ~= wantParent then
     Minimap:SetParent(wantParent)
@@ -107,6 +114,7 @@ end
 
 local function EnsureZoomButtonsVisible()
   if not Minimap then return end
+  if InCombatLockdown() then return end
   if MinimapZoomIn then
     if MinimapZoomIn.GetParent and MinimapZoomIn:GetParent() ~= Minimap then
       MinimapZoomIn:SetParent(Minimap)
