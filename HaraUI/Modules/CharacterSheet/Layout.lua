@@ -1115,14 +1115,21 @@ end
 
 local _dragRegistered = false
 
+local function ApplyMovableProps(parent, retries)
+  if InCombatLockdown() then
+    retries = (retries or 0)
+    if retries < 3 and C_Timer and C_Timer.After then
+      C_Timer.After(0.5, function() ApplyMovableProps(parent, retries + 1) end)
+    end
+    return
+  end
+  if parent.SetMovable then parent:SetMovable(true) end
+  if parent.SetClampedToScreen then parent:SetClampedToScreen(true) end
+end
+
 local function EnsureDragSupport(state, parent)
   if not (state and parent) then return end
-  if parent.SetMovable then
-    parent:SetMovable(true)
-  end
-  if parent.SetClampedToScreen then
-    parent:SetClampedToScreen(true)
-  end
+  ApplyMovableProps(parent)
 
   RestoreFramePosition(parent)
 
