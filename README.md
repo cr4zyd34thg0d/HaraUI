@@ -72,15 +72,20 @@ World of Warcraft/_retail_/Interface/AddOns/
 
 ## :spiral_notepad: Changelog (Recent)
 
+### v2.1.1-alpha - 2026-02-18
+- **Fixed:** Resolve "Primary" stat label bug when SPEC_STAT_STRINGS is unavailable.
+- **Fixed:** Guard StatusTrackingBarManager, CharacterFrame, and Minimap SetParent against combat lockdown taint.
+- **Fixed:** Sanitize CHAT_MSG event args with tostring() to strip secret string taint.
+- **Added:** Dynamic gem socket tooltips based on expansion, slot, and PvP context.
+- **Added:** Bind M+ right panel to character frame, remove independent drag.
+- **Changed:** Shorten loot toast preview duration from 20s to 10s.
+
 ### v2.1.0-alpha - 2026-02-18
-- Fix release workflow parse and README sync
 - Sync local feature snapshot to main for 2.1.0-alpha
 - Group release notes into feature summaries
-- Refresh README features install and changelog
+- Refresh README features, install, and changelog
 - Remove legacy refactor plan doc
 - Stop tracking legacy addon/vendor folders
-- Remove OPie and Platynator references from README
-
 
 ### v1.2.2 - 2026-02-15
 - **Changed:** Improved dungeon and raid friendly-name font behavior for HaraUI plates.
