@@ -1707,61 +1707,35 @@ end
 ---------------------------------------------------------------------------
 -- CharacterFrame integration
 ---------------------------------------------------------------------------
-function RightPanel:_TryHookCharacterFrame()
+-- Called by Coordinator's consolidated CharacterFrame OnShow hook.
+function RightPanel:_OnCharacterFrameShow(reason)
   local state = EnsureState(self)
-  if state.characterHookInstalled then return end
-  if not (CharacterFrame and CharacterFrame.HookScript) then return end
-
-  CharacterFrame:HookScript("OnShow", function()
-    if not IsRefactorEnabled() then return end
-    -- In account transfer builds, defer to avoid synchronous insecure work
-    -- during CharacterFrame:Show() inside the panel-manager secure chain.
-    if IsAccountTransferBuild() and C_Timer and C_Timer.After then
-      C_Timer.After(0, function()
-        if not IsRefactorEnabled() then return end
-        if not (CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()) then return end
-        if IsNativeCurrencyMode() then return end
-        self:Create()
-        if ApplyPreferredVisibility(state) then
-          self:RequestUpdate("CharacterFrame.OnShow.deferred")
-          self:_StartTicker()
-        else
-          self:MarkDirty("CharacterFrame.OnShow.deferred.hidden")
-          self:_StopTicker()
-        end
-      end)
-      return
-    end
-    self:Create()
-    if ApplyPreferredVisibility(state) then
-      self:RequestUpdate("CharacterFrame.OnShow")
-      self:_StartTicker()
-    else
-      self:MarkDirty("CharacterFrame.OnShow.hidden")
-      self:_StopTicker()
-    end
-  end)
-
-  CharacterFrame:HookScript("OnHide", function()
-    if state.root then state.root:Hide() end
+  self:Create()
+  if ApplyPreferredVisibility(state) then
+    self:RequestUpdate(reason or "CharacterFrame.OnShow")
+    self:_StartTicker()
+  else
+    self:MarkDirty((reason or "CharacterFrame.OnShow") .. ".hidden")
     self:_StopTicker()
-  end)
+  end
+end
 
-  state.characterHookInstalled = true
+-- Called by Coordinator's consolidated CharacterFrame OnHide hook.
+function RightPanel:_OnCharacterFrameHide()
+  local state = EnsureState(self)
+  if state.root then state.root:Hide() end
+  self:_StopTicker()
 end
 
 function RightPanel:_EnsureHooks()
   local state = EnsureState(self)
-  if state.hooksInstalled then self:_TryHookCharacterFrame(); return end
+  if state.hooksInstalled then return end
   state.hooksInstalled = true
-  self:_TryHookCharacterFrame()
-
 end
 
 -- Called by Layout's consolidated ToggleCharacter hook.
 function RightPanel:_OnToggleCharacter()
   if not IsRefactorEnabled() then return end
-  self:_TryHookCharacterFrame()
   if IsAccountTransferBuild() and IsNativeCurrencyMode() then return end
   self:Create()
   if CharacterFrame and CharacterFrame:IsShown() then

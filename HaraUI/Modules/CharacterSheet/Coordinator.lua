@@ -297,12 +297,73 @@ function Coordinator:GetDirtyFlags()
   return copy
 end
 
+---------------------------------------------------------------------------
+-- Consolidated CharacterFrame OnShow / OnHide hook
+---------------------------------------------------------------------------
+local function IsRefactorEnabled()
+  return CS and CS.IsRefactorEnabled and CS:IsRefactorEnabled()
+end
+
+local function IsAccountTransferBuild()
+  return C_CurrencyInfo and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
+end
+
+local function IsNativeCurrencyMode()
+  local layout = CS and CS.Layout or nil
+  local ls = layout and layout._state or nil
+  return ls and ls.nativeCurrencyMode == true
+end
+
+local function DispatchOnShow(reason)
+  local gear = CS and CS.GearDisplay or nil
+  if gear and gear._OnCharacterFrameShow then pcall(gear._OnCharacterFrameShow, gear, reason) end
+  local stats = CS and CS.StatsPanel or nil
+  if stats and stats._OnCharacterFrameShow then pcall(stats._OnCharacterFrameShow, stats, reason) end
+  local right = CS and CS.RightPanel or nil
+  if right and right._OnCharacterFrameShow then pcall(right._OnCharacterFrameShow, right, reason) end
+end
+
+local function DispatchOnHide()
+  local gear = CS and CS.GearDisplay or nil
+  if gear and gear._OnCharacterFrameHide then pcall(gear._OnCharacterFrameHide, gear) end
+  local stats = CS and CS.StatsPanel or nil
+  if stats and stats._OnCharacterFrameHide then pcall(stats._OnCharacterFrameHide, stats) end
+  local right = CS and CS.RightPanel or nil
+  if right and right._OnCharacterFrameHide then pcall(right._OnCharacterFrameHide, right) end
+end
+
+function Coordinator:_EnsureCharacterFrameHooks()
+  local state = EnsureState(self)
+  if state.characterFrameHooked then return end
+  if not (CharacterFrame and CharacterFrame.HookScript) then return end
+  state.characterFrameHooked = true
+
+  CharacterFrame:HookScript("OnShow", function()
+    if not IsRefactorEnabled() then return end
+    if IsAccountTransferBuild() and C_Timer and C_Timer.After then
+      C_Timer.After(0, function()
+        if not IsRefactorEnabled() then return end
+        if not (CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()) then return end
+        if IsNativeCurrencyMode() then return end
+        DispatchOnShow("CharacterFrame.OnShow.deferred")
+      end)
+      return
+    end
+    DispatchOnShow("CharacterFrame.OnShow")
+  end)
+
+  CharacterFrame:HookScript("OnHide", function()
+    DispatchOnHide()
+  end)
+end
+
 function Coordinator:Apply()
   local state = EnsureState(self)
   if CS.State then
     CS.State.activeBackend = "refactor"
   end
   state.active = true
+  self:_EnsureCharacterFrameHooks()
   local core = CS and CS.Core or nil
   if core and core.OnEnable then
     pcall(core.OnEnable, core)

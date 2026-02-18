@@ -1717,53 +1717,32 @@ function StatsPanel:RequestUpdate(_reason)
   return true
 end
 
-function StatsPanel:_TryHookCharacterFrame()
+-- Called by Coordinator's consolidated CharacterFrame OnShow hook.
+function StatsPanel:_OnCharacterFrameShow(reason)
   local state = EnsureState(self)
-  if state.characterHookInstalled then return end
-  if not (CharacterFrame and CharacterFrame.HookScript) then return end
-  CharacterFrame:HookScript("OnShow", function()
-    if not IsRefactorEnabled() then return end
-    -- In account transfer builds, defer to avoid synchronous insecure work
-    -- during CharacterFrame:Show() inside the panel-manager secure chain.
-    if IsAccountTransferBuild() and C_Timer and C_Timer.After then
-      C_Timer.After(0, function()
-        if not IsRefactorEnabled() then return end
-        if not (CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()) then return end
-        if IsNativeCurrencyMode() then return end
-        self:Create(ResolveParent())
-        ApplyRightPanelPreference()
-        local ls = CS and CS.Layout and CS.Layout._state or nil
-        local pane = ls and ls.activePane or "character"
-        if pane == "character" and state.root then state.root:Show() end
-        self:RequestUpdate("CharacterFrame.OnShow.deferred")
-      end)
-      return
-    end
-    self:Create(ResolveParent())
-    ApplyRightPanelPreference()
-    -- Only show on character pane; other panes hide stats via SetActivePane
-    local ls = CS and CS.Layout and CS.Layout._state or nil
-    local pane = ls and ls.activePane or "character"
-    if pane == "character" and state.root then state.root:Show() end
-    self:RequestUpdate("CharacterFrame.OnShow")
-  end)
-  CharacterFrame:HookScript("OnHide", function()
-    if state.root then state.root:Hide() end
-  end)
-  state.characterHookInstalled = true
+  self:Create(ResolveParent())
+  ApplyRightPanelPreference()
+  local ls = CS and CS.Layout and CS.Layout._state or nil
+  local pane = ls and ls.activePane or "character"
+  if pane == "character" and state.root then state.root:Show() end
+  self:RequestUpdate(reason or "CharacterFrame.OnShow")
+end
+
+-- Called by Coordinator's consolidated CharacterFrame OnHide hook.
+function StatsPanel:_OnCharacterFrameHide()
+  local state = EnsureState(self)
+  if state.root then state.root:Hide() end
 end
 
 function StatsPanel:_EnsureHooks()
   local state = EnsureState(self)
-  if state.hooksInstalled then self:_TryHookCharacterFrame(); return end
+  if state.hooksInstalled then return end
   state.hooksInstalled = true
-  self:_TryHookCharacterFrame()
 end
 
 -- Called by Layout's consolidated ToggleCharacter hook.
 function StatsPanel:_OnToggleCharacter()
   if not IsRefactorEnabled() then return end
-  self:_TryHookCharacterFrame()
   if IsAccountTransferBuild() and IsNativeCurrencyMode() then return end
   self:Create(ResolveParent())
   if CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() then
