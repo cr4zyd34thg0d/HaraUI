@@ -1,5 +1,26 @@
 # HaraUI
 
+## [v2.1.1-alpha](https://github.com/cr4zyd34thg0d/HaraUI/tree/v2.1.1-alpha) (2026-02-18)
+[Full Changelog](https://github.com/cr4zyd34thg0d/HaraUI/commits/v2.1.1-alpha)
+
+- fix(stats): resolve "Primary" label bug when SPEC_STAT_STRINGS is unavailable
+    Fallback to class-based stat detection now triggers when the label is
+    still "Primary", not just when the value is zero.
+- fix(taint): guard StatusTrackingBarManager:EnableMouse() against combat lockdown
+    Wrap protected calls on Blizzard XP bar frames with InCombatLockdown
+    check and pcall to prevent ADDON_ACTION_BLOCKED errors.
+- fix(taint): guard CharacterFrame SetAttribute and UpdateUIPanelPositions in combat
+    Skip UIPanelLayout attribute writes and panel manager relayout during
+    combat lockdown to prevent frame squishing and taint propagation.
+- fix(taint): sanitize CHAT_MSG event args with tostring() to strip secret string taint
+- feat(gems): dynamic socket item tooltips based on expansion, slot, and PvP context
+    Missing-socket indicators now resolve the correct socket-adding item
+    (Magnificent Jeweler's Setting, Technomancer's Gift, Forged Jeweler's
+    Setting) by checking the equipped item's expansion ID and PvP status.
+    Item names are fetched via GetItemInfo for locale accuracy.
+- feat(panel): bind M+ right panel to character frame, remove independent drag
+- perf(loot): shorten loot toast preview duration from 20s to 10s
+
 ## [v2.0.1-alpha](https://github.com/cr4zyd34thg0d/HaraUI/tree/v2.0.1-alpha) (2026-02-15)
 [Full Changelog](https://github.com/cr4zyd34thg0d/HaraUI/commits/v2.0.1-alpha) 
 

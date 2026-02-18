@@ -1581,13 +1581,85 @@ function Skin.CanSlotHaveEnchant(slotName, itemLink)
 	return false
 end
 
-function Skin.CanSlotHaveGem(slotName)
-	return slotName == "NeckSlot"
-		or slotName == "Finger0Slot"
-		or slotName == "Finger1Slot"
-		or slotName == "WristSlot"
-		or slotName == "WaistSlot"
-		or slotName == "HeadSlot"
+---------------------------------------------------------------------------
+-- Socket-adding item lookup (dynamic per expansion / PvP context)
+---------------------------------------------------------------------------
+-- Slot categories: "jewelry" = Neck + Rings, "armor" = Head + Wrist + Waist
+local SLOT_SOCKET_TYPE = {
+	NeckSlot    = "jewelry",
+	Finger0Slot = "jewelry",
+	Finger1Slot = "jewelry",
+	HeadSlot    = "armor",
+	WristSlot   = "armor",
+	WaistSlot   = "armor",
+}
+
+-- Item IDs for socket-adding consumables, keyed by expansion ID.
+-- Names are resolved at runtime via GetItemInfo so they stay correct
+-- across locales and hotfixes.
+local LATEST_EXPANSION_KEY = 10  -- The War Within
+local SOCKET_ITEMS = {
+	[10] = {  -- The War Within
+		jewelry = { pve = 213777, pvp = 213778 },  -- Magnificent Jeweler's Setting / Forged Jeweler's Setting
+		armor   = { pve = 248410, pvp = 213778 },  -- Technomancer's Gift / Forged Jeweler's Setting
+	},
+}
+
+-- Cache resolved item names so we only call GetItemInfo once per ID.
+local _socketItemNameCache = {}
+local function GetSocketItemName(itemID)
+	if not itemID then return nil end
+	local cached = _socketItemNameCache[itemID]
+	if cached ~= nil then return cached or nil end
+	local name = GetItemInfo(itemID)
+	-- GetItemInfo may return nil if the item isn't cached yet; store false
+	-- as sentinel so we retry next call rather than spamming the server.
+	if name and name ~= "" then
+		_socketItemNameCache[itemID] = name
+		return name
+	end
+	return nil  -- don't cache nil — retry next time
+end
+
+-- Detect whether an equipped item is PvP gear by scanning its tooltip for
+-- PvP-related keywords (e.g. "PvP", "Rated", "Vicious", etc.).
+local function IsPvPItem(invID)
+	local lines = GetTooltipLines(invID)
+	for _, line in ipairs(lines) do
+		local text = line and line.leftText
+		if type(text) == "string" and text:find("PvP", 1, true) then
+			return true
+		end
+	end
+	return false
+end
+
+-- Returns false when the slot can never have gems, or a string describing
+-- the specific socket-adding item for the currently equipped piece.
+-- Uses the item's expansion ID and PvP status to pick the right consumable,
+-- then resolves its name via GetItemInfo so it's always accurate.
+function Skin.CanSlotHaveGem(slotName, invID, itemLink)
+	local slotType = SLOT_SOCKET_TYPE[slotName]
+	if not slotType then return false end
+
+	-- Determine expansion of the equipped item; fall back to latest known
+	local expacID
+	if itemLink then
+		expacID = select(15, GetItemInfo(itemLink))
+	end
+	local expacData = expacID and SOCKET_ITEMS[expacID]
+		or SOCKET_ITEMS[LATEST_EXPANSION_KEY]
+	if not expacData then return false end
+
+	local slotData = expacData[slotType]
+	if not slotData then return false end
+
+	-- Pick PvE or PvP variant based on the equipped item
+	local isPvP = invID and IsPvPItem(invID) or false
+	local itemID = isPvP and slotData.pvp or slotData.pve
+	local name = GetSocketItemName(itemID)
+
+	return name or (isPvP and "PvP Jeweler's Setting" or "Jeweler's Setting")
 end
 
 ---------------------------------------------------------------------------

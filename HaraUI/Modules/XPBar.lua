@@ -77,8 +77,10 @@ local function HideBlizzardXPTrackingBars()
     end
     if frame then
       if frame.SetAlpha then frame:SetAlpha(0) end
-      if frame.EnableMouse then frame:EnableMouse(false) end
-      if frame.Hide then frame:Hide() end
+      if not (InCombatLockdown and InCombatLockdown()) then
+        if frame.EnableMouse then pcall(frame.EnableMouse, frame, false) end
+        if frame.Hide then pcall(frame.Hide, frame) end
+      end
     end
   end
 end

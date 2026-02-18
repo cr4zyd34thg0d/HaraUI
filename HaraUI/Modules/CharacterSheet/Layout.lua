@@ -650,9 +650,10 @@ local function ExpandCharacterFrame(state, parent)
     }
   end
 
-  -- Avoid writing UIPanelLayout attributes in account-currency-transfer builds.
-  -- Those writes can taint panel-managed secure transfer flows.
-  if not IsAccountTransferBuild() and parent.SetAttribute then
+  -- Avoid writing UIPanelLayout attributes in account-currency-transfer builds
+  -- or during combat lockdown (SetAttribute taints in combat).
+  if not IsAccountTransferBuild() and parent.SetAttribute
+     and not (InCombatLockdown and InCombatLockdown()) then
     parent:SetAttribute("UIPanelLayout-width", EXPANDED_WIDTH)
     parent:SetAttribute("UIPanelLayout-height", EXPANDED_HEIGHT)
     parent:SetAttribute("UIPanelLayout-defined", true)
@@ -680,8 +681,10 @@ local function ExpandCharacterFrame(state, parent)
     end
   end
 
-  -- Avoid panel-manager relayout calls in account transfer builds.
-  if not IsAccountTransferBuild() and UpdateUIPanelPositions then
+  -- Avoid panel-manager relayout calls in account transfer builds or combat
+  -- (the panel manager reads UIPanelLayout attributes which we skip in combat).
+  if not IsAccountTransferBuild() and UpdateUIPanelPositions
+     and not (InCombatLockdown and InCombatLockdown()) then
     pcall(UpdateUIPanelPositions, parent)
   end
 

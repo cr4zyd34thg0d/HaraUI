@@ -201,7 +201,9 @@ local function CreateGearRow(parent, rightAlign)
       elseif self.missingSocket and GameTooltip then
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("No gem socket", 1, 0.3, 0.3)
-        GameTooltip:AddLine("Can be added via Jewelcrafting", 0.7, 0.7, 0.7, true)
+        if self.socketHint then
+          GameTooltip:AddLine("Use: " .. self.socketHint, 0.7, 0.7, 0.7, true)
+        end
         GameTooltip:Show()
       end
     end)
@@ -351,7 +353,8 @@ local function UpdateRow(row, slotName, rightAlign, classR, classG, classB)
   -- Gem socket icons
   local gemInfo = Skin.GetGemInfo and Skin.GetGemInfo(invID, link) or nil
   local gemCount = gemInfo and #gemInfo or 0
-  local showMissing = gemCount == 0 and Skin.CanSlotHaveGem and Skin.CanSlotHaveGem(slotName)
+  local socketHint = Skin.CanSlotHaveGem and Skin.CanSlotHaveGem(slotName, invID, link)
+  local showMissing = gemCount == 0 and socketHint
 
   -- Always reserve gem column space so all text rows align uniformly
   -- Layout: [GearIcon] -1.5px- [GemIcon] -1.5px- [Text...]
@@ -414,6 +417,7 @@ local function UpdateRow(row, slotName, rightAlign, classR, classG, classB)
     gem.gemLink = nil
     gem.isEmpty = false
     gem.missingSocket = true
+    gem.socketHint = type(socketHint) == "string" and socketHint or nil
     gem:ClearAllPoints()
     local yOff = -(row:GetHeight() - GEM_ICON_SIZE) / 2
     if rightAlign then

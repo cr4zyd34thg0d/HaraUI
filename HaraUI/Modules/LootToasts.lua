@@ -715,14 +715,17 @@ function M:Apply()
     state.eventFrame:SetScript("OnEvent", function(_, event, ...)
       if not M.active then return end
       if event == "CHAT_MSG_LOOT" then
-        local msg = ...
+        -- tostring() strips taint from secret string event args (WoW 12.0)
+        local msg = ... ~= nil and tostring(...) or nil
         C_Timer.After(0.3, function()
           OnLootWithRetries(msg, 1)
         end)
       elseif event == "CHAT_MSG_MONEY" then
-        OnMoney(...)
+        local msg = ... ~= nil and tostring(...) or nil
+        OnMoney(msg)
       elseif event == "CHAT_MSG_CURRENCY" then
-        OnCurrency(...)
+        local msg = ... ~= nil and tostring(...) or nil
+        OnCurrency(msg)
       elseif event == "SHOW_LOOT_TOAST" then
         local typeID, link, quantity, _, _, _, _, _, isUpgraded = ...
         if typeID == "item" and link then
@@ -760,9 +763,9 @@ end
 function M:Preview()
   local db = NS:GetDB()
   if not db or not db.loot.enabled then return end
-  self._previewUntil = GetTime() + 20
+  self._previewUntil = GetTime() + 10
   local function PreviewToast(icon, text, title, quality)
-    local toast = ShowToast(icon, text, 20)
+    local toast = ShowToast(icon, text, 10)
     if toast then
       toast.title:SetText(title or "You received")
       ApplyToastRarity(toast, quality, nil)

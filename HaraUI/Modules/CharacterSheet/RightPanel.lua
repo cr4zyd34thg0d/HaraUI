@@ -1102,36 +1102,6 @@ function RightPanel:Create()
   f:SetFrameStrata("HIGH")
   f:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 80)
   f:EnableMouse(true)
-  f:SetMovable(true)
-  f:SetClampedToScreen(true)
-  f:RegisterForDrag("LeftButton")
-  f:SetScript("OnDragStart", function()
-    if InCombatLockdown and InCombatLockdown() then return end
-    f:StartMoving()
-  end)
-  f:SetScript("OnDragStop", function()
-    f:StopMovingOrSizing()
-    local db = NS and NS.GetDB and NS:GetDB() or nil
-    local cs = db and db.charsheet or nil
-    if cs then
-      local point, _, _, x, y = f:GetPoint(1)
-      if point then
-        cs.rightPanelAnchor = point
-        cs.rightPanelX = math.floor((x or 0) + 0.5)
-        cs.rightPanelY = math.floor((y or 0) + 0.5)
-      end
-    end
-  end)
-
-  -- Restore saved position
-  local db = NS and NS.GetDB and NS:GetDB() or nil
-  local cs = db and db.charsheet or nil
-  if cs and cs.rightPanelAnchor and cs.rightPanelX and cs.rightPanelY
-     and (cs.rightPanelX ~= 0 or cs.rightPanelY ~= 0) then
-    f:ClearAllPoints()
-    f:SetPoint(cs.rightPanelAnchor, UIParent, cs.rightPanelAnchor,
-               cs.rightPanelX, cs.rightPanelY)
-  end
 
   -- Black-to-purple vertical gradient background
   f.bgGradient = f:CreateTexture(nil, "BACKGROUND")

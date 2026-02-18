@@ -397,7 +397,7 @@ local function BuildSectionsData()
       end
     end
   end
-  if primaryValue == 0 and UnitStat then
+  if (primaryLabel == "Primary" or primaryValue == 0) and UnitStat then
     -- Use class-based primary stat detection instead of picking the highest value
     local PRIMARY_STAT_MAP = {
       DEATHKNIGHT = { label = "Strength", index = 1 },
