@@ -223,4 +223,3 @@ PY
           release_type: ${{ steps.meta.outputs.release_type }}
           changelog: ${{ steps.changelog.outputs.body }}
           changelog_type: markdown
-
