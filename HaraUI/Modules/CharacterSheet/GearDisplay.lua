@@ -840,19 +840,17 @@ function GearDisplay:_EnsureHooks()
   state.hooksInstalled = true
   self:_TryHookCharacterFrame()
 
-  if hooksecurefunc and type(ToggleCharacter) == "function" then
-    hooksecurefunc("ToggleCharacter", function()
-      if not IsRefactorEnabled() then return end
-      self:_TryHookCharacterFrame()
-      -- In account transfer builds with native currency mode, Blizzard owns
-      -- the layout.  Skip addon frame work to reduce insecure-hook footprint.
-      if IsAccountTransferBuild() and IsNativeCurrencyMode() then return end
-      local parent = ResolveParent()
-      if parent then self:Create(parent) end
-      if CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() then
-        self:RequestUpdate("ToggleCharacter")
-      end
-    end)
+end
+
+-- Called by Layout's consolidated ToggleCharacter hook.
+function GearDisplay:_OnToggleCharacter()
+  if not IsRefactorEnabled() then return end
+  self:_TryHookCharacterFrame()
+  if IsAccountTransferBuild() and IsNativeCurrencyMode() then return end
+  local parent = ResolveParent()
+  if parent then self:Create(parent) end
+  if CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() then
+    self:RequestUpdate("ToggleCharacter")
   end
 end
 

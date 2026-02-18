@@ -1756,24 +1756,23 @@ function RightPanel:_EnsureHooks()
   state.hooksInstalled = true
   self:_TryHookCharacterFrame()
 
-  if hooksecurefunc and type(ToggleCharacter) == "function" then
-    hooksecurefunc("ToggleCharacter", function()
-      if not IsRefactorEnabled() then return end
-      self:_TryHookCharacterFrame()
-      -- In account transfer builds with native currency mode, Blizzard owns
-      -- the layout.  Skip addon frame work to reduce insecure-hook footprint.
-      if IsAccountTransferBuild() and IsNativeCurrencyMode() then return end
-      self:Create()
-      if CharacterFrame and CharacterFrame:IsShown() then
-        if ApplyPreferredVisibility(state) then
-          self:RequestUpdate("ToggleCharacter")
-          self:_StartTicker()
-        else
-          self:MarkDirty("ToggleCharacter.hidden")
-          self:_StopTicker()
-        end
-      end
-    end)
+end
+
+-- Called by Layout's consolidated ToggleCharacter hook.
+function RightPanel:_OnToggleCharacter()
+  if not IsRefactorEnabled() then return end
+  self:_TryHookCharacterFrame()
+  if IsAccountTransferBuild() and IsNativeCurrencyMode() then return end
+  self:Create()
+  if CharacterFrame and CharacterFrame:IsShown() then
+    local state = EnsureState(self)
+    if ApplyPreferredVisibility(state) then
+      self:RequestUpdate("ToggleCharacter")
+      self:_StartTicker()
+    else
+      self:MarkDirty("ToggleCharacter.hidden")
+      self:_StopTicker()
+    end
   end
 end
 

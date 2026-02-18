@@ -3228,7 +3228,18 @@ function Layout:_EnsureBootstrapHooks()
   end
   state.hookBootstrapDone = true
 
+  -- Single consolidated ToggleCharacter hook.  Dispatches to sub-modules
+  -- so they no longer need their own hooksecurefunc on ToggleCharacter.
   if hooksecurefunc and type(ToggleCharacter) == "function" then
+    local function dispatchSubModules()
+      local gear = CS and CS.GearDisplay or nil
+      if gear and gear._OnToggleCharacter then pcall(gear._OnToggleCharacter, gear) end
+      local stats = CS and CS.StatsPanel or nil
+      if stats and stats._OnToggleCharacter then pcall(stats._OnToggleCharacter, stats) end
+      local right = CS and CS.RightPanel or nil
+      if right and right._OnToggleCharacter then pcall(right._OnToggleCharacter, right) end
+    end
+
     hooksecurefunc("ToggleCharacter", function(subFrameToken)
       if not IsRefactorEnabled() then
         return
@@ -3252,6 +3263,7 @@ function Layout:_EnsureBootstrapHooks()
             end
             self:_ScheduleBoundedApply("ToggleCharacter.transfer_hidden")
           end
+          dispatchSubModules()
         end
       ) then
         return
@@ -3269,6 +3281,7 @@ function Layout:_EnsureBootstrapHooks()
         -- schedule Apply so ExpandCharacterFrame restores the panel size.
         if IsAccountTransferBuild() and state.nativeCurrencyMode then
           self:_ScheduleBoundedApply("ToggleCharacter.nativeCurrency")
+          dispatchSubModules()
           return
         end
         if ResolvePaneFromToken(subFrameToken) == "currency" then
@@ -3277,6 +3290,7 @@ function Layout:_EnsureBootstrapHooks()
         end
         self:_ScheduleBoundedApply("ToggleCharacter")
       end
+      dispatchSubModules()
     end)
   end
 end
