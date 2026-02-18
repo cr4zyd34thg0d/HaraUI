@@ -234,20 +234,20 @@ function Core:EnsurePaneVisibilityHooks()
     HookOnShow(_G and _G.TokenFrameTokenFrame, "token_alias_onshow", "CURRENCY_DISPLAY_UPDATE")
   end
 
-  if not state.hookBootstrapDone and hooksecurefunc and type(CharacterFrame_ShowSubFrame) == "function" then
-    state.hookBootstrapDone = true
-    hooksecurefunc("CharacterFrame_ShowSubFrame", function(frameName)
-      if HasAccountCurrencyTransferSupport() and IsCurrencyTransferVisible() then
-        return
-      end
-      if frameName == "ReputationFrame" then
-        self:QueueCurrencyRepUpdate("UPDATE_FACTION")
-        return
-      end
-      if IsCurrencySubFrameName(frameName) then
-        self:QueueCurrencyRepUpdate("CURRENCY_DISPLAY_UPDATE")
-      end
-    end)
+end
+
+-- Called by Layout's consolidated CharacterFrame_ShowSubFrame hook.
+function Core:_OnShowSubFrame(frameName)
+  if HasAccountCurrencyTransferSupport() and IsCurrencyTransferVisible() then
+    return
+  end
+  frameName = tostring(frameName or "")
+  if frameName == "ReputationFrame" then
+    self:QueueCurrencyRepUpdate("UPDATE_FACTION")
+    return
+  end
+  if IsCurrencySubFrameName(frameName) then
+    self:QueueCurrencyRepUpdate("CURRENCY_DISPLAY_UPDATE")
   end
 end
 

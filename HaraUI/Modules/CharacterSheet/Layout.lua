@@ -2905,8 +2905,18 @@ function Layout:_EnsureSubFrameHooks()
   end
   state.subFrameHookedGlobals = true
 
+  -- Single consolidated CharacterFrame_ShowSubFrame hook.  Also dispatches
+  -- the data-refresh that Core previously handled via its own hook.
   if hooksecurefunc and type(CharacterFrame_ShowSubFrame) == "function" then
     hooksecurefunc("CharacterFrame_ShowSubFrame", function(subFrameToken)
+      -- Data-refresh dispatch (was previously a separate hook in Core.lua).
+      -- Core:QueueCurrencyRepUpdate already guards for transfer visibility
+      -- and pane relevance internally, so we just forward the event hint.
+      local core = CS and CS.Core or nil
+      if core and core._OnShowSubFrame then
+        pcall(core._OnShowSubFrame, core, subFrameToken)
+      end
+
       if not IsRefactorEnabled() then
         return
       end
