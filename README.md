@@ -3,7 +3,7 @@
 :sparkles: A curated World of Warcraft UI focused on clean gameplay UX, practical QoL modules, and battle-tested nameplate behavior.
 
 ![WoW Interface](https://img.shields.io/badge/WoW-12.0.1-1f6feb?style=for-the-badge)
-![HaraUI](https://img.shields.io/badge/HaraUI-2.1.0--alpha-f97316?style=for-the-badge)
+![HaraUI](https://img.shields.io/badge/HaraUI-2.1.1--alpha-f97316?style=for-the-badge)
 
 ## :school_satchel: Overview
 
@@ -13,7 +13,7 @@
 
 | Addon | Version | Interface | Author | Purpose |
 |-------|---------|-----------|--------|---------|
-| HaraUI | 2.1.0-alpha | 120001 | Harath | Modular UI/QoL suite |
+| HaraUI | 2.1.1-alpha | 120001 | Harath | Modular UI/QoL suite |
 
 ## :jigsaw: Current Feature Set
 
