@@ -3,7 +3,7 @@
 :sparkles: A curated World of Warcraft UI focused on clean gameplay UX, practical QoL modules, and battle-tested nameplate behavior.
 
 ![WoW Interface](https://img.shields.io/badge/WoW-12.0.1-1f6feb?style=for-the-badge)
-![HaraUI](https://img.shields.io/badge/HaraUI-2.0-f97316?style=for-the-badge)
+![HaraUI](https://img.shields.io/badge/HaraUI-2.1.0--alpha-f97316?style=for-the-badge)
 
 ## :school_satchel: Overview
 
@@ -13,7 +13,7 @@
 
 | Addon | Version | Interface | Author | Purpose |
 |-------|---------|-----------|--------|---------|
-| HaraUI | 2.0 | 120001 | Harath | Modular UI/QoL suite |
+| HaraUI | 2.1.0-alpha | 120001 | Harath | Modular UI/QoL suite |
 
 ## :jigsaw: Current Feature Set
 
@@ -71,6 +71,16 @@ World of Warcraft/_retail_/Interface/AddOns/
 3. Run `/reload` in-game.
 
 ## :spiral_notepad: Changelog (Recent)
+
+### v2.1.0-alpha - 2026-02-18
+- Fix release workflow parse and README sync
+- Sync local feature snapshot to main for 2.1.0-alpha
+- Group release notes into feature summaries
+- Refresh README features install and changelog
+- Remove legacy refactor plan doc
+- Stop tracking legacy addon/vendor folders
+- Remove OPie and Platynator references from README
+
 
 ### v1.2.2 - 2026-02-15
 - **Changed:** Improved dungeon and raid friendly-name font behavior for HaraUI plates.
