@@ -4,27 +4,43 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v2.1.1-alpha)"
+        required: true
 
 env:
   CURSEFORGE_PROJECT_ID: "1461250"
 
 jobs:
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write  # needed for creating GitHub Releases
 
     steps:
+      - name: Resolve tag ref
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ref=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${GITHUB_REF}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ steps.resolve.outputs.ref }}
           fetch-depth: 0  # full history so packager can resolve tags
 
       - name: Parse tag metadata
         id: meta
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          REF="${{ steps.resolve.outputs.ref }}"
+          TAG="${REF#refs/tags/}"
           VERSION="${TAG#v}"
 
           if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha$ ]]; then
