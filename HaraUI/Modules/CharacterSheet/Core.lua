@@ -7,10 +7,6 @@ CS.State = CS.State or {
   activeBackend = "refactor",
 }
 
-function CS:IsRefactorEnabled()
-  return true
-end
-
 CS.Core = CS.Core or {}
 local Core = CS.Core
 
@@ -19,7 +15,6 @@ Core._state = Core._state or {
   enabled = false,
   eventFrame = nil,
   hookMap = nil,
-  hookBootstrapDone = false,
 }
 
 local CURRENCY_REP_DEBOUNCE_DELAY = 0.05
@@ -31,6 +26,7 @@ local EVENT_FLAGS = {
     stats = true,
     gear = true,
     rightpanel = true,
+    portalpanel = true,
   },
   PLAYER_LOGIN = {
     layout = true,
@@ -38,6 +34,7 @@ local EVENT_FLAGS = {
     stats = true,
     gear = true,
     rightpanel = true,
+    portalpanel = true,
   },
 }
 
@@ -91,6 +88,11 @@ local function RegisterCoreEvents(frame)
   RegisterEventIfExists(frame, "CURRENCY_DISPLAY_UPDATE")
   RegisterEventIfExists(frame, "PLAYER_MONEY")
   RegisterEventIfExists(frame, "UPDATE_FACTION")
+  -- Combat end: re-apply layout if CharacterFrame was opened during combat.
+  RegisterEventIfExists(frame, "PLAYER_REGEN_ENABLED")
+  -- Equipment changes: route to stats + gear panels for ilvl / slot updates.
+  RegisterEventIfExists(frame, "PLAYER_EQUIPMENT_CHANGED")
+  RegisterEventIfExists(frame, "PLAYER_AVG_ITEM_LEVEL_UPDATE")
 end
 
 local function IsFrameVisible(frame)
@@ -162,9 +164,6 @@ end
 
 function Core:QueueCurrencyRepUpdate(event)
   if not self._state.enabled then
-    return false
-  end
-  if not (CS and CS.IsRefactorEnabled and CS:IsRefactorEnabled()) then
     return false
   end
   if not IsRelevantPaneVisibleForEvent(event) then
@@ -254,9 +253,22 @@ end
 function Core:DispatchEvent(event, ...)
   if event == "ADDON_LOADED" then
     local addonName = ...
-    if addonName == "Blizzard_CharacterUI" then
+    if addonName == "Blizzard_UIPanels_Game" then
+      -- CharacterFrame now exists (demand-loaded). Install lifecycle hooks and
+      -- preset attributes so the first combat open uses the expanded size.
+      local factory = CS and CS.FrameFactory or nil
+      if factory and factory.PresetFrameAttributes then
+        factory.PresetFrameAttributes()
+      end
+      -- Install the CharacterFrame OnShow/OnHide lifecycle hooks now that the
+      -- frame exists. Without this, a demand-load during combat means the hooks
+      -- are never installed and Coordinator:_OnShow never fires.
+      local coordinator = GetCoordinator()
+      if coordinator and coordinator._EnsureCharacterFrameHooks then
+        pcall(coordinator._EnsureCharacterFrameHooks, coordinator)
+      end
       self:EnsurePaneVisibilityHooks()
-      self:RequestUpdateForEvent(event, "core:blizzard_characterui_loaded")
+      self:RequestUpdateForEvent(event, "core:blizzard_uipanels_game_loaded")
       return
     end
     if addonName == "Blizzard_TokenUI" then
@@ -279,12 +291,52 @@ function Core:DispatchEvent(event, ...)
 
   if event == "PLAYER_LOGIN" then
     self:EnsurePaneVisibilityHooks()
+    -- Force-load Blizzard_UIPanels_Game now so CharacterFrame exists before any
+    -- combat can start. Without this, a first-ever open during combat means
+    -- the addon demand-loads while InCombatLockdown() is true, SetAttribute is
+    -- blocked, and the frame opens at Blizzard's small default size.
+    -- LoadAddOn is not combat-restricted and runs synchronously.
+    local loadFn = (C_AddOns and C_AddOns.LoadAddOn) or LoadAddOn
+    if loadFn then
+      pcall(loadFn, "Blizzard_UIPanels_Game")
+    end
+    local factory = CS and CS.FrameFactory or nil
+    if factory and factory.PresetFrameAttributes then
+      factory.PresetFrameAttributes()
+    end
     self:RequestUpdateForEvent(event, "core:player_login")
     return
   end
 
   if event == "CURRENCY_DISPLAY_UPDATE" or event == "PLAYER_MONEY" or event == "UPDATE_FACTION" then
     self:QueueCurrencyRepUpdate(event)
+    return
+  end
+
+  -- Equipment changes: route to stats + gear panels so ilvl and slot displays refresh.
+  if event == "PLAYER_EQUIPMENT_CHANGED" or event == "PLAYER_AVG_ITEM_LEVEL_UPDATE" then
+    if IsCharacterVisible() then
+      local coordinator = GetCoordinator()
+      if coordinator and coordinator.RequestUpdate then
+        coordinator:RequestUpdate("core:" .. tostring(event), { stats = true, gear = true })
+      end
+    end
+    return
+  end
+
+  -- Re-apply layout when combat ends as a safety net (ensures UpdateUIPanelPositions
+  -- runs with the correct expanded attributes after any combat-blocked open).
+  if event == "PLAYER_REGEN_ENABLED" then
+    -- Dismiss the compact combat overlay now that full HaraUI can take over.
+    local cp = CS and CS.CombatPanel or nil
+    if cp and cp.Hide then cp:Hide() end
+    if IsCharacterVisible() then
+      local coordinator = GetCoordinator()
+      if coordinator and coordinator.RequestUpdate then
+        coordinator:RequestUpdate("core:player_regen_enabled", { layout = true })
+      end
+    end
+    return
   end
 end
 
@@ -302,7 +354,6 @@ function Core:OnLoad()
     end)
   end
 
-  -- Start with a minimal event surface while the refactor is staged.
   RegisterCoreEvents(state.eventFrame)
 end
 

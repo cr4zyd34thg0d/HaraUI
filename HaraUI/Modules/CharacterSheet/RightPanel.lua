@@ -25,7 +25,6 @@ local AFFIX_BORDER_COLORS = {
 local AFFIX_LEVEL_LABELS = { "4", "7", "10", "12" }
 
 local VAULT_TRACK_TYPE_BY_ROW = { 2, 1, 3 } -- Mythic+, Raid, World
-local VAULT_TRACK_NAMES = { [1] = "Raid", [2] = "Mythic+", [3] = "World" }
 
 local PORTAL_ALIASES = {
   ["the motherlode"] = { common = { "the m o t h e r l o d e", "motherlode" } },
@@ -56,12 +55,6 @@ local PORTAL_ALIASES = {
   ["return to karazhan upper"] = { common = { "return to karazhan", "karazhan" } },
 }
 local VAULT_THRESHOLDS = { [1] = { 1, 4, 6 }, [2] = { 2, 4, 8 }, [3] = { 2, 4, 8 } }
-local VAULT_TRACK_COLORS = {
-  [1] = { 0.05, 0.08, 0.16, 0.74,  0.20, 0.30, 0.55, 0.88 }, -- Raids (blue)
-  [2] = { 0.12, 0.04, 0.18, 0.74,  0.38, 0.22, 0.56, 0.90 }, -- Dungeons (purple)
-  [3] = { 0.06, 0.11, 0.08, 0.74,  0.20, 0.40, 0.26, 0.88 }, -- World (green)
-}
-local VAULT_UNLOCKED_ILVL_COLOR = { 1.00, 0.84, 0.22, 1.0 }
 
 local WEEKLY_REWARD_TYPE = {}
 do
@@ -79,10 +72,8 @@ RightPanel._state = RightPanel._state or {
   root = nil,
   created = false,
   hooksInstalled = false,
-  characterHookInstalled = false,
   eventFrame = nil,
   ticker = nil,
-  tickerToken = 0,
   dirtyReason = nil,
   pendingSecureUpdate = false,
   affixSlots = nil,
@@ -93,35 +84,15 @@ RightPanel._state = RightPanel._state or {
   counters = { creates = 0, updateRequests = 0, updatesApplied = 0, tickerStarts = 0, tickerTicks = 0 },
 }
 
-local function IsRefactorEnabled()
-  return CS and CS.IsRefactorEnabled and CS:IsRefactorEnabled()
-end
-
-local function IsAccountTransferBuild()
-  return C_CurrencyInfo and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
-end
-
 local function IsNativeCurrencyMode()
-  local layoutState = CS and CS.Layout and CS.Layout._state or nil
-  if not layoutState then
-    return false
-  end
-  return layoutState.nativeCurrencyMode == true and layoutState.activePane == "currency"
+  local pm = CS and CS.PaneManager or nil
+  return pm ~= nil and pm:IsNativeCurrencyMode()
 end
 
 local function IsCharacterPaneActive()
-  local layoutState = CS and CS.Layout and CS.Layout._state or nil
-  if not layoutState then
-    return true
-  end
-  if layoutState.nativeCurrencyMode == true then
-    return false
-  end
-  local pane = layoutState.activePane
-  if type(pane) ~= "string" then
-    return true
-  end
-  return pane == "character"
+  local pm = CS and CS.PaneManager or nil
+  if not pm then return true end
+  return pm:IsCharacterPaneActive()
 end
 
 local function EnsureState(self)
@@ -172,6 +143,11 @@ local function ApplyPreferredVisibility(state)
     else
       if root.Hide then root:Hide() end
     end
+  end
+  -- Notify PortalPanel to re-anchor when M+ panel visibility changes
+  local pp = CS and CS.PortalPanel or nil
+  if pp and pp.UpdateAnchoring then
+    pcall(pp.UpdateAnchoring, pp)
   end
   return shouldShow
 end
@@ -268,6 +244,14 @@ local function IsSpellKnownCompat(spellID)
   if IsSpellKnownOrOverridesKnown then return IsSpellKnownOrOverridesKnown(spellID) end
   if IsSpellKnown then return IsSpellKnown(spellID) end
   if IsPlayerSpell then return IsPlayerSpell(spellID) end
+  return false
+end
+
+local function TrySetAtlas(tex, atlas)
+  if tex and tex.SetAtlas then
+    local ok = pcall(tex.SetAtlas, tex, atlas)
+    if ok then return true end
+  end
   return false
 end
 
@@ -916,10 +900,6 @@ local function IsVaultPvP(act)
   return t == WEEKLY_REWARD_TYPE.RankedPvP or (WEEKLY_REWARD_TYPE.RankedPvP == 4 and t == 4)
 end
 
-local function GetVaultTrackLabel(trackType, act)
-  if trackType == 3 and IsVaultPvP(act) then return "PvP" end
-  return VAULT_TRACK_NAMES[trackType] or "Vault"
-end
 
 local function GetVaultThreshold(trackType, col, act)
   if type(act) == "table" then
@@ -938,54 +918,6 @@ end
 local function GetVaultRewards(act)
   if type(act) ~= "table" or type(act.rewards) ~= "table" then return {} end
   return act.rewards
-end
-
-local function GetVaultItemLevel(act)
-  if type(act) ~= "table" then return nil end
-  local direct = ToNumber(act.itemLevel) or ToNumber(act.rewardItemLevel) or ToNumber(act.rewardLevel) or ToNumber(act.ilvl)
-  if direct and direct > 100 then return math.floor(direct + 0.5) end
-
-  local function IlvlFromHyperlink(hyperlink)
-    if type(hyperlink) ~= "string" or hyperlink == "" then return nil end
-    local ilvl
-    if C_Item and C_Item.GetDetailedItemLevelInfo then
-      local ok2, n = pcall(C_Item.GetDetailedItemLevelInfo, hyperlink)
-      if ok2 then ilvl = ToNumber(n) end
-    end
-    if (not ilvl or ilvl <= 0) and GetDetailedItemLevelInfo then
-      local ok2, n = pcall(GetDetailedItemLevelInfo, hyperlink)
-      if ok2 then ilvl = ToNumber(n) end
-    end
-    if (not ilvl or ilvl <= 0) and GetItemInfo then
-      local ok2, _, _, _, itemLevel = pcall(GetItemInfo, hyperlink)
-      if ok2 then ilvl = ToNumber(itemLevel) end
-    end
-    if ilvl and ilvl > 100 then return math.floor(ilvl + 0.5) end
-    return nil
-  end
-
-  if C_WeeklyRewards and C_WeeklyRewards.GetItemHyperlink then
-    for _, reward in ipairs(GetVaultRewards(act)) do
-      local itemDBID = reward and reward.itemDBID
-      if itemDBID then
-        local ok, hyperlink = pcall(C_WeeklyRewards.GetItemHyperlink, itemDBID)
-        if ok then
-          local ilvl = IlvlFromHyperlink(hyperlink)
-          if ilvl then return ilvl end
-        end
-      end
-    end
-  end
-
-  if C_WeeklyRewards and C_WeeklyRewards.GetExampleRewardItemHyperlinks and act.id then
-    local ok, hyperlink = pcall(C_WeeklyRewards.GetExampleRewardItemHyperlinks, act.id)
-    if ok then
-      local ilvl = IlvlFromHyperlink(hyperlink)
-      if ilvl then return ilvl end
-    end
-  end
-
-  return nil
 end
 
 local function GetVaultDifficultyLabel(trackType, act)
@@ -1046,6 +978,23 @@ local function GetWeeklyVaultActivities()
   return acts
 end
 
+local function GetVaultSlotDescription(trackType, threshold)
+  threshold = threshold or 0
+  if trackType == 1 then
+    return threshold == 1 and "Defeat 1 Raid Boss"
+      or ("Defeat %d Raid Bosses"):format(threshold)
+  elseif trackType == 2 then
+    return threshold == 1
+      and "Complete 1 Heroic, Mythic, or Timewalking Dungeon"
+      or ("Complete %d Heroic, Mythic, or Timewalking Dungeons"):format(threshold)
+  elseif trackType == 3 then
+    return threshold == 1
+      and "Complete 1 Delve or World Activity"
+      or ("Complete %d Delves or World Activities"):format(threshold)
+  end
+  return ""
+end
+
 ---------------------------------------------------------------------------
 -- Frame creation
 ---------------------------------------------------------------------------
@@ -1058,12 +1007,10 @@ function RightPanel:_StopTicker()
   local state = EnsureState(self)
   if state.ticker and type(state.ticker) == "table" and state.ticker.Cancel then state.ticker:Cancel() end
   state.ticker = nil
-  state.tickerToken = (state.tickerToken or 0) + 1
 end
 
 function RightPanel:_StartTicker()
   local state = EnsureState(self)
-  if not IsRefactorEnabled() then self:_StopTicker(); return end
   if not (state.root and state.root:IsShown()) then self:_StopTicker(); return end
   if state.ticker then return end
   state.counters.tickerStarts = (state.counters.tickerStarts or 0) + 1
@@ -1071,7 +1018,7 @@ function RightPanel:_StartTicker()
   if C_Timer and C_Timer.NewTicker then
     state.ticker = C_Timer.NewTicker(TICK_INTERVAL, function()
       local live = EnsureState(self)
-      if not IsRefactorEnabled() or not (live.root and live.root:IsShown()) then self:_StopTicker(); return end
+      if not (live.root and live.root:IsShown()) then self:_StopTicker(); return end
       live.counters.tickerTicks = (live.counters.tickerTicks or 0) + 1
       self:RequestUpdate("ticker")
     end)
@@ -1079,7 +1026,6 @@ function RightPanel:_StartTicker()
 end
 
 function RightPanel:Create()
-  if not IsRefactorEnabled() then return nil end
   local state = EnsureState(self)
   if not CharacterFrame then return nil end
 
@@ -1088,7 +1034,7 @@ function RightPanel:Create()
   local Skin = EnsureSkin()
 
   -- Floating frame parented to CharacterFrame, anchored to its right
-  local f = CreateFrame("Frame", nil, CharacterFrame, "BackdropTemplate")
+  local f = CreateFrame("Frame", nil, CS._characterOverlay or CharacterFrame, "BackdropTemplate")
   f:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
   f:SetPoint("LEFT", CharacterFrame, "RIGHT", 0, -12)
   f:SetBackdrop({
@@ -1123,7 +1069,7 @@ function RightPanel:Create()
 
   -- M+ Rating: title + large value (centered)
   f.mplusTitle = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-  f.mplusTitle:SetPoint("TOP", f, "TOP", 0, -58)
+  f.mplusTitle:SetPoint("TOP", f, "TOP", 0, -12)
   f.mplusTitle:SetText("Mythic+ Rating")
   ApplyFont(f.mplusTitle, 14)
 
@@ -1178,8 +1124,8 @@ function RightPanel:Create()
 
   -- Dungeon table header
   f.tableHeader = CreateFrame("Frame", nil, f)
-  f.tableHeader:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -106)
-  f.tableHeader:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -106)
+  f.tableHeader:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -66)
+  f.tableHeader:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -66)
   f.tableHeader:SetHeight(26)
 
   local function HeaderCol(parent, text, anchor, xOff, width, justify)
@@ -1283,84 +1229,195 @@ function RightPanel:Create()
     state.dungeonRows[i] = row
   end
 
-  -- Great Vault title
-  f.vaultTitle = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-  f.vaultTitle:SetPoint("BOTTOM", f, "BOTTOM", 0, 172)
-  f.vaultTitle:SetText("Great Vault")
-  ApplyFont(f.vaultTitle, 14)
-
-  -- Vault container: 9 cards in 3x3 grid
+  -- Great Vault: 3x3 grid, Blizzard-style vault slots
   f.vault = CreateFrame("Frame", nil, f)
-  f.vault:SetSize(606, 144)
-  f.vault:SetPoint("BOTTOM", f, "BOTTOM", 0, 20)
+  f.vault:SetSize(612, 228)
+  f.vault:SetPoint("TOP", f.rowContainer, "BOTTOM", 0, -9)
   state.vaultCards = {}
+
+  local VAULT_CARD_W = 200
+  local VAULT_CARD_H = 72
+  local VAULT_COL_SPACING = 206
+  local VAULT_ROW_SPACING = 78
 
   for i = 1, 9 do
     local card = CreateFrame("Frame", nil, f.vault, "BackdropTemplate")
-    card:SetSize(198, 44)
+    card:SetSize(VAULT_CARD_W, VAULT_CARD_H)
     local col = (i - 1) % 3
     local vRow = math.floor((i - 1) / 3)
-    card:SetPoint("TOPLEFT", col * 204, -(vRow * 50))
+    card:SetPoint("TOPLEFT", col * VAULT_COL_SPACING, -(vRow * VAULT_ROW_SPACING))
     card:SetBackdrop({
       bgFile = "Interface/Buttons/WHITE8x8",
       edgeFile = "Interface/Buttons/WHITE8x8",
       edgeSize = 1,
       insets = { left = 0, right = 0, top = 0, bottom = 0 },
     })
-    card:SetBackdropColor(0.08, 0.03, 0.14, 0.72)
-    card:SetBackdropBorderColor(0.22, 0.16, 0.28, 0.85)
+    card:SetBackdropColor(0.12, 0.12, 0.14, 0.88)
+    card:SetBackdropBorderColor(0.40, 0.40, 0.42, 0.85)
 
-    card.title = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    card.title:SetPoint("TOPLEFT", 7, -6)
-    card.title:SetJustifyH("LEFT")
-    card.title:SetText("Vault")
-    ApplyFont(card.title, 12)
+    -- Description text (top, multi-line wrapping like Blizzard vault)
+    card.desc = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    card.desc:SetPoint("TOPLEFT", 6, -5)
+    card.desc:SetPoint("TOPRIGHT", -6, -5)
+    card.desc:SetJustifyH("LEFT")
+    card.desc:SetJustifyV("TOP")
+    if card.desc.SetWordWrap then card.desc:SetWordWrap(true) end
+    card.desc:SetMaxLines(3)
+    card.desc:SetText("")
+    card.desc:SetTextColor(0.80, 0.80, 0.80, 1)
+    ApplyFont(card.desc, 9)
 
-    card.ilvl = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    card.ilvl:SetPoint("TOPRIGHT", -7, -6)
-    card.ilvl:SetJustifyH("RIGHT")
-    card.ilvl:SetText("")
-    ApplyFont(card.ilvl, 12)
-
-    card.difficulty = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.difficulty:SetPoint("BOTTOMLEFT", 7, 6)
-    card.difficulty:SetJustifyH("LEFT")
-    card.difficulty:SetText("")
-    ApplyFont(card.difficulty, 11)
-
-    card.progress = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.progress:SetPoint("BOTTOMRIGHT", -7, 6)
-    card.progress:SetJustifyH("RIGHT")
-    card.progress:SetText("0 / 0")
-    ApplyFont(card.progress, 11)
-
-    -- Lock overlay for incomplete slots
-    card.overlay = CreateFrame("Frame", nil, card)
-    card.overlay:SetAllPoints(true)
-    card.overlay:SetFrameLevel(card:GetFrameLevel() + 20)
-    card.overlay:EnableMouse(false)
-
-    card.dim = card.overlay:CreateTexture(nil, "BACKGROUND")
-    card.dim:SetAllPoints(true)
-    card.dim:SetColorTexture(0, 0, 0, 0.65)
-
-    card.lock = card.overlay:CreateTexture(nil, "ARTWORK")
-    card.lock:SetSize(24, 24)
-    card.lock:SetPoint("CENTER", 0, 0)
-    card.lock:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-LOCK")
-    if not card.lock:GetTexture() then
-      card.lock:SetTexture("Interface\\Common\\LockIcon")
+    -- Green checkmark (top-left, shown when completed)
+    card.check = card:CreateTexture(nil, "OVERLAY")
+    card.check:SetSize(14, 14)
+    card.check:SetPoint("TOPLEFT", 4, -4)
+    if not TrySetAtlas(card.check, "common-icon-checkmark") then
+      card.check:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
     end
-    card.lock:SetDesaturated(true)
-    card.lock:SetVertexColor(0.95, 0.95, 0.95, 1)
-    card.overlay:Show()
+    card.check:SetVertexColor(0.2, 0.9, 0.3, 1)
+    card.check:Hide()
+
+    -- Blizzard vault background (locked / unlocked atlas)
+    card.vaultBg = card:CreateTexture(nil, "BACKGROUND", nil, 1)
+    card.vaultBg:SetAllPoints()
+    card.vaultBg:SetAlpha(0.45)
+    TrySetAtlas(card.vaultBg, "evergreen-weeklyrewards-reward-unlocked")
+    card.vaultBg:Hide()
+
+    -- Lock icon (bottom-left, Blizzard Great Vault ornate shield)
+    card.lock = card:CreateTexture(nil, "ARTWORK")
+    card.lock:SetSize(42, 42)
+    card.lock:SetPoint("BOTTOMLEFT", 2, 2)
+    if not TrySetAtlas(card.lock, "greatVault-centerPlate-dis") then
+      TrySetAtlas(card.lock, "evergreen-weeklyrewards-reward-locked")
+    end
+    card.lock:SetVertexColor(0.75, 0.75, 0.78, 0.9)
+
+    -- Blizzard-style back-glow (shown when completed, breathing pulse)
+    card.glow = card:CreateTexture(nil, "ARTWORK", nil, 2)
+    card.glow:SetAllPoints()
+    if not TrySetAtlas(card.glow, "evergreen-weeklyrewards-reward-fx-backglow") then
+      card.glow:SetTexture("Interface\\Cooldown\\star4")
+    end
+    card.glow:SetVertexColor(0.95, 0.75, 0.15, 0.5)
+    card.glow:SetBlendMode("ADD")
+    card.glow:Hide()
+
+    card.glowAG = card.glow:CreateAnimationGroup()
+    card.glowAG:SetLooping("REPEAT")
+    local fadeOut = card.glowAG:CreateAnimation("Alpha")
+    fadeOut:SetFromAlpha(1)
+    fadeOut:SetToAlpha(0.55)
+    fadeOut:SetDuration(1.2)
+    fadeOut:SetOrder(1)
+    fadeOut:SetSmoothing("IN_OUT")
+    local fadeIn = card.glowAG:CreateAnimation("Alpha")
+    fadeIn:SetFromAlpha(0.55)
+    fadeIn:SetToAlpha(1)
+    fadeIn:SetDuration(1.2)
+    fadeIn:SetOrder(2)
+    fadeIn:SetSmoothing("IN_OUT")
+
+    -- Rotating swirl effect inside the glow
+    card.swirl = card:CreateTexture(nil, "ARTWORK", nil, 3)
+    card.swirl:SetSize(VAULT_CARD_H * 0.9, VAULT_CARD_H * 0.9)
+    card.swirl:SetPoint("CENTER", 0, 0)
+    TrySetAtlas(card.swirl, "evergreen-weeklyrewards-reward-unlocked-fx-swirl")
+    card.swirl:SetVertexColor(0.95, 0.75, 0.15, 0.35)
+    card.swirl:SetBlendMode("ADD")
+    card.swirl:Hide()
+
+    card.swirlAG = card.swirl:CreateAnimationGroup()
+    card.swirlAG:SetLooping("REPEAT")
+    local spin = card.swirlAG:CreateAnimation("Rotation")
+    spin:SetDegrees(-360)
+    spin:SetDuration(8)
+    spin:SetOrder(1)
+    spin:SetOrigin("CENTER", 0, 0)
+
+    -- Sparkle overlay (pulsing star on top of swirl)
+    card.sparkle = card:CreateTexture(nil, "ARTWORK", nil, 4)
+    card.sparkle:SetSize(VAULT_CARD_H * 0.55, VAULT_CARD_H * 0.55)
+    card.sparkle:SetPoint("CENTER", 0, 0)
+    TrySetAtlas(card.sparkle, "evergreen-weeklyrewards-reward-unlocked-fx-sparkle01")
+    card.sparkle:SetBlendMode("ADD")
+    card.sparkle:SetVertexColor(1, 0.85, 0.3, 0.6)
+    card.sparkle:Hide()
+
+    card.sparkleAG = card.sparkle:CreateAnimationGroup()
+    card.sparkleAG:SetLooping("REPEAT")
+    local spkOut = card.sparkleAG:CreateAnimation("Alpha")
+    spkOut:SetFromAlpha(1)
+    spkOut:SetToAlpha(0.3)
+    spkOut:SetDuration(0.8)
+    spkOut:SetOrder(1)
+    spkOut:SetSmoothing("IN_OUT")
+    local spkIn = card.sparkleAG:CreateAnimation("Alpha")
+    spkIn:SetFromAlpha(0.3)
+    spkIn:SetToAlpha(1)
+    spkIn:SetDuration(0.8)
+    spkIn:SetOrder(2)
+    spkIn:SetSmoothing("IN_OUT")
+
+    -- Enable mouse for reward tooltip on completed cards
+    card:EnableMouse(true)
+    card.actInfo = nil  -- populated on update
+    card:SetScript("OnEnter", function(self)
+      if not self.actInfo or not self.actComplete then return end
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT", -7, -11)
+      GameTooltip:ClearLines()
+      GameTooltip:AddLine("Current Reward", 1, 1, 1)
+      local actID = self.actInfo.id
+      local itemLink, upgradeItemLink
+      if actID and C_WeeklyRewards and C_WeeklyRewards.GetExampleRewardItemHyperlinks then
+        local ok, link, upLink = pcall(C_WeeklyRewards.GetExampleRewardItemHyperlinks, actID)
+        if ok then itemLink, upgradeItemLink = link, upLink end
+      end
+      local itemLevel
+      if itemLink and C_Item and C_Item.GetDetailedItemLevelInfo then
+        local ok2, ilvl = pcall(C_Item.GetDetailedItemLevelInfo, itemLink)
+        if ok2 then itemLevel = ilvl end
+      end
+      if itemLevel then
+        local diffLabel = self.actDiffLabel or ""
+        if diffLabel ~= "" then
+          GameTooltip:AddLine(("Item Level %d - %s"):format(itemLevel, diffLabel), 1, 0.82, 0, true)
+        else
+          GameTooltip:AddLine(("Item Level %d"):format(itemLevel), 1, 0.82, 0, true)
+        end
+        local upgradeLevel
+        if upgradeItemLink and C_Item and C_Item.GetDetailedItemLevelInfo then
+          local ok3, uIlvl = pcall(C_Item.GetDetailedItemLevelInfo, upgradeItemLink)
+          if ok3 then upgradeLevel = uIlvl end
+        end
+        if upgradeLevel then
+          GameTooltip:AddLine(" ")
+          GameTooltip:AddLine(("Improve to Item Level %d"):format(upgradeLevel), 0.2, 0.9, 0.2)
+        else
+          GameTooltip:AddLine(" ")
+          GameTooltip:AddLine("Reward at Highest Item Level", 0.2, 0.9, 0.2)
+        end
+      else
+        GameTooltip:AddLine("Retrieving item information...", 0.7, 0.7, 0.7)
+      end
+      GameTooltip:Show()
+    end)
+    card:SetScript("OnLeave", function()
+      GameTooltip:Hide()
+    end)
+
+    -- Info text (bottom-right: progress when locked, difficulty when complete)
+    card.info = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    card.info:SetPoint("BOTTOMRIGHT", -6, 5)
+    card.info:SetJustifyH("RIGHT")
+    card.info:SetText("")
+    ApplyFont(card.info, 11)
 
     state.vaultCards[i] = card
   end
 
   -- Show/hide hooks on root
   f:HookScript("OnShow", function()
-    if not IsRefactorEnabled() then return end
     self:_StartTicker()
     if state.dirtyReason then self:RequestUpdate(state.dirtyReason) end
   end)
@@ -1378,7 +1435,6 @@ end
 -- Update: refresh header, affixes, dungeon rows, vault cards
 ---------------------------------------------------------------------------
 function RightPanel:UpdateRightPanel()
-  if not IsRefactorEnabled() then return false end
   local state = EnsureState(self)
   if not state.created or not state.root then return false end
 
@@ -1581,55 +1637,61 @@ function RightPanel:UpdateRightPanel()
     local actList = byType[trackType] or {}
     local act = actList[col]
 
-    local c = VAULT_TRACK_COLORS[trackType] or VAULT_TRACK_COLORS[2]
-    card:SetBackdropColor(c[1], c[2], c[3], c[4])
-    card:SetBackdropBorderColor(c[5], c[6], c[7], c[8])
-
-    local label = GetVaultTrackLabel(trackType, act)
     local target = GetVaultThreshold(trackType, col, act)
     local progress = GetVaultProgress(act)
-    local progressDisplay = target > 0 and math.min(math.max(progress, 0), target) or progress
     local rewards = GetVaultRewards(act)
     local complete = #rewards > 0 or (target > 0 and progress >= target)
+    local desc = GetVaultSlotDescription(trackType, target)
 
-    card.title:SetText(label)
-    if target > 0 then
-      card.progress:SetText(("%d / %d"):format(progressDisplay, target))
-    elseif progress > 0 then
-      card.progress:SetText(("%d"):format(progress))
-    else
-      card.progress:SetText("-")
-    end
-
-    local ilvl = GetVaultItemLevel(act)
-    card.ilvl:SetText(ilvl and tostring(ilvl) or "")
-    card.difficulty:SetText(GetVaultDifficultyLabel(trackType, act))
-
-    -- Item level styling for completed slots
-    card.ilvl:ClearAllPoints()
-    if complete and ilvl and ilvl > 0 then
-      card.ilvl:SetPoint("CENTER", card, "CENTER", 0, 0)
-      card.ilvl:SetJustifyH("CENTER")
-      card.ilvl:SetTextColor(VAULT_UNLOCKED_ILVL_COLOR[1], VAULT_UNLOCKED_ILVL_COLOR[2], VAULT_UNLOCKED_ILVL_COLOR[3], VAULT_UNLOCKED_ILVL_COLOR[4])
-      ApplyFont(card.ilvl, 18)
-    else
-      card.ilvl:SetPoint("TOPRIGHT", card, "TOPRIGHT", -7, -6)
-      card.ilvl:SetJustifyH("RIGHT")
-      card.ilvl:SetTextColor(0.95, 0.95, 0.95, 1)
-      ApplyFont(card.ilvl, 12)
-    end
+    -- Store activity info for tooltip
+    card.actInfo = act
+    card.actComplete = complete
+    local diffLabel = GetVaultDifficultyLabel(trackType, act)
+    card.actDiffLabel = diffLabel ~= "" and diffLabel or nil
 
     if complete then
-      card.title:SetTextColor(0.35, 1, 0.5, 1)
-      card.difficulty:SetTextColor(0.35, 1, 0.5, 1)
-      card.progress:SetTextColor(0.35, 1, 0.5, 1)
-      if card.overlay then card.overlay:Hide() end
+      -- Completed: golden border, green description, orb effects, difficulty info
+      card:SetBackdropBorderColor(0.78, 0.60, 0.12, 1)
+      card:SetBackdropColor(0.16, 0.13, 0.08, 0.90)
+      card.vaultBg:Show()
+      TrySetAtlas(card.vaultBg, "evergreen-weeklyrewards-reward-unlocked")
+      card.vaultBg:SetAlpha(0.45)
+      card.desc:SetText(desc)
+      card.desc:SetTextColor(0.25, 0.85, 0.25, 1)
+      card.desc:ClearAllPoints()
+      card.desc:SetPoint("TOPLEFT", 22, -5)
+      card.desc:SetPoint("TOPRIGHT", -6, -5)
+      card.check:Show()
+      card.lock:Hide()
+      card.glow:Show()
+      card.swirl:Show()
+      card.sparkle:Show()
+      if not card.glowAG:IsPlaying() then card.glowAG:Play() end
+      if not card.swirlAG:IsPlaying() then card.swirlAG:Play() end
+      if not card.sparkleAG:IsPlaying() then card.sparkleAG:Play() end
+      card.info:SetText(diffLabel)
+      card.info:SetTextColor(0.95, 0.75, 0.15, 1)
     else
-      card.title:SetTextColor(0.95, 0.95, 0.95, 1)
-      card.ilvl:SetTextColor(0.95, 0.95, 0.95, 1)
-      card.difficulty:SetTextColor(0.95, 0.95, 0.95, 1)
-      card.progress:SetTextColor(0.95, 0.95, 0.95, 1)
-      if card.overlay then card.overlay:Show() end
+      -- Incomplete: gray metallic border, Blizzard vault lock, progress counter
+      card:SetBackdropBorderColor(0.40, 0.40, 0.42, 0.85)
+      card:SetBackdropColor(0.12, 0.12, 0.14, 0.88)
+      card.vaultBg:Hide()
+      card.desc:SetText(desc)
+      card.desc:SetTextColor(0.80, 0.80, 0.80, 1)
+      card.desc:ClearAllPoints()
+      card.desc:SetPoint("TOPLEFT", 6, -5)
+      card.desc:SetPoint("TOPRIGHT", -6, -5)
+      card.check:Hide()
+      card.lock:Show()
+      card.glow:Hide()
+      card.swirl:Hide()
+      card.sparkle:Hide()
+      if card.glowAG:IsPlaying() then card.glowAG:Stop() end
+      if card.swirlAG:IsPlaying() then card.swirlAG:Stop() end
+      if card.sparkleAG:IsPlaying() then card.sparkleAG:Stop() end
+      local progressDisplay = target > 0 and math.min(math.max(progress, 0), target) or progress
+      card.info:SetText(target > 0 and ("%d/%d"):format(progressDisplay, target) or "-")
+      card.info:SetTextColor(0.70, 0.70, 0.70, 1)
     end
   end
 
@@ -1642,7 +1704,6 @@ end
 -- Request update with throttle
 ---------------------------------------------------------------------------
 function RightPanel:RequestUpdate(reason)
-  if not IsRefactorEnabled() then return false end
   local state = EnsureState(self)
   if not state.created then self:Create() end
 
@@ -1654,22 +1715,14 @@ function RightPanel:RequestUpdate(reason)
   local function doUpdate()
     self:UpdateRightPanel()
   end
-  local function runLocked()
-    local guards = CS and CS.Guards or nil
-    if guards and guards.WithLock then
-      guards:WithLock("right_panel_update_lock", doUpdate)
-    else
-      doUpdate()
-    end
-  end
 
   local guards = CS and CS.Guards or nil
   if guards and guards.Throttle then
-    guards:Throttle("right_panel_update", THROTTLE_INTERVAL, runLocked)
+    guards:Throttle("right_panel_update", THROTTLE_INTERVAL, doUpdate)
   elseif C_Timer and C_Timer.After then
-    C_Timer.After(0, runLocked)
+    C_Timer.After(0, doUpdate)
   else
-    runLocked()
+    doUpdate()
   end
   return true
 end
@@ -1677,8 +1730,7 @@ end
 ---------------------------------------------------------------------------
 -- CharacterFrame integration
 ---------------------------------------------------------------------------
--- Called by Coordinator's consolidated CharacterFrame OnShow hook.
-function RightPanel:_OnCharacterFrameShow(reason)
+function RightPanel:OnShow(reason)
   local state = EnsureState(self)
   self:Create()
   if ApplyPreferredVisibility(state) then
@@ -1690,35 +1742,12 @@ function RightPanel:_OnCharacterFrameShow(reason)
   end
 end
 
--- Called by Coordinator's consolidated CharacterFrame OnHide hook.
-function RightPanel:_OnCharacterFrameHide()
+function RightPanel:OnHide()
   local state = EnsureState(self)
   if state.root then state.root:Hide() end
   self:_StopTicker()
 end
 
-function RightPanel:_EnsureHooks()
-  local state = EnsureState(self)
-  if state.hooksInstalled then return end
-  state.hooksInstalled = true
-end
-
--- Called by Layout's consolidated ToggleCharacter hook.
-function RightPanel:_OnToggleCharacter()
-  if not IsRefactorEnabled() then return end
-  if IsAccountTransferBuild() and IsNativeCurrencyMode() then return end
-  self:Create()
-  if CharacterFrame and CharacterFrame:IsShown() then
-    local state = EnsureState(self)
-    if ApplyPreferredVisibility(state) then
-      self:RequestUpdate("ToggleCharacter")
-      self:_StartTicker()
-    else
-      self:MarkDirty("ToggleCharacter.hidden")
-      self:_StopTicker()
-    end
-  end
-end
 
 function RightPanel:_EnsureEventFrame()
   local state = EnsureState(self)
@@ -1734,7 +1763,6 @@ function RightPanel:_EnsureEventFrame()
   state.eventFrame:RegisterEvent("WEEKLY_REWARDS_ITEM_CHANGED")
   state.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
   state.eventFrame:SetScript("OnEvent", function(_, event)
-    if not IsRefactorEnabled() then return end
     if event == "CHALLENGE_MODE_COMPLETED" and C_MythicPlus and C_MythicPlus.RequestMapInfo then
       pcall(C_MythicPlus.RequestMapInfo)
     end
@@ -1757,52 +1785,15 @@ end
 ---------------------------------------------------------------------------
 -- Coordinator integration
 ---------------------------------------------------------------------------
-function RightPanel:_HandleCoordinatorRightPanelFlush(reason)
-  local state = EnsureState(self)
-  if not IsRefactorEnabled() then
-    if state.root then state.root:Hide() end
-    self:_StopTicker()
-    return
-  end
-  if IsNativeCurrencyMode() then
-    if state.root then state.root:Hide() end
-    self:_StopTicker()
-    return
-  end
-
-  self:_EnsureHooks()
-  self:_EnsureEventFrame()
-  self:Create()
-
-  if CharacterFrame and CharacterFrame:IsShown() then
-    if ApplyPreferredVisibility(state) then
-      self:RequestUpdate(reason or "coordinator.rightpanel")
-      self:_StartTicker()
-    else
-      self:MarkDirty(reason or "coordinator.rightpanel.hidden")
-      self:_StopTicker()
-    end
-  else
-    self:MarkDirty(reason or "coordinator.rightpanel.hidden")
-    if state.root then state.root:Hide() end
-    self:_StopTicker()
-  end
-end
-
 function RightPanel:Update(reason)
+  if InCombatLockdown and InCombatLockdown() then return false end
   local state = EnsureState(self)
-  if not IsRefactorEnabled() then
-    if state.root then state.root:Hide() end
-    self:_StopTicker()
-    return false
-  end
   if IsNativeCurrencyMode() then
     if state.root then state.root:Hide() end
     self:_StopTicker()
     return false
   end
 
-  self:_EnsureHooks()
   self:_EnsureEventFrame()
   self:Create()
 
@@ -1841,9 +1832,3 @@ end
 ---------------------------------------------------------------------------
 -- Register coordinator flush handler
 ---------------------------------------------------------------------------
-local coordinator = CS and CS.Coordinator or nil
-if coordinator and coordinator.SetFlushHandler then
-  coordinator:SetFlushHandler("rightpanel", function(_, reason)
-    RightPanel:_HandleCoordinatorRightPanelFlush(reason)
-  end)
-end

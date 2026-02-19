@@ -19,7 +19,6 @@ GearDisplay._state = GearDisplay._state or {
   rightRows = nil,
   eventFrame = nil,
   hooksInstalled = false,
-  characterHookInstalled = false,
   specResyncToken = 0,
   lootResyncToken = 0,
   counters = {
@@ -37,20 +36,9 @@ local function EnsureSkin()
   return Skin ~= nil
 end
 
-local function IsRefactorEnabled()
-  return CS and CS.IsRefactorEnabled and CS:IsRefactorEnabled()
-end
-
-local function IsAccountTransferBuild()
-  return C_CurrencyInfo and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
-end
-
 local function IsNativeCurrencyMode()
-  local layoutState = CS and CS.Layout and CS.Layout._state or nil
-  if not layoutState then
-    return false
-  end
-  return layoutState.nativeCurrencyMode == true and layoutState.activePane == "currency"
+  local pm = CS and CS.PaneManager or nil
+  return pm ~= nil and pm:IsNativeCurrencyMode()
 end
 
 local function EnsureState(self)
@@ -96,8 +84,8 @@ local function ApplyPendingClickStyle(btn)
 end
 
 local function ResolveParent()
-  local layoutState = CS and CS.Layout and CS.Layout._state or nil
-  local panels = layoutState and layoutState.panels or nil
+  local fState = CS and CS.FrameFactory and CS.FrameFactory._state or nil
+  local panels = fState and fState.panels or nil
   if panels and panels.left then return panels.left end
   return CharacterFrame
 end
@@ -435,7 +423,6 @@ end
 -- Create / Layout
 ---------------------------------------------------------------------------
 function GearDisplay:Create(parent)
-  if not IsRefactorEnabled() then return nil end
   if not EnsureSkin() then return nil end
 
   local state = EnsureState(self)
@@ -474,7 +461,7 @@ function GearDisplay:Create(parent)
   -- Specialization + Loot Specialization panel (bottom of CharacterFrame, above tab bar)
   local charFrame = CharacterFrame
   if charFrame then
-    state.specPanel = CreateFrame("Frame", nil, charFrame)
+    state.specPanel = CreateFrame("Frame", nil, CS._characterOverlay or charFrame)
     state.specPanel:SetPoint("BOTTOMLEFT", charFrame, "BOTTOMLEFT", 36, 8)
     state.specPanel:SetSize(376, 46)
     state.specPanel:EnableMouse(true)
@@ -609,7 +596,6 @@ end
 -- Update all gear rows
 ---------------------------------------------------------------------------
 function GearDisplay:UpdateGear()
-  if not IsRefactorEnabled() then return false end
   if not EnsureSkin() then return false end
 
   local state = EnsureState(self)
@@ -638,8 +624,8 @@ function GearDisplay:UpdateGear()
   end
 
   -- Only show gear display on the character (paperdoll) pane
-  local layoutState = CS and CS.Layout and CS.Layout._state or nil
-  local activePane = layoutState and layoutState.activePane or "character"
+  local pm = CS and CS.PaneManager or nil
+  local activePane = pm and pm:GetActivePane() or "character"
   if activePane == "character" and CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() then
     root:Show()
   else
@@ -775,8 +761,6 @@ end
 -- Request throttled update
 ---------------------------------------------------------------------------
 function GearDisplay:RequestUpdate(reason)
-  if not IsRefactorEnabled() then return false end
-
   local state = EnsureState(self)
   state.counters.updateRequests = (state.counters.updateRequests or 0) + 1
 
@@ -798,37 +782,18 @@ end
 ---------------------------------------------------------------------------
 -- Hooks
 ---------------------------------------------------------------------------
--- Called by Coordinator's consolidated CharacterFrame OnShow hook.
-function GearDisplay:_OnCharacterFrameShow(reason)
+function GearDisplay:OnShow(reason)
   local state = EnsureState(self)
   self:Create(ResolveParent())
-  local ls = CS and CS.Layout and CS.Layout._state or nil
-  local pane = ls and ls.activePane or "character"
+  local pm = CS and CS.PaneManager or nil
+  local pane = pm and pm:GetActivePane() or "character"
   if pane == "character" and state.root then state.root:Show() end
   self:RequestUpdate(reason or "CharacterFrame.OnShow")
 end
 
--- Called by Coordinator's consolidated CharacterFrame OnHide hook.
-function GearDisplay:_OnCharacterFrameHide()
+function GearDisplay:OnHide()
   local state = EnsureState(self)
   if state.root then state.root:Hide() end
-end
-
-function GearDisplay:_EnsureHooks()
-  local state = EnsureState(self)
-  if state.hooksInstalled then return end
-  state.hooksInstalled = true
-end
-
--- Called by Layout's consolidated ToggleCharacter hook.
-function GearDisplay:_OnToggleCharacter()
-  if not IsRefactorEnabled() then return end
-  if IsAccountTransferBuild() and IsNativeCurrencyMode() then return end
-  local parent = ResolveParent()
-  if parent then self:Create(parent) end
-  if CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() then
-    self:RequestUpdate("ToggleCharacter")
-  end
 end
 
 function GearDisplay:_EnsureEventFrame()
@@ -849,7 +814,6 @@ function GearDisplay:_EnsureEventFrame()
     state.eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
   end
   state.eventFrame:SetScript("OnEvent", function(_, event, unit)
-    if not IsRefactorEnabled() then return end
     if event == "UNIT_INVENTORY_CHANGED" and unit and unit ~= "player" then return end
     if event == "PLAYER_SPECIALIZATION_CHANGED" then
       if unit and unit ~= "player" then return end
@@ -871,42 +835,14 @@ function GearDisplay:_EnsureEventFrame()
   end)
 end
 
-function GearDisplay:_HandleCoordinatorGearFlush(reason)
-  local state = EnsureState(self)
-  if not IsRefactorEnabled() then
-    if state.root then state.root:Hide() end
-    if state.specPanel then state.specPanel:Hide() end
-    return
-  end
-  if IsNativeCurrencyMode() then
-    if state.root then state.root:Hide() end
-    if state.specPanel then state.specPanel:Hide() end
-    return
-  end
-
-  self:_EnsureHooks()
-  self:_EnsureEventFrame()
-
-  local parent = ResolveParent()
-  if not parent then return end
-  self:Create(parent)
-  self:RequestUpdate(reason or "coordinator.gear")
-end
-
 function GearDisplay:Update(reason)
   local state = EnsureState(self)
-  if not IsRefactorEnabled() then
-    if state.root then state.root:Hide() end
-    if state.specPanel then state.specPanel:Hide() end
-    return false
-  end
   if IsNativeCurrencyMode() then
     if state.root then state.root:Hide() end
     if state.specPanel then state.specPanel:Hide() end
     return false
   end
 
-  self:_EnsureHooks()
   self:_EnsureEventFrame()
 
   local parent = ResolveParent()
@@ -924,9 +860,3 @@ function GearDisplay:GetDebugCounters()
   }
 end
 
-local coordinator = CS and CS.Coordinator or nil
-if coordinator and coordinator.SetFlushHandler then
-  coordinator:SetFlushHandler("gear", function(_, reason)
-    GearDisplay:_HandleCoordinatorGearFlush(reason)
-  end)
-end

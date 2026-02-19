@@ -3,7 +3,7 @@
 :sparkles: A curated World of Warcraft UI focused on clean gameplay UX, practical QoL modules, and battle-tested nameplate behavior.
 
 ![WoW Interface](https://img.shields.io/badge/WoW-12.0.1-1f6feb?style=for-the-badge)
-![HaraUI](https://img.shields.io/badge/HaraUI-2.1.1--alpha-f97316?style=for-the-badge)
+![HaraUI](https://img.shields.io/badge/HaraUI-2.2.0-f97316?style=for-the-badge)
 
 ## :school_satchel: Overview
 
@@ -13,7 +13,7 @@
 
 | Addon | Version | Interface | Author | Purpose |
 |-------|---------|-----------|--------|---------|
-| HaraUI | 2.1.1-alpha | 120001 | Harath | Modular UI/QoL suite |
+| HaraUI | 2.2.0 | 120001 | Harath | Modular UI/QoL suite |
 
 ## :jigsaw: Current Feature Set
 
@@ -71,6 +71,15 @@ World of Warcraft/_retail_/Interface/AddOns/
 3. Run `/reload` in-game.
 
 ## :spiral_notepad: Changelog (Recent)
+
+### v2.2.0 - 2026-02-19
+- **Refactored:** Complete CharacterSheet 8-phase rewrite — Coordinator state machine, FrameFactory extraction, CurrencyLayout extraction, PaneManager, sub-module lifecycle (OnShow/OnHide), dead code removal.
+- **Removed:** Layout.lua deleted; layout logic consolidated into FrameFactory and PaneManager.
+- **Added:** Dungeon Portal Panel with expansion-grouped spell list, right-click grid assignment, and quick-access 4x2 portal grid.
+- **Added:** Great Vault card restyle with Blizzard atlas lock icon, animated glow/swirl/sparkle effects, and reward tooltip on hover.
+- **Fixed:** Equipped item level display now updates reliably via Core event routing (PLAYER_EQUIPMENT_CHANGED, PLAYER_AVG_ITEM_LEVEL_UPDATE) and multi-retry recheck.
+- **Fixed:** Portal list and quick-access grid secure casting now uses dedicated castBtn overlay matching M+ panel pattern.
+- **Changed:** Stat panel row heights tuned to 18px with tighter section gaps for consistent alignment.
 
 ### v2.1.1-alpha - 2026-02-18
 - **Fixed:** Resolve "Primary" stat label bug when SPEC_STAT_STRINGS is unavailable.

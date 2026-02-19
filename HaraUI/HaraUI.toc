@@ -4,6 +4,7 @@
 ## Author: Harath
 ## Version: @project-version@
 ## SavedVariables: HaraUI_DB
+## IconTexture: Interface\AddOns\HaraUI\Media\mmicon
 ## OptionalDeps: LibSharedMedia-3.0, LibDataBroker-1.1, LibDBIcon-1.0
 
 Libs/LibStub/LibStub.lua
@@ -40,12 +41,16 @@ Modules/XPBar.lua
 Modules/CastBar.lua
 Modules/CharacterSheet/Core.lua
 Modules/CharacterSheet/Coordinator.lua
-Modules/CharacterSheet/Layout.lua
+Modules/CharacterSheet/FrameFactory.lua
+Modules/CharacterSheet/CurrencyLayout.lua
+Modules/CharacterSheet/PaneManager.lua
 Modules/CharacterSheet/Data.lua
 Modules/CharacterSheet/Skin.lua
 Modules/CharacterSheet/RightPanel.lua
+Modules/CharacterSheet/PortalPanel.lua
 Modules/CharacterSheet/GearDisplay.lua
 Modules/CharacterSheet/StatsPanel.lua
+Modules/CharacterSheet/CombatPanel.lua
 Modules/CharacterSheet/Guards.lua
 Modules/CharacterSheet.lua
 Modules/TrackedBars.lua

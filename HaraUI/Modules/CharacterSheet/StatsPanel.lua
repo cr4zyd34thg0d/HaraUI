@@ -55,7 +55,6 @@ StatsPanel._state = StatsPanel._state or {
   -- hooks/events
   eventFrame = nil,
   hooksInstalled = false,
-  characterHookInstalled = false,
   counters = {
     creates = 0,
     updateRequests = 0,
@@ -72,20 +71,9 @@ local function EnsureSkin()
   return Skin ~= nil
 end
 
-local function IsRefactorEnabled()
-  return CS and CS.IsRefactorEnabled and CS:IsRefactorEnabled()
-end
-
-local function IsAccountTransferBuild()
-  return C_CurrencyInfo and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
-end
-
 local function IsNativeCurrencyMode()
-  local layoutState = CS and CS.Layout and CS.Layout._state or nil
-  if not layoutState then
-    return false
-  end
-  return layoutState.nativeCurrencyMode == true and layoutState.activePane == "currency"
+  local pm = CS and CS.PaneManager or nil
+  return pm ~= nil and pm:IsNativeCurrencyMode()
 end
 
 local function EnsureState(self)
@@ -111,8 +99,8 @@ local function EnsureState(self)
 end
 
 local function ResolveParent()
-  local layoutState = CS and CS.Layout and CS.Layout._state or nil
-  local panels = layoutState and layoutState.panels or nil
+  local fState = CS and CS.FrameFactory and CS.FrameFactory._state or nil
+  local panels = fState and fState.panels or nil
   if panels and panels.rightTop then return panels.rightTop end
   return CharacterFrame
 end
@@ -145,6 +133,21 @@ local function SetRightPanelPreferenceEnabled(enabled)
   local csdb = GetCharSheetDB()
   if type(csdb) == "table" then
     csdb.showRightPanel = enabled and true or false
+  end
+end
+
+local function IsPortalPanelPreferenceEnabled()
+  local csdb = GetCharSheetDB()
+  if type(csdb) ~= "table" then
+    return false
+  end
+  return csdb.showPortalPanel == true
+end
+
+local function SetPortalPanelPreferenceEnabled(enabled)
+  local csdb = GetCharSheetDB()
+  if type(csdb) == "table" then
+    csdb.showPortalPanel = enabled and true or false
   end
 end
 
@@ -522,7 +525,7 @@ local function CreateTopInfo(parent)
   })
   ti:SetBackdropColor(0.02, 0.02, 0.03, 0.75)
   ti:SetBackdropBorderColor(0, 0, 0, 0)
-  ti:SetHeight(66)
+  ti:SetHeight(70)
   ti:EnableMouse(true)
 
   -- Item level (large purple)
@@ -544,7 +547,7 @@ local function CreateTopInfo(parent)
   ti.healthRow = CreateFrame("Frame", nil, ti)
   ti.healthRow:SetPoint("TOPLEFT", ti, "TOPLEFT", 0, -30)
   ti.healthRow:SetPoint("TOPRIGHT", ti, "TOPRIGHT", 0, -30)
-  ti.healthRow:SetHeight(16)
+  ti.healthRow:SetHeight(18)
   ti.healthRow:EnableMouse(true)
   ti.healthRow:SetScript("OnEnter", function(self) StatTooltipBridge.HandleEnter(self) end)
   ti.healthRow:SetScript("OnLeave", function() StatTooltipBridge.HandleLeave() end)
@@ -562,7 +565,7 @@ local function CreateTopInfo(parent)
   ti.powerRow = CreateFrame("Frame", nil, ti)
   ti.powerRow:SetPoint("TOPLEFT", ti.healthRow, "BOTTOMLEFT", 0, -2)
   ti.powerRow:SetPoint("TOPRIGHT", ti.healthRow, "BOTTOMRIGHT", 0, -2)
-  ti.powerRow:SetHeight(16)
+  ti.powerRow:SetHeight(18)
   ti.powerRow:EnableMouse(true)
   ti.powerRow:SetScript("OnEnter", function(self) StatTooltipBridge.HandleEnter(self) end)
   ti.powerRow:SetScript("OnLeave", function() StatTooltipBridge.HandleLeave() end)
@@ -664,6 +667,8 @@ local function GetTopSidebarIconData(index)
     return "Interface\\Icons\\INV_Chest_Plate12", 0.08, 0.92, 0.08, 0.92
   elseif index == 4 then
     return "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up", 0.0, 1.0, 0.0, 1.0
+  elseif index == 5 then
+    return "Interface\\Icons\\Spell_Arcane_PortalDalaran", 0.08, 0.92, 0.08, 0.92
   end
   return "Interface\\Icons\\INV_Misc_QuestionMark", 0.08, 0.92, 0.08, 0.92
 end
@@ -675,6 +680,7 @@ local SIDEBAR_TOOLTIPS = {
   [2] = "Titles",
   [3] = "Equipment Manager",
   [4] = "Toggle Mythic+ Panel",
+  [5] = "Toggle Dungeon Portals",
 }
 
 local function CreateSidebarButton(parent, index)
@@ -726,6 +732,16 @@ local function UpdateSidebarVisuals(state)
         local prefEnabled = IsRightPanelPreferenceEnabled()
         local shown = prefEnabled and (not rpRoot or (rpRoot.IsShown and rpRoot:IsShown()))
         if shown then
+          btn:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
+        else
+          btn:SetBackdropBorderColor(0.90, 0.12, 0.12, 0.95)
+        end
+      elseif i == 5 then
+        -- Portal toggle: red when collapsed, purple when expanded
+        local pp = CS and CS.PortalPanel or nil
+        local ppRoot = pp and pp._state and pp._state.root or nil
+        local ppShown = IsPortalPanelPreferenceEnabled() and (not ppRoot or (ppRoot.IsShown and ppRoot:IsShown()))
+        if ppShown then
           btn:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
         else
           btn:SetBackdropBorderColor(0.90, 0.12, 0.12, 0.95)
@@ -1278,7 +1294,6 @@ end
 -- Create
 ---------------------------------------------------------------------------
 function StatsPanel:Create(parent)
-  if not IsRefactorEnabled() then return nil end
   if not EnsureSkin() then return nil end
 
   local state = EnsureState(self)
@@ -1328,7 +1343,7 @@ function StatsPanel:Create(parent)
       local modeKey = SIDEBAR_MODE_MAP[sidebarIdx]
       if modeKey then
         self:SetMode(modeKey)
-      else
+      elseif sidebarIdx == 4 then
         -- Button 4: toggle M+ panel
         local rp = CS and CS.RightPanel or nil
         local rpRoot = rp and rp._state and rp._state.root or nil
@@ -1345,6 +1360,29 @@ function StatsPanel:Create(parent)
         end
         if nextVisible and rp and rp.RequestUpdate then
           pcall(rp.RequestUpdate, rp, "sidebar_toggle")
+        end
+        -- Re-anchor portal panel when M+ visibility changes
+        local pp = CS and CS.PortalPanel or nil
+        if pp and pp.UpdateAnchoring then
+          pcall(pp.UpdateAnchoring, pp)
+        end
+      elseif sidebarIdx == 5 then
+        -- Button 5: toggle Portal panel
+        local pp = CS and CS.PortalPanel or nil
+        local ppRoot = pp and pp._state and pp._state.root or nil
+        local nextVisible = true
+        if ppRoot then
+          nextVisible = not ppRoot:IsShown()
+          if nextVisible then ppRoot:Show() else ppRoot:Hide() end
+        else
+          nextVisible = not IsPortalPanelPreferenceEnabled()
+        end
+        SetPortalPanelPreferenceEnabled(nextVisible)
+        if pp and pp.UpdateAnchoring then
+          pcall(pp.UpdateAnchoring, pp)
+        end
+        if nextVisible and pp and pp.RequestUpdate then
+          pcall(pp.RequestUpdate, pp, "sidebar_toggle")
         end
       end
       UpdateSidebarVisuals(state)
@@ -1506,7 +1544,6 @@ end
 -- Update: render TopInfo + sections with gradients, or equipment mode
 ---------------------------------------------------------------------------
 function StatsPanel:UpdateStats()
-  if not IsRefactorEnabled() then return false end
   if not EnsureSkin() then return false end
   SuppressBlizzardStatsPane()
 
@@ -1667,8 +1704,8 @@ function StatsPanel:UpdateStats()
   end
 
   -- Only show stats panel on the character (paperdoll) pane
-  local layoutState = CS and CS.Layout and CS.Layout._state or nil
-  local activePane = layoutState and layoutState.activePane or "character"
+  local pm = CS and CS.PaneManager or nil
+  local activePane = pm and pm:GetActivePane() or "character"
   if activePane == "character" and CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() then
     state.root:Show()
   else
@@ -1701,7 +1738,6 @@ end
 -- Request / hooks / events
 ---------------------------------------------------------------------------
 function StatsPanel:RequestUpdate(_reason)
-  if not IsRefactorEnabled() then return false end
   local state = EnsureState(self)
   if not state.created then self:Create(ResolveParent() or state.parent) end
   state.counters.updateRequests = (state.counters.updateRequests or 0) + 1
@@ -1717,38 +1753,21 @@ function StatsPanel:RequestUpdate(_reason)
   return true
 end
 
--- Called by Coordinator's consolidated CharacterFrame OnShow hook.
-function StatsPanel:_OnCharacterFrameShow(reason)
+function StatsPanel:OnShow(reason)
   local state = EnsureState(self)
   self:Create(ResolveParent())
   ApplyRightPanelPreference()
-  local ls = CS and CS.Layout and CS.Layout._state or nil
-  local pane = ls and ls.activePane or "character"
+  local pm = CS and CS.PaneManager or nil
+  local pane = pm and pm:GetActivePane() or "character"
   if pane == "character" and state.root then state.root:Show() end
   self:RequestUpdate(reason or "CharacterFrame.OnShow")
 end
 
--- Called by Coordinator's consolidated CharacterFrame OnHide hook.
-function StatsPanel:_OnCharacterFrameHide()
+function StatsPanel:OnHide()
   local state = EnsureState(self)
   if state.root then state.root:Hide() end
 end
 
-function StatsPanel:_EnsureHooks()
-  local state = EnsureState(self)
-  if state.hooksInstalled then return end
-  state.hooksInstalled = true
-end
-
--- Called by Layout's consolidated ToggleCharacter hook.
-function StatsPanel:_OnToggleCharacter()
-  if not IsRefactorEnabled() then return end
-  if IsAccountTransferBuild() and IsNativeCurrencyMode() then return end
-  self:Create(ResolveParent())
-  if CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() then
-    self:RequestUpdate("ToggleCharacter")
-  end
-end
 
 function StatsPanel:_EnsureEventFrame()
   local state = EnsureState(self)
@@ -1771,44 +1790,42 @@ function StatsPanel:_EnsureEventFrame()
   state.eventFrame:RegisterEvent("PLAYER_TITLE_CHANGED")
   state.eventFrame:RegisterEvent("KNOWN_TITLES_UPDATE")
   state.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+  -- PLAYER_AVG_ITEM_LEVEL_UPDATE fires *after* ilvl recalculation completes;
+  -- PLAYER_EQUIPMENT_CHANGED alone fires too early (stale GetAverageItemLevel).
+  pcall(state.eventFrame.RegisterEvent, state.eventFrame, "PLAYER_AVG_ITEM_LEVEL_UPDATE")
   state.eventFrame:SetScript("OnEvent", function(_, event, unit)
-    if not IsRefactorEnabled() then return end
     if (event == "UNIT_STATS" or event == "UNIT_MAXHEALTH" or event == "UNIT_MAXPOWER") and unit and unit ~= "player" then return end
     if event == "PLAYER_TITLE_CHANGED" or event == "KNOWN_TITLES_UPDATE" then
       RequestTitleResync(self, state, "event:" .. tostring(event))
       return
     end
     self:RequestUpdate("event:" .. tostring(event))
+    -- GetAverageItemLevel may return stale data right after equipment changes;
+    -- schedule multiple follow-up retries until the value actually changes.
+    if (event == "PLAYER_EQUIPMENT_CHANGED" or event == "EQUIPMENT_SWAP_FINISHED" or event == "EQUIPMENT_SETS_CHANGED") then
+      if C_Timer and C_Timer.After and GetAverageItemLevel then
+        local snapOverall, snapEquipped = GetAverageItemLevel()
+        local ILVL_RECHECK_DELAYS = { 0.15, 0.35, 0.6, 1.0, 1.5 }
+        for _, delay in ipairs(ILVL_RECHECK_DELAYS) do
+          C_Timer.After(delay, function()
+            if not GetAverageItemLevel then return end
+            local curOverall, curEquipped = GetAverageItemLevel()
+            if curOverall ~= snapOverall or curEquipped ~= snapEquipped then
+              self:RequestUpdate("ilvl_recheck")
+            end
+          end)
+        end
+      end
+    end
   end)
-end
-
-function StatsPanel:_HandleCoordinatorStatsFlush(reason)
-  local state = EnsureState(self)
-  if not IsRefactorEnabled() then
-    if state.root then state.root:Hide() end
-    return
-  end
-  if IsNativeCurrencyMode() then
-    if state.root then state.root:Hide() end
-    return
-  end
-  self:_EnsureHooks()
-  self:_EnsureEventFrame()
-  self:Create(ResolveParent())
-  self:RequestUpdate(reason or "coordinator.stats")
 end
 
 function StatsPanel:Update(reason)
   local state = EnsureState(self)
-  if not IsRefactorEnabled() then
-    if state.root then state.root:Hide() end
-    return false
-  end
   if IsNativeCurrencyMode() then
     if state.root then state.root:Hide() end
     return false
   end
-  self:_EnsureHooks()
   self:_EnsureEventFrame()
   self:Create(ResolveParent())
   return self:RequestUpdate(reason or "coordinator.stats")
@@ -1825,9 +1842,3 @@ function StatsPanel:GetDebugCounters()
   }
 end
 
-local coordinator = CS and CS.Coordinator or nil
-if coordinator and coordinator.SetFlushHandler then
-  coordinator:SetFlushHandler("stats", function(_, reason)
-    StatsPanel:_HandleCoordinatorStatsFlush(reason)
-  end)
-end

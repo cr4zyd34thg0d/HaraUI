@@ -20,10 +20,10 @@ Skin.CFG = {
 	GEAR_ROW_HEIGHT = 46,
 	ENCHANT_QUALITY_MARKUP_SIZE = 18,
 
-	STAT_ROW_HEIGHT = 16,
+	STAT_ROW_HEIGHT = 18,
 	STAT_ROW_GAP = 2,
-	STAT_SECTION_GAP = 7,
-	STAT_SECTION_BOTTOM_PAD = 2,
+	STAT_SECTION_GAP = 4,
+	STAT_SECTION_BOTTOM_PAD = 1,
 	STAT_GRADIENT_SPLIT = 0.82,
 	STAT_TOPINFO_GRADIENT_SPLIT = 0.86,
 	STAT_BODY_GRADIENT_SPLIT = 0.90,
@@ -36,7 +36,7 @@ Skin.CFG = {
 	BASE_FRAME_WIDTH = 820,
 	FRAME_EXPAND_FACTOR = 1.15,
 
-	-- Slot layout constants (from Legacy ApplyChonkySlotLayout)
+	-- Slot layout constants (from Legacy ApplyHaraSlotLayout)
 	SLOT_VPAD = 24,
 	SLOT_TOP_Y = -64,
 	-- Unified cluster controls
@@ -69,7 +69,7 @@ Skin.CFG = {
 	STATS_MODE_BUTTON_WIDTH = 86,
 	STATS_MODE_BUTTON_HEIGHT = 30,
 	STATS_MODE_BUTTON_GAP = 6,
-	STATS_SIDEBAR_BUTTON_COUNT = 4,
+	STATS_SIDEBAR_BUTTON_COUNT = 5,
 	STATS_SIDEBAR_BUTTON_SIZE = 34,
 	STATS_SIDEBAR_BUTTON_GAP = 4,
 
@@ -204,6 +204,8 @@ local _slotSkins = {}
 local _tooltipCache = {}
 local _gemIconCache = {}
 local _nativeTabSkins = setmetatable({}, { __mode = "k" })
+local _blizzardChromeHidden = false
+local _slotButtonsSkinned   = false
 
 ---------------------------------------------------------------------------
 -- Gradient helpers (WoW API compat: Classic vs Retail)
@@ -387,6 +389,7 @@ local function GetSidebarTabButton(index)
 end
 
 function Skin.HideBlizzardChrome()
+	if _blizzardChromeHidden then return end
 	local cf = _G.CharacterFrame
 	if not cf then
 		return
@@ -616,9 +619,12 @@ function Skin.HideBlizzardChrome()
 	---------------------------------------------------------------------------
 	HideFrameTextureRegions(cf)
 	HideFrameTextureRegions(_G.PaperDollFrame)
+	_blizzardChromeHidden = true
 end
 
 function Skin.RestoreBlizzardChrome()
+	_blizzardChromeHidden = false
+	_slotButtonsSkinned   = false
 	for region, state in pairs(_hiddenRegions) do
 		if region then
 			if region.SetAlpha and state.alpha ~= nil then
@@ -845,9 +851,6 @@ local function RefreshCharacterTabSkin(tab)
 end
 
 function Skin.ApplyNativeBottomTabSkin()
-	if not IsAccountTransferBuild() then
-		return
-	end
 	for i = 1, 3 do
 		local tab = _G and _G[("CharacterFrameTab%d"):format(i)] or nil
 		if tab then
@@ -890,6 +893,7 @@ local function EnsureSlotSkin(slotButton)
 end
 
 function Skin.SkinAllSlotButtons()
+	if _slotButtonsSkinned then return end
 	for _, name in ipairs(CFG.CHARACTER_SLOT_BUTTON_NAMES) do
 		local btn = _G[name]
 		if btn then
@@ -974,12 +978,16 @@ function Skin.SkinAllSlotButtons()
 			end
 		end
 	end
+	_slotButtonsSkinned = true
 end
 
 ---------------------------------------------------------------------------
--- Slot positioning (ported from Legacy ApplyChonkySlotLayout)
+-- Slot positioning (ported from Legacy ApplyHaraSlotLayout)
 ---------------------------------------------------------------------------
-function Skin.ApplyChonkySlotLayout()
+function Skin.ApplyHaraSlotLayout()
+	-- During combat, CombatPanel owns slot positioning via _ApplyCombatSlotLayout.
+	-- Skip normal layout so the slot enforcer doesn't overwrite combat positions.
+	if InCombatLockdown and InCombatLockdown() then return end
 	local anchor = CharacterFrame
 	if not anchor then
 		return
@@ -1078,55 +1086,41 @@ function Skin.ApplyChonkySlotLayout()
 end
 
 ---------------------------------------------------------------------------
--- Model layout (ported from Legacy ApplyChonkyModelLayout)
+-- Model layout (ported from Legacy ApplyHaraModelLayout)
 ---------------------------------------------------------------------------
+-- Gradient frame is now created by FrameFactory. These functions just
+-- resolve and show/hide it.  The local cache avoids repeated table lookups.
 local _modelFillFrame = nil
 
 local function EnsureModelFillFrame()
 	if _modelFillFrame then
 		return _modelFillFrame
 	end
-	local cf = CharacterFrame
-	if not cf then
-		return nil
-	end
-
-	_modelFillFrame = CreateFrame("Frame", nil, cf)
-	_modelFillFrame:SetFrameStrata(cf:GetFrameStrata() or "HIGH")
-	_modelFillFrame:SetFrameLevel((cf:GetFrameLevel() or 1) + 2)
-
-	_modelFillFrame.base = _modelFillFrame:CreateTexture(nil, "BACKGROUND")
-	_modelFillFrame.base:SetAllPoints()
-	_modelFillFrame.base:SetColorTexture(0, 0, 0, 0.0)
-
-	_modelFillFrame.overlay = _modelFillFrame:CreateTexture(nil, "BORDER")
-	_modelFillFrame.overlay:SetAllPoints()
-	_modelFillFrame.overlay:SetTexture("Interface\\Buttons\\WHITE8x8")
-	-- Purple at top -> black at bottom
-	Skin.SetVerticalGradient(_modelFillFrame.overlay, 0.08, 0.02, 0.12, 0.90, 0, 0, 0, 0.90)
-
-	_modelFillFrame:Hide()
+	local factory = CS and CS.FrameFactory or nil
+	local fState = factory and factory._state or nil
+	_modelFillFrame = fState and fState.gradient or nil
 	return _modelFillFrame
 end
 
 function Skin.ApplyCharacterPanelGradient()
 	local fill = EnsureModelFillFrame()
-	if not fill then
-		return
+	if fill and fill.Show then
+		fill:Show()
 	end
-	fill:ClearAllPoints()
-	fill:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 2, -2)
-	fill:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -2, 2)
-	fill:Show()
 end
 
 function Skin.HideCharacterPanelGradient()
-	if _modelFillFrame then
-		_modelFillFrame:Hide()
+	local fill = EnsureModelFillFrame()
+	if fill and fill.Hide then
+		fill:Hide()
 	end
 end
 
-function Skin.ApplyChonkyModelLayout()
+function Skin.ApplyHaraModelLayout()
+	-- CharacterModelScene is a protected frame. Position, mouse-config, and
+	-- SetScript calls on it are all blocked during combat lockdown.
+	-- PLAYER_REGEN_ENABLED triggers a full layout re-run after combat ends.
+	if InCombatLockdown and InCombatLockdown() then return end
 	local model = _G.CharacterModelScene
 	if not model then
 		return
@@ -1218,6 +1212,7 @@ local _slotEnforcer = nil
 local _slotEnforceUntil = 0
 
 function Skin.StartSlotEnforcer()
+	if InCombatLockdown and InCombatLockdown() then return end
 	if not _slotEnforcer then
 		_slotEnforcer = CreateFrame("Frame")
 		_slotEnforcer:Hide()
@@ -1226,7 +1221,7 @@ function Skin.StartSlotEnforcer()
 				self:Hide()
 				return
 			end
-			Skin.ApplyChonkySlotLayout()
+			Skin.ApplyHaraSlotLayout()
 		end)
 	end
 	_slotEnforceUntil = GetTime() + 1.5
@@ -1890,7 +1885,7 @@ function Skin.ApplyCustomHeader(forcedTitleID)
 
 	-- Ensure high-level header frame so text appears above the root overlay
 	if not _polishState.headerFrame then
-		_polishState.headerFrame = CreateFrame("Frame", nil, CharacterFrame)
+		_polishState.headerFrame = CreateFrame("Frame", nil, CS._characterOverlay or CharacterFrame)
 		_polishState.headerFrame:SetAllPoints(CharacterFrame)
 		_polishState.headerFrame:SetFrameStrata("HIGH")
 		_polishState.headerFrame:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 40)
@@ -1961,6 +1956,14 @@ function Skin.ApplyCustomHeader(forcedTitleID)
 			blizLevel:Hide()
 		end
 	end
+end
+
+-- Shift header to frame center (combat view) or back to normal offset.
+function Skin.SetHeaderCentered(centered)
+	if not _polishState.customNameText then return end
+	local xOff = centered and 0 or HEADER_TEXT_X_OFFSET
+	_polishState.customNameText:ClearAllPoints()
+	_polishState.customNameText:SetPoint("TOP", CharacterFrame, "TOP", xOff, -8)
 end
 
 function Skin.HideCustomHeader()

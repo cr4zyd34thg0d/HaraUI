@@ -5,9 +5,19 @@ if not CS then return end
 CS.Coordinator = CS.Coordinator or {}
 local Coordinator = CS.Coordinator
 
-Coordinator._handlers = Coordinator._handlers or {}
+local DIRTY_KEYS = { "layout", "data", "stats", "gear", "rightpanel", "portalpanel" }
 
-local DIRTY_KEYS = { "layout", "data", "stats", "gear", "rightpanel" }
+local function IsAccountTransferBuild()
+  return C_CurrencyInfo
+    and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
+    or false
+end
+
+local LIFECYCLE_UNINITIALIZED = "UNINITIALIZED"
+local LIFECYCLE_CREATED       = "CREATED"
+local LIFECYCLE_SHOWN         = "SHOWN"
+local LIFECYCLE_HIDDEN        = "HIDDEN"
+local LIFECYCLE_DESTROYED     = "DESTROYED"
 
 local function NewDirtyMap()
   return {
@@ -16,6 +26,7 @@ local function NewDirtyMap()
     stats = false,
     gear = false,
     rightpanel = false,
+    portalpanel = false,
   }
 end
 
@@ -24,10 +35,11 @@ local function EnsureState(self)
   local s = self._state
   if s.active == nil then s.active = false end
   s.dirty = s.dirty or NewDirtyMap()
-  s.lastReason = s.lastReason
+  s.lastReason = s.lastReason or nil
   if s.flushQueued == nil then s.flushQueued = false end
   if s.flushInProgress == nil then s.flushInProgress = false end
   if s.flushPendingAfterCurrent == nil then s.flushPendingAfterCurrent = false end
+  if s.lifecycleState == nil then s.lifecycleState = LIFECYCLE_UNINITIALIZED end
   for _, key in ipairs(DIRTY_KEYS) do
     if s.dirty[key] == nil then
       s.dirty[key] = false
@@ -76,27 +88,6 @@ local function NormalizeFlags(flags)
   end
 
   return out
-end
-
-function Coordinator:SetFlushHandler(flag, fn)
-  if type(flag) ~= "string" then
-    return false
-  end
-  local isKnown = false
-  for _, key in ipairs(DIRTY_KEYS) do
-    if key == flag then
-      isKnown = true
-      break
-    end
-  end
-  if not isKnown then
-    return false
-  end
-  if fn ~= nil and type(fn) ~= "function" then
-    return false
-  end
-  self._handlers[flag] = fn
-  return true
 end
 
 function Coordinator:_QueueFlush()
@@ -170,8 +161,6 @@ function Coordinator:FlushUpdates()
   state.lastReason = nil
 
   if hadDirty then
-    local handledByCoordinator = NewDirtyMap()
-
     local function MarkAndCall(key, fn, ...)
       if type(fn) ~= "function" then
         return false
@@ -180,7 +169,6 @@ function Coordinator:FlushUpdates()
       if not ok and NS and NS.Debug then
         NS:Debug("CharacterSheet coordinator update error:", key, err)
       end
-      handledByCoordinator[key] = true
       return true
     end
 
@@ -217,14 +205,23 @@ function Coordinator:FlushUpdates()
     -- Deterministic coordinator update order for the refactor runtime:
     -- layout first, then data-driven panels.
     if dirtySnapshot.layout then
-      local layout = CS and CS.Layout or nil
-      if layout and layout._EnsureBootstrapHooks then
-        pcall(layout._EnsureBootstrapHooks, layout)
+      local pm      = CS and CS.PaneManager  or nil
+      local factory = CS and CS.FrameFactory or nil
+      if pm and pm._EnsureBootstrapHooks then
+        pcall(pm._EnsureBootstrapHooks, pm)
       end
-      if layout and layout._HookParent and CharacterFrame then
-        pcall(layout._HookParent, layout, CharacterFrame)
+      if factory and factory._HookParent and CharacterFrame then
+        pcall(factory._HookParent, factory, CharacterFrame)
       end
-      MarkAndCall("layout", layout and layout.Apply, layout, reason, dirtySnapshot)
+      MarkAndCall("layout", factory and factory.Apply, factory, reason, dirtySnapshot)
+      -- If _OnShow fired during combat, pm:OnShow and DispatchOnShow were skipped
+      -- to avoid blocked frame Show/Hide calls (CharacterFrame child frames are
+      -- restricted during combat).  Complete the dispatch now, after layout has
+      -- been applied, once we're no longer in combat.
+      -- NOTE: calls self:_DispatchSubModulesIfPending() (a method) so Lua resolves
+      -- it at runtime — DispatchOnShow is a local defined later in this file and
+      -- cannot be referenced directly from FlushUpdates.
+      self:_DispatchSubModulesIfPending()
     end
 
     if dirtySnapshot.gear then
@@ -254,6 +251,11 @@ function Coordinator:FlushUpdates()
       MarkAndCall("rightpanel", rightPanel and rightPanel.Update, rightPanel, reason, snapshot, dirtySnapshot)
     end
 
+    if dirtySnapshot.portalpanel then
+      local portalPanel = CS and CS.PortalPanel or nil
+      MarkAndCall("portalpanel", portalPanel and portalPanel.Update, portalPanel, reason, dirtySnapshot)
+    end
+
     -- Core event routing emits data-only updates for currency/reputation changes.
     -- Fan those into the right panel so data refreshes are not dropped.
     if dirtySnapshot.data and not dirtySnapshot.rightpanel then
@@ -263,18 +265,6 @@ function Coordinator:FlushUpdates()
       MarkAndCall("data", rightPanel and rightPanel.Update, rightPanel, reason, snapshot, dirtySnapshot)
     end
 
-    -- Backward-compatible fallback for keys without direct coordinator calls.
-    for _, key in ipairs(DIRTY_KEYS) do
-      if dirtySnapshot[key] and not handledByCoordinator[key] then
-        local fn = self._handlers[key]
-        if type(fn) == "function" then
-          local ok, err = pcall(fn, self, reason, dirtySnapshot)
-          if not ok and NS and NS.Debug then
-            NS:Debug("CharacterSheet coordinator handler error:", key, err)
-          end
-        end
-      end
-    end
   end
 
   state.flushInProgress = false
@@ -300,36 +290,96 @@ end
 ---------------------------------------------------------------------------
 -- Consolidated CharacterFrame OnShow / OnHide hook
 ---------------------------------------------------------------------------
-local function IsRefactorEnabled()
-  return CS and CS.IsRefactorEnabled and CS:IsRefactorEnabled()
-end
-
-local function IsAccountTransferBuild()
-  return C_CurrencyInfo and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
-end
-
-local function IsNativeCurrencyMode()
-  local layout = CS and CS.Layout or nil
-  local ls = layout and layout._state or nil
-  return ls and ls.nativeCurrencyMode == true
+local function IsCharacterPaneActive()
+  local pm = CS and CS.PaneManager or nil
+  if not pm then return true end
+  return pm:IsCharacterPaneActive()
 end
 
 local function DispatchOnShow(reason)
+  -- Only show character-pane modules when on the character pane;
+  -- non-character panes (currency, reputation) handle their own visibility.
+  if not IsCharacterPaneActive() then return end
   local gear = CS and CS.GearDisplay or nil
-  if gear and gear._OnCharacterFrameShow then pcall(gear._OnCharacterFrameShow, gear, reason) end
+  if gear and gear.OnShow then pcall(gear.OnShow, gear, reason) end
   local stats = CS and CS.StatsPanel or nil
-  if stats and stats._OnCharacterFrameShow then pcall(stats._OnCharacterFrameShow, stats, reason) end
+  if stats and stats.OnShow then pcall(stats.OnShow, stats, reason) end
   local right = CS and CS.RightPanel or nil
-  if right and right._OnCharacterFrameShow then pcall(right._OnCharacterFrameShow, right, reason) end
+  if right and right.OnShow then pcall(right.OnShow, right, reason) end
+  local portal = CS and CS.PortalPanel or nil
+  if portal and portal.OnShow then pcall(portal.OnShow, portal, reason) end
 end
 
 local function DispatchOnHide()
   local gear = CS and CS.GearDisplay or nil
-  if gear and gear._OnCharacterFrameHide then pcall(gear._OnCharacterFrameHide, gear) end
+  if gear and gear.OnHide then pcall(gear.OnHide, gear) end
   local stats = CS and CS.StatsPanel or nil
-  if stats and stats._OnCharacterFrameHide then pcall(stats._OnCharacterFrameHide, stats) end
+  if stats and stats.OnHide then pcall(stats.OnHide, stats) end
   local right = CS and CS.RightPanel or nil
-  if right and right._OnCharacterFrameHide then pcall(right._OnCharacterFrameHide, right) end
+  if right and right.OnHide then pcall(right.OnHide, right) end
+  local portal = CS and CS.PortalPanel or nil
+  if portal and portal.OnHide then pcall(portal.OnHide, portal) end
+end
+
+-- Called from FlushUpdates after Apply completes.  Defined here (after the
+-- DispatchOnShow local) so it can reference it; FlushUpdates itself is defined
+-- earlier in the file where the local is not yet in scope.
+function Coordinator:_DispatchSubModulesIfPending()
+  local state = EnsureState(self)
+  if not state.pendingSubModuleDispatch then return end
+  if InCombatLockdown and InCombatLockdown() then return end
+  local reason = state.pendingSubModuleDispatch
+  state.pendingSubModuleDispatch = nil
+  local pm = CS and CS.PaneManager or nil
+  if pm and pm.OnShow then pcall(pm.OnShow, pm, reason) end
+  DispatchOnShow(reason)
+end
+
+function Coordinator:_OnShow(reason)
+  local state = EnsureState(self)
+  if not state.active then return end
+  if state.lifecycleState == LIFECYCLE_DESTROYED then return end
+  if state.lifecycleState == LIFECYCLE_SHOWN then return end
+  state.lifecycleState = LIFECYCLE_SHOWN
+  -- During combat, Show/Hide on frames parented to CharacterFrame is blocked.
+  -- Record a pending dispatch flag; FlushUpdates will run pm:OnShow +
+  -- DispatchOnShow after Apply completes once combat ends and
+  -- PLAYER_REGEN_ENABLED triggers a layout update.
+  if InCombatLockdown and InCombatLockdown() then
+    state.pendingSubModuleDispatch = reason or "CharacterFrame.OnShow"
+    -- Show compact combat overlay (UIParent-parented, deferred one tick).
+    local cp = CS and CS.CombatPanel or nil
+    if cp and cp.Show then cp:Show() end
+    return
+  end
+  state.pendingSubModuleDispatch = nil
+  -- PaneManager resolves active pane from current Blizzard frame visibility.
+  local pm = CS and CS.PaneManager or nil
+  if pm and pm.OnShow then
+    pcall(pm.OnShow, pm, reason)
+  end
+  DispatchOnShow(reason)
+end
+
+function Coordinator:_OnHide()
+  local state = EnsureState(self)
+  if state.lifecycleState ~= LIFECYCLE_SHOWN then return end
+  state.lifecycleState = LIFECYCLE_HIDDEN
+  -- Cancel any pending sub-module show dispatch (opened + closed during combat).
+  state.pendingSubModuleDispatch = nil
+  -- Always hide the combat overlay (UIParent-parented, not restricted by lockdown).
+  local cp = CS and CS.CombatPanel or nil
+  if cp and cp.Hide then cp:Hide() end
+  -- During combat, Show/Hide on frames parented to CharacterFrame is blocked.
+  -- Our sub-frames are children of CharacterFrame and auto-hide with it, so
+  -- skipping the explicit Hide calls here is safe.
+  if InCombatLockdown and InCombatLockdown() then return end
+  -- PaneManager resets activePane=nil, clears pending, hides chrome.
+  local pm = CS and CS.PaneManager or nil
+  if pm and pm.OnHide then
+    pcall(pm.OnHide, pm)
+  end
+  DispatchOnHide()
 end
 
 function Coordinator:_EnsureCharacterFrameHooks()
@@ -339,30 +389,67 @@ function Coordinator:_EnsureCharacterFrameHooks()
   state.characterFrameHooked = true
 
   CharacterFrame:HookScript("OnShow", function()
-    if not IsRefactorEnabled() then return end
-    if IsAccountTransferBuild() and C_Timer and C_Timer.After then
-      C_Timer.After(0, function()
-        if not IsRefactorEnabled() then return end
-        if not (CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()) then return end
-        if IsNativeCurrencyMode() then return end
-        DispatchOnShow("CharacterFrame.OnShow.deferred")
-      end)
-      return
+    local factory = CS and CS.FrameFactory or nil
+    if factory and factory.SyncExpandSize then
+      factory.SyncExpandSize()
     end
-    DispatchOnShow("CharacterFrame.OnShow")
+    if IsAccountTransferBuild() then
+      -- Transfer builds: defer by one frame so sub-frame layouts settle.
+      if C_Timer and C_Timer.After then
+        C_Timer.After(0, function()
+          if not (CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()) then return end
+          self:_OnShow("CharacterFrame.OnShow.deferred")
+        end)
+      else
+        self:_OnShow("CharacterFrame.OnShow")
+      end
+    else
+      self:_OnShow("CharacterFrame.OnShow")
+    end
   end)
 
   CharacterFrame:HookScript("OnHide", function()
-    DispatchOnHide()
+    self:_OnHide()
   end)
+
+  -- Hook UpdateSize to directly maintain our expanded width.
+  -- RefreshDisplay calls UpdateSize after every pane switch/show; it sets
+  -- CharacterFrame width from Blizzard's characterFrameDisplayInfo table
+  -- (Default = PANEL_DEFAULT_WIDTH, Rep/Currency = 400).  Our post-hook
+  -- corrects it back to our expanded width.  This fires after the full
+  -- UpdateSize body (including any UpdateUIPanelPositions call inside it),
+  -- so it is the last word on frame width for that call.
+  if CharacterFrame.UpdateSize then
+    hooksecurefunc(CharacterFrame, "UpdateSize", function()
+      if not state.active then return end
+      local factory = CS and CS.FrameFactory or nil
+      local w = factory and factory.EXPANDED_WIDTH or nil
+      if not w then return end
+      -- Defer out of any secure execution chain (ShowUIPanel attribute handler).
+      -- Calling SetWidth from a tainted hook context poisons CharacterFrame
+      -- and causes "Interface action failed because of an AddOn".
+      if C_Timer and C_Timer.After then
+        C_Timer.After(0, function()
+          if not state.active then return end
+          if InCombatLockdown and InCombatLockdown() then return end
+          CharacterFrame:SetWidth(w)
+        end)
+      end
+    end)
+  end
 end
 
 function Coordinator:Apply()
   local state = EnsureState(self)
+  if state.lifecycleState == LIFECYCLE_DESTROYED then return false end
   if CS.State then
     CS.State.activeBackend = "refactor"
   end
   state.active = true
+  if state.lifecycleState == LIFECYCLE_UNINITIALIZED
+  or state.lifecycleState == LIFECYCLE_HIDDEN then
+    state.lifecycleState = LIFECYCLE_CREATED
+  end
   self:_EnsureCharacterFrameHooks()
   local core = CS and CS.Core or nil
   if core and core.OnEnable then
@@ -374,6 +461,7 @@ function Coordinator:Apply()
     stats = true,
     gear = true,
     rightpanel = true,
+    portalpanel = true,
   })
   return true
 end
@@ -389,12 +477,14 @@ function Coordinator:Refresh()
     stats = true,
     gear = true,
     rightpanel = true,
+    portalpanel = true,
   })
   return true
 end
 
 function Coordinator:Disable()
   local state = EnsureState(self)
+  state.lifecycleState = LIFECYCLE_HIDDEN
   state.active = false
   state.lastReason = nil
   state.flushQueued = false
@@ -409,12 +499,17 @@ function Coordinator:Disable()
     pcall(core.OnDisable, core)
   end
 
-  local layout = CS and CS.Layout or nil
-  if layout and layout.RestoreSubFrames then
-    pcall(layout.RestoreSubFrames, layout)
+  local pm = CS and CS.PaneManager or nil
+  if pm and pm.RestoreSubFrames then
+    pcall(pm.RestoreSubFrames, pm)
   end
-  if layout and layout._state and layout._state.root and layout._state.root.Hide then
-    layout._state.root:Hide()
+  local factory = CS and CS.FrameFactory or nil
+  local fState  = factory and factory._state or nil
+  if fState and fState.root and fState.root.Hide then
+    fState.root:Hide()
+  end
+  if fState and fState.characterOverlay and fState.characterOverlay.Hide then
+    fState.characterOverlay:Hide()
   end
 
   local gear = CS and CS.GearDisplay or nil
@@ -435,13 +530,14 @@ function Coordinator:Disable()
     right._state.root:Hide()
   end
 
+  local portal = CS and CS.PortalPanel or nil
+  if portal and portal._state and portal._state.root and portal._state.root.Hide then
+    portal._state.root:Hide()
+  end
+  if portal and portal._state and portal._state.gridRoot and portal._state.gridRoot.Hide then
+    portal._state.gridRoot:Hide()
+  end
+
   return true
 end
 
-function Coordinator:SetLocked(locked)
-  return true
-end
-
-function Coordinator:DebugLayoutSnapshot(_reason)
-  return true
-end

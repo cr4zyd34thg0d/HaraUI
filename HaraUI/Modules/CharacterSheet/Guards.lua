@@ -5,7 +5,6 @@ if not CS then return end
 CS.Guards = CS.Guards or {}
 local Guards = CS.Guards
 
-Guards._locks = Guards._locks or {}
 Guards._debounce = Guards._debounce or {}
 Guards._throttle = Guards._throttle or {}
 
@@ -21,22 +20,6 @@ end
 
 local function CallOrError(fn)
   local ok, r1, r2, r3, r4 = pcall(fn)
-  if not ok then
-    error(r1, 0)
-  end
-  return r1, r2, r3, r4
-end
-
-function Guards:WithLock(key, fn)
-  if key == nil or type(fn) ~= "function" then
-    return
-  end
-  if self._locks[key] then
-    return
-  end
-  self._locks[key] = true
-  local ok, r1, r2, r3, r4 = pcall(fn)
-  self._locks[key] = nil
   if not ok then
     error(r1, 0)
   end
@@ -138,7 +121,6 @@ end
 
 -- Helper for future unit tests; intentionally unused by runtime paths.
 function Guards:_ResetForTests()
-  wipe(self._locks)
   wipe(self._debounce)
   wipe(self._throttle)
 end
