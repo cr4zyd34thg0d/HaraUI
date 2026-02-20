@@ -55,16 +55,9 @@ local PORTAL_ALIASES = {
   ["return to karazhan lower"] = { common = { "return to karazhan", "karazhan" } },
   ["return to karazhan upper"] = { common = { "return to karazhan", "karazhan" } },
 }
-local VAULT_THRESHOLDS = { [1] = { 1, 4, 6 }, [2] = { 2, 4, 8 }, [3] = { 2, 4, 8 } }
-
-local WEEKLY_REWARD_TYPE = {}
-do
-  local t = Enum and Enum.WeeklyRewardChestThresholdType
-  WEEKLY_REWARD_TYPE.Raid = (t and t.Raid) or 1
-  WEEKLY_REWARD_TYPE.Activities = (t and t.Activities) or 2
-  WEEKLY_REWARD_TYPE.World = (t and t.World) or 3
-  WEEKLY_REWARD_TYPE.RankedPvP = (t and t.RankedPvP) or 4
-end
+local _DT = CS.Data and CS.Data.VAULT_THRESHOLDS or {}
+local VAULT_THRESHOLDS = { [1] = _DT.raid or { 1, 4, 6 }, [2] = _DT.dungeon or { 2, 4, 8 }, [3] = _DT.world or { 2, 4, 8 } }
+local WEEKLY_REWARD_TYPE = CS.Data and CS.Data.WEEKLY_REWARD_TYPE or { Raid = 1, Activities = 2, World = 3, RankedPvP = 4 }
 
 ---------------------------------------------------------------------------
 -- State

@@ -362,7 +362,7 @@ FrameFactory.PANE_HEADING_LEVEL_BOOST = PANE_HEADING_LEVEL_BOOST
 ---------------------------------------------------------------------------
 -- Layout constants (moved from Layout.lua, Phase 5)
 ---------------------------------------------------------------------------
-local RETRY_DELAYS            = { 0, 0.05, 0.15, 0.5 }
+local RETRY_DELAYS            = { 0, 0.05, 0.15 }
 local STATS_COLUMN_WIDTH_BONUS = 28
 local RIGHT_PANEL_TOP_RAISE   = 38
 

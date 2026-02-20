@@ -35,32 +35,10 @@ local EVENT_FLAGS = {
   },
 }
 
-local function HasAccountCurrencyTransferSupport()
-  return C_CurrencyInfo
-    and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
-    and type(C_CurrencyInfo.FetchCurrencyDataFromAccountCharacters) == "function"
-end
-
-local function IsFrameShownSafe(frame)
-  if not (frame and frame.IsShown) then
-    return false
-  end
-  local ok, shown = pcall(frame.IsShown, frame)
-  return ok and shown == true
-end
-
 local function IsCurrencyTransferVisible()
-  local candidates = {
-    _G and _G.AccountCurrencyTransferFrame or nil,
-    _G and _G.CurrencyTransferFrame or nil,
-    _G and _G.CurrencyTransferMenu or nil,
-    _G and _G.CurrencyTransferLog or nil,
-    _G and _G.TokenFramePopup or nil,
-  }
-  for _, frame in ipairs(candidates) do
-    if IsFrameShownSafe(frame) then
-      return true
-    end
+  local cl = CS and CS.CurrencyLayout or nil
+  if cl and cl.IsTransferVisible then
+    return cl.IsTransferVisible()
   end
   return false
 end
@@ -162,7 +140,7 @@ function Core:QueueCurrencyRepUpdate(event)
   if not IsRelevantPaneVisibleForEvent(event) then
     return false
   end
-  if HasAccountCurrencyTransferSupport() and IsCurrencyTransferVisible() then
+  if Utils.IsAccountTransferBuild() and IsCurrencyTransferVisible() then
     return false
   end
 
@@ -219,7 +197,7 @@ function Core:EnsurePaneVisibilityHooks()
 
   HookOnShow(CharacterFrame, "character_onshow", "CURRENCY_DISPLAY_UPDATE")
   HookOnShow(_G and _G.ReputationFrame, "reputation_onshow", "UPDATE_FACTION")
-  if not HasAccountCurrencyTransferSupport() then
+  if not Utils.IsAccountTransferBuild() then
     HookOnShow(_G and _G.TokenFrame, "token_onshow", "CURRENCY_DISPLAY_UPDATE")
     HookOnShow(_G and _G.CurrencyFrame, "currency_onshow", "CURRENCY_DISPLAY_UPDATE")
     HookOnShow(_G and _G.CharacterFrameTokenFrame, "character_token_onshow", "CURRENCY_DISPLAY_UPDATE")
@@ -230,7 +208,7 @@ end
 
 -- Called by Layout's consolidated CharacterFrame_ShowSubFrame hook.
 function Core:_OnShowSubFrame(frameName)
-  if HasAccountCurrencyTransferSupport() and IsCurrencyTransferVisible() then
+  if Utils.IsAccountTransferBuild() and IsCurrencyTransferVisible() then
     return
   end
   frameName = tostring(frameName or "")

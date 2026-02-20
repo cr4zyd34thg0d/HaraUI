@@ -868,3 +868,6 @@ function Data:GetVaultSummary()
   }
 end
 
+Data.VAULT_THRESHOLDS = VAULT_THRESHOLDS
+Data.WEEKLY_REWARD_TYPE = WEEKLY_REWARD_TYPE
+
