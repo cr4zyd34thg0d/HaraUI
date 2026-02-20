@@ -3,7 +3,7 @@
 :sparkles: A curated World of Warcraft UI focused on clean gameplay UX, practical QoL modules, and battle-tested nameplate behavior.
 
 ![WoW Interface](https://img.shields.io/badge/WoW-12.0.1-1f6feb?style=for-the-badge)
-![HaraUI](https://img.shields.io/badge/HaraUI-2.2.1--alpha-f97316?style=for-the-badge)
+![HaraUI](https://img.shields.io/badge/HaraUI-2.3.0-f97316?style=for-the-badge)
 
 ## :school_satchel: Overview
 
@@ -13,7 +13,7 @@
 
 | Addon | Version | Interface | Author | Purpose |
 |-------|---------|-----------|--------|---------|
-| HaraUI | 2.2.1-alpha | 120001 | Harath | Modular UI/QoL suite |
+| HaraUI | 2.3.0 | 120001 | Harath | Modular UI/QoL suite |
 
 ## :jigsaw: Current Feature Set
 
@@ -31,6 +31,11 @@
 - :world_map: **Mythic+ and Vault Panel**: integrated dungeon run details and Great Vault progress snapshot.
 - :money_with_wings: **Currency and Reputation Integration**: unified tab behavior and layout polish across Character, Reputation, and Currency views.
 - :art: **Visual Skinning Pass**: consistent borders, textures, and typography across Character Sheet elements.
+
+### :busts_in_silhouette: Alt Tracker
+- :bar_chart: **Alt Overview Panel**: cross-character dashboard showing item level, Mythic+ rating, keystone, Great Vault progress, raid lockouts, and seasonal currencies for every alt.
+- :mag: **Equipment Inspector**: left-click any character row to pop up a gear summary with slot-by-slot item levels.
+- :arrows_counterclockwise: **Auto Weekly Reset**: detects Tuesday reset and clears stale vault/lockout data automatically.
 
 ### :crossed_swords: Combat and Utility
 - :label: **Friendly Player Nameplates**: class-color and font handling for friendly units, tuned for dungeon and raid readability.
@@ -53,9 +58,8 @@
 - `/hui lock` -> toggle Move Mode
 - `/hui xp | cast | loot | summon` -> toggle module quickly
 - `/hui debug` -> toggle debug mode
-- `/hui layoutdebug` -> toggle Character Sheet layout debug mode
-- `/hui layoutsnap` -> print Character Sheet layout snapshot
 - `/hui version` -> show version details
+- `/haralt` -> toggle Alt Tracker panel
 
 ## :rocket: Installation
 
@@ -71,6 +75,13 @@ World of Warcraft/_retail_/Interface/AddOns/
 3. Run `/reload` in-game.
 
 ## :spiral_notepad: Changelog (Recent)
+
+### v2.3.0 - 2026-02-20
+- **Added:** Alt Tracker module — cross-character dashboard with item level, M+ rating, keystones, Great Vault progress, raid lockouts, seasonal currencies, and equipment inspection popup. Toggle with `/haralt`.
+- **Improved:** Cache `IsAccountTransferBuild()` as session-constant; deduplicate shared utilities across CharacterSheet modules.
+- **Improved:** Consolidate `VAULT_THRESHOLDS` and `WEEKLY_REWARD_TYPE` constants into Data.lua (single source of truth).
+- **Improved:** Reduce FrameFactory Apply retry delays from 4 to 3 passes; slot enforcer timing tightened from 1.5s to 0.75s.
+- **Removed:** Dead slash commands (`layoutdebug`, `charsheetdebug`, `layoutsnap`, `charsheetsnap`), orphaned `Minimap.tga`, unused SavedVariables keys, and other dead code paths.
 
 ### v2.2.1-alpha - 2026-02-20
 - **Added:** "None" Codex glyph theme — clean pages and spine with no watermark textures.
