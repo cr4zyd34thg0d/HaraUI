@@ -17,10 +17,14 @@ local Utils = CS.Utils
 ---------------------------------------------------------------------------
 
 --- True when the account-currency-transfer UI is available (11.x+).
+local _isAccountTransferBuild  -- cache (session-constant)
+
 function Utils.IsAccountTransferBuild()
-  return C_CurrencyInfo
-    and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
-    or false
+  if _isAccountTransferBuild == nil then
+    _isAccountTransferBuild = (C_CurrencyInfo
+      and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function") or false
+  end
+  return _isAccountTransferBuild
 end
 
 --- True when frame is shown (non-nil, has IsShown, and IsShown returns true).

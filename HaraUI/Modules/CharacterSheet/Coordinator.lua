@@ -30,7 +30,6 @@ local function EnsureState(self)
   local s = self._state
   if s.active == nil then s.active = false end
   s.dirty = s.dirty or NewDirtyMap()
-  s.lastReason = s.lastReason or nil
   if s.flushQueued == nil then s.flushQueued = false end
   if s.flushInProgress == nil then s.flushInProgress = false end
   if s.flushPendingAfterCurrent == nil then s.flushPendingAfterCurrent = false end
@@ -385,9 +384,6 @@ end
 function Coordinator:Apply()
   local state = EnsureState(self)
   if state.lifecycleState == LIFECYCLE_DESTROYED then return false end
-  if CS.State then
-    CS.State.activeBackend = "refactor"
-  end
   state.active = true
   if state.lifecycleState == LIFECYCLE_UNINITIALIZED
   or state.lifecycleState == LIFECYCLE_HIDDEN then

@@ -4,10 +4,6 @@ NS.CharacterSheet = NS.CharacterSheet or {}
 local CS = NS.CharacterSheet
 local Utils = CS.Utils
 
-CS.State = CS.State or {
-  activeBackend = "refactor",
-}
-
 CS.Core = CS.Core or {}
 local Core = CS.Core
 

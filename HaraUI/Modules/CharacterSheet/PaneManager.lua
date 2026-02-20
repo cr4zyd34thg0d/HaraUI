@@ -256,23 +256,7 @@ end
 ---------------------------------------------------------------------------
 -- Sub-frame layout capture / restore
 ---------------------------------------------------------------------------
-local function CaptureFrameLayout(state, frame)
-  if not (state and frame) then return end
-  if state.originalSubFrameLayout[frame] then return end
-  local points = {}
-  if frame.GetNumPoints and frame.GetPoint then
-    for i = 1, (frame:GetNumPoints() or 0) do
-      local point, rel, relPoint, x, y = frame:GetPoint(i)
-      points[#points + 1] = { point = point, rel = rel, relPoint = relPoint, x = x, y = y }
-    end
-  end
-  state.originalSubFrameLayout[frame] = {
-    parent = frame.GetParent and frame:GetParent() or nil,
-    strata = frame.GetFrameStrata and frame:GetFrameStrata() or nil,
-    level = frame.GetFrameLevel and frame:GetFrameLevel() or nil,
-    points = points,
-  }
-end
+local CaptureFrameLayout = CS.CurrencyLayout.CaptureFrameLayout
 
 local function RestoreCapturedSubFrameLayout(state)
   if not (state and state.originalSubFrameLayout) then return end

@@ -36,8 +36,4 @@ function M:Disable()
   return disabled
 end
 
-function M:SetLocked(locked)
-  return Forward("SetLocked", locked)
-end
-
 NS:RegisterModule("charsheet", M)

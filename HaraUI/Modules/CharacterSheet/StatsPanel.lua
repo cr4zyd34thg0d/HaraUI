@@ -23,6 +23,22 @@ local TITLE_RESYNC_RETRY_DELAYS = { 0, RESYNC_SETTLE_DELAY, 0.35, 0.75 }
 local SIDEBAR_TOP_INSET = 8
 local MODEBAR_TOP_INSET = 6
 
+local PRIMARY_STAT_MAP = {
+  DEATHKNIGHT = { label = "Strength", index = 1 },
+  DEMONHUNTER = { label = "Agility", index = 2 },
+  DRUID       = { label = "Agility", index = 2 },
+  EVOKER      = { label = "Intellect", index = 4 },
+  HUNTER      = { label = "Agility", index = 2 },
+  MAGE        = { label = "Intellect", index = 4 },
+  MONK        = { label = "Agility", index = 2 },
+  PALADIN     = { label = "Strength", index = 1 },
+  PRIEST      = { label = "Intellect", index = 4 },
+  ROGUE       = { label = "Agility", index = 2 },
+  SHAMAN      = { label = "Agility", index = 2 },
+  WARLOCK     = { label = "Intellect", index = 4 },
+  WARRIOR     = { label = "Strength", index = 1 },
+}
+
 StatsPanel._state = StatsPanel._state or {
   parent = nil,
   root = nil,
@@ -391,22 +407,6 @@ local function BuildSectionsData()
     end
   end
   if (primaryLabel == "Primary" or primaryValue == 0) and UnitStat then
-    -- Use class-based primary stat detection instead of picking the highest value
-    local PRIMARY_STAT_MAP = {
-      DEATHKNIGHT = { label = "Strength", index = 1 },
-      DEMONHUNTER = { label = "Agility", index = 2 },
-      DRUID       = { label = "Agility", index = 2 },
-      EVOKER      = { label = "Intellect", index = 4 },
-      HUNTER      = { label = "Agility", index = 2 },
-      MAGE        = { label = "Intellect", index = 4 },
-      MONK        = { label = "Agility", index = 2 },
-      PALADIN     = { label = "Strength", index = 1 },
-      PRIEST      = { label = "Intellect", index = 4 },
-      ROGUE       = { label = "Agility", index = 2 },
-      SHAMAN      = { label = "Agility", index = 2 },
-      WARLOCK     = { label = "Intellect", index = 4 },
-      WARRIOR     = { label = "Strength", index = 1 },
-    }
     local _, classTag = UnitClass("player")
     local classMeta = classTag and PRIMARY_STAT_MAP[classTag]
     if classMeta then
