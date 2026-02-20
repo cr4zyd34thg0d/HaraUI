@@ -1221,7 +1221,7 @@ function Skin.StartSlotEnforcer()
 			Skin.ApplyHaraSlotLayout()
 		end)
 	end
-	_slotEnforceUntil = GetTime() + 1.5
+	_slotEnforceUntil = GetTime() + 0.75
 	_slotEnforcer:Show()
 end
 

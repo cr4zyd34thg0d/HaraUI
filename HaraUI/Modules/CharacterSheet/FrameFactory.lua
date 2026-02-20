@@ -417,6 +417,13 @@ end
 -- Skipped during combat lockdown — CharacterFrame:SetSize() is a protected call
 -- that WoW blocks from addon code during combat.  PLAYER_REGEN_ENABLED will
 -- trigger a layout update that resizes the frame after combat ends.
+--
+-- NOTE: Both SyncExpandSize (here) and ExpandCharacterFrame (below) install
+-- SetSize/SetWidth post-hooks behind the shared _sizeGuardInstalled flag.
+-- SyncExpandSize runs from Coordinator's CharacterFrame:OnShow hook (immediate,
+-- before Apply).  ExpandCharacterFrame runs from Apply (deferred via retries).
+-- Whichever fires first installs the hooks; the other path is a no-op for hooks
+-- but still calls SetSize to enforce the expanded dimensions.
 function FrameFactory.SyncExpandSize()
   if InCombatLockdown and InCombatLockdown() then return end
   local state = FrameFactory._state

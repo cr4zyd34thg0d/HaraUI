@@ -167,8 +167,6 @@ function Core:QueueCurrencyRepUpdate(event)
   local guards = CS and CS.Guards or nil
   if guards and guards.Debounce then
     guards:Debounce(debounceKey, CURRENCY_REP_DEBOUNCE_DELAY, request)
-  elseif C_Timer and C_Timer.After then
-    C_Timer.After(CURRENCY_REP_DEBOUNCE_DELAY, request)
   else
     request()
   end
@@ -195,6 +193,11 @@ function Core:EnsurePaneVisibilityHooks()
     hookMap[key] = true
   end
 
+  -- NOTE: Core installs pane-level OnShow hooks to trigger currency/reputation
+  -- data refreshes when a sub-frame becomes visible (debounced via Guards).
+  -- Coordinator separately hooks CharacterFrame:OnShow (Coordinator.lua:334) to
+  -- drive the lifecycle state machine (SHOWN → pm:OnShow → DispatchOnShow).
+  -- Both hooks coexist: Core's fires data refresh, Coordinator's fires layout.
   HookOnShow(CharacterFrame, "character_onshow", "CURRENCY_DISPLAY_UPDATE")
   HookOnShow(_G and _G.ReputationFrame, "reputation_onshow", "UPDATE_FACTION")
   if not Utils.IsAccountTransferBuild() then

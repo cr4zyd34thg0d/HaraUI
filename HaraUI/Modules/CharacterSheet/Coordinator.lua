@@ -102,11 +102,6 @@ function Coordinator:_QueueFlush()
     return
   end
 
-  if C_Timer and C_Timer.After then
-    C_Timer.After(0, run)
-    return
-  end
-
   run()
 end
 
@@ -287,6 +282,9 @@ function Coordinator:_OnShow(reason)
   -- Record a pending dispatch flag; FlushUpdates will run pm:OnShow +
   -- DispatchOnShow after Apply completes once combat ends and
   -- PLAYER_REGEN_ENABLED triggers a layout update.
+  -- Ordering: CombatPanel:Show runs here (UIParent-parented, safe in combat);
+  -- PaneManager:OnShow + DispatchOnShow are deferred to _DispatchSubModulesIfPending
+  -- in FlushUpdates, which only fires after InCombatLockdown() is false.
   if InCombatLockdown and InCombatLockdown() then
     state.pendingSubModuleDispatch = reason or "CharacterFrame.OnShow"
     -- Show compact combat overlay (UIParent-parented, deferred one tick).
