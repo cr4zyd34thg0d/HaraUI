@@ -26,8 +26,8 @@ local function GetAddonMetadataField(field)
   return nil
 end
 
-local DEV_VERSION = "2.0.2-dev"
-local VERSION_TOKEN = "v2.0.2-alpha.1"
+local DEV_VERSION = "2.2.1-alpha"
+local VERSION_TOKEN = "v2.2.1-alpha"
 
 local function GetVersionString()
   if NS and NS.GetVersionString then
@@ -340,22 +340,6 @@ function NS:InitOptions()
       end
     end
 
-    local BuildGeneralPageCards = Pages.CreateBuildGeneralPageCards(
-      db,
-      ORANGE,
-      MakeCheckbox,
-      NS,
-      function()
-        UpdateNavIndicators()
-      end,
-      ApplyToggleSkin,
-      MakeAccentDivider,
-      MakeButton,
-      MakeColorSwatch,
-      SetThemeColor,
-      Small
-    )
-
     local function MakeModuleHeader(page, key)
       local en = MakeCheckbox(page, "Enable Module", "Enable or disable this module.")
       en:SetPoint("TOPLEFT", 18, -96)
@@ -521,6 +505,22 @@ function NS:InitOptions()
   -- =========================================================
   -- GENERAL PAGE
   -- =========================================================
+    local BuildGeneralPageCards = Pages.CreateBuildGeneralPageCards(
+      db,
+      ORANGE,
+      MakeCheckbox,
+      NS,
+      function() UpdateNavIndicators() end,
+      ApplyToggleSkin,
+      MakeButton,
+      MakeColorSwatch,
+      SetThemeColor,
+      Small,
+      BuildStandardSliderRow,
+      Round2,
+      RegisterTheme,
+      ApplyUIFont
+    )
     Pages.BuildGeneralPage(pages, content, BuildStandardModuleCards, BuildGeneralPageCards)
 
   -- =========================================================
@@ -554,165 +554,126 @@ function NS:InitOptions()
     Pages.BuildMinimapPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
 
   -- =========================================================
-  -- NAVIGATION MENU
+  -- NAVIGATION
   -- =========================================================
-    local navItems = {
-      { key = "general",  label = "General",              media = "General.png" },
-      { key = "xp",       label = "XP / Rep Bar",         media = "XP_Rep_Bar.png" },
-      { key = "cast",     label = "Cast Bar",             media = "Cast_Bar.png" },
-      { key = "friendly", label = "Friendly Nameplates",  media = "Friendly_Nameplates.png" },
-      { key = "rotation", label = "Rotation Helper",      media = "Rotation_Helper.png" },
-      { key = "minimap",  label = "Minimap Bar",          media = "Minimap_Bar.png" },
-      { key = "loot",     label = "Loot Toasts",          media = "Loot_Toasts.png" },
-      { key = nil,        label = "",                     media = nil },
-      { key = nil,        label = "",                     media = nil },
+    local CODEX_TX = "Interface\\AddOns\\HaraUI\\Media\\HaraUI_Codex\\"
+    local NAV_ICON_SZ  = 32   -- icon sigil size
+    local NAV_FRAME_SZ = 40   -- rune frame ring size
+    local NAV_GLOW_SZ  = 48   -- additive glow size
+    local NAV_BTN_SZ   = 40   -- button hit area
+    local NAV_GAP      = 4
+
+    local navDefs = {
+      { key = "general",  label = "General",          icon = "rune_charsheet" },
+      { key = "xp",       label = "XP / Rep Bar",     icon = "rune_xp"        },
+      { key = "cast",     label = "Cast Bar",          icon = "rune_cast"      },
+      { key = "loot",     label = "Loot Toasts",       icon = "rune_loot"      },
+      { key = "minimap",  label = "Minimap Bar",       icon = "rune_minimap"   },
+      { key = "rotation", label = "Rotation Helper",   icon = "rune_rotation"  },
+      { key = "friendly", label = "Friendly Plates",   icon = "rune_plates"    },
     }
 
-    local navKeyToDb = {
-      general = "general",
-      xp = "xpbar",
-      cast = "castbar",
-      friendly = "friendlyplates",
-      rotation = "rotationhelper",
-      minimap = "minimapbar",
-      loot = "loot",
-    }
+    local navRow = CreateFrame("Frame", nil, content)
+    navRow:SetPoint("TOPLEFT", content, "TOPLEFT", 18, -20)
+    navRow:SetHeight(NAV_BTN_SZ)
 
-    local function IsNavEnabled(key)
-      local dbKey = navKeyToDb[key]
-      if not dbKey then return nil end
-      if dbKey == "general" then
-        return db.general and db.general.enabled ~= false
-      end
-      return db[dbKey] and db[dbKey].enabled ~= false
-    end
+    local navBtns = {}
 
-    -- Single-row nav lives in the right content panel, left-aligned.
-    local navGrid = CreateFrame("Frame", nil, content)
-    navGrid:SetPoint("TOPLEFT", content, "TOPLEFT", 18, -26)
-    navGrid:SetPoint("TOPRIGHT", content, "TOPRIGHT", -18, -26)
-    navGrid:SetHeight(44)
-
-    local function ApplyNavButtonState(btn)
-      if not btn or btn._isPlaceholder then return end
-      if btn._huiSelected then
-        btn:SetBackdropColor(0.18, 0.08, 0.24, 0.88)
-        btn:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.95)
-        if btn.selectedGlow then btn.selectedGlow:Show() end
+    local function ApplyNavBtnState(btn, selected)
+      if selected then
+        btn.ring:SetTexture(CODEX_TX .. "rune_frame_active.tga")
+        btn.icon:SetVertexColor(1, 1, 1, 1)
+        btn.glow:Show()
+        btn.glow:SetVertexColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.55)
       else
-        btn:SetBackdropColor(0.06, 0.07, 0.10, 0.82)
-        if btn._huiEnabledState == true then
-          btn:SetBackdropBorderColor(0.20, 0.88, 0.32, 0.90) -- enabled: green border
-        elseif btn._huiEnabledState == false then
-          btn:SetBackdropBorderColor(0.92, 0.22, 0.22, 0.90) -- disabled: red border
-        else
-          btn:SetBackdropBorderColor(0.52, 0.54, 0.60, 0.26)
-        end
-        if btn.selectedGlow then btn.selectedGlow:Hide() end
+        btn.ring:SetTexture(CODEX_TX .. "rune_frame_normal.tga")
+        btn.icon:SetVertexColor(0.60, 0.54, 0.74, 0.70)
+        btn.glow:Hide()
       end
     end
 
     local function SelectNavKey(key)
-      if not key then return end
-      ShowPage(key)
-      for _, btn in ipairs(nav._huiButtons or {}) do
-        btn._huiSelected = (btn._key == key)
-        ApplyNavButtonState(btn)
+      if key then ShowPage(key) end
+      for _, b in ipairs(navBtns) do
+        b._selected = (b._key == key)
+        ApplyNavBtnState(b, b._selected)
       end
     end
 
-    for idx, it in ipairs(navItems) do
+    NS.OptionsPages.NavigateTo = SelectNavKey
+
+    local prevBtn
+    for _, it in ipairs(navDefs) do
       local navKey = it.key
-      local b = CreateFrame("Button", nil, navGrid, "BackdropTemplate")
-      b:SetSize(44, 44)
-      b:SetPoint("LEFT", navGrid, "LEFT", (idx - 1) * 46, 0)
-      b._key = it.key
-      b._isPlaceholder = (it.key == nil)
-      b._label = it.label
-
-      b:SetBackdrop({
-        bgFile = "Interface/Buttons/WHITE8x8",
-        edgeFile = "Interface/Buttons/WHITE8x8",
-        edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-      })
-
-      b.icon = b:CreateTexture(nil, "ARTWORK")
-      b.icon:SetPoint("TOPLEFT", 1, -1)
-      b.icon:SetPoint("BOTTOMRIGHT", -1, 1)
-      if it.media then
-        b.icon:SetTexture("Interface\\AddOns\\HaraUI\\Media\\" .. it.media)
+      local b = CreateFrame("Button", nil, navRow)
+      b:SetSize(NAV_BTN_SZ, NAV_BTN_SZ)
+      if prevBtn then
+        b:SetPoint("LEFT", prevBtn, "RIGHT", NAV_GAP, 0)
       else
-        b.icon:SetTexture("Interface/Buttons/WHITE8x8")
-        b.icon:SetColorTexture(0, 0, 0, 0.18)
+        b:SetPoint("LEFT", navRow, "LEFT", 0, 0)
       end
+      b._key = navKey
 
-      b.selectedGlow = b:CreateTexture(nil, "OVERLAY")
-      b.selectedGlow:SetPoint("TOPLEFT", 1, -1)
-      b.selectedGlow:SetPoint("BOTTOMRIGHT", -1, 1)
-      b.selectedGlow:SetTexture("Interface/Buttons/WHITE8x8")
-      b.selectedGlow:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 0.12)
-      b.selectedGlow:Hide()
+      -- Rune frame ring
+      b.ring = b:CreateTexture(nil, "BACKGROUND")
+      b.ring:SetSize(NAV_FRAME_SZ, NAV_FRAME_SZ)
+      b.ring:SetPoint("CENTER", 0, 0)
 
-      RegisterTheme(function(c)
-        if b.selectedGlow and b.selectedGlow.SetColorTexture then
-          b.selectedGlow:SetColorTexture(c[1], c[2], c[3], 0.12)
+      -- Rune sigil icon
+      b.icon = b:CreateTexture(nil, "ARTWORK")
+      b.icon:SetSize(NAV_ICON_SZ, NAV_ICON_SZ)
+      b.icon:SetPoint("CENTER", 0, 0)
+      b.icon:SetTexture(CODEX_TX .. it.icon .. ".tga")
+
+      -- Additive glow (selected only)
+      b.glow = b:CreateTexture(nil, "OVERLAY")
+      b.glow:SetSize(NAV_GLOW_SZ, NAV_GLOW_SZ)
+      b.glow:SetPoint("CENTER", 0, 0)
+      b.glow:SetTexture(CODEX_TX .. "rune_glow.tga")
+      b.glow:SetBlendMode("ADD")
+      b.glow:Hide()
+
+      ApplyNavBtnState(b, false)
+
+      b:SetScript("OnEnter", function()
+        if not b._selected then
+          b.ring:SetTexture(CODEX_TX .. "rune_frame_hover.tga")
+          b.icon:SetVertexColor(1, 1, 1, 0.90)
         end
-        ApplyNavButtonState(b)
+        if GameTooltip then
+          GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
+          GameTooltip:SetText(it.label, ORANGE[1], ORANGE[2], ORANGE[3])
+          GameTooltip:Show()
+        end
+      end)
+      b:SetScript("OnLeave", function()
+        ApplyNavBtnState(b, b._selected)
+        if GameTooltip then GameTooltip:Hide() end
+      end)
+      b:SetScript("OnClick", function()
+        SelectNavKey(navKey)
       end)
 
-      if b._isPlaceholder then
-        b:SetBackdropColor(0.02, 0.02, 0.03, 0.48)
-        b:SetBackdropBorderColor(0.28, 0.30, 0.36, 0.18)
-        b:Disable()
-      else
-        ApplyNavButtonState(b)
-        b:SetScript("OnEnter", function(self)
-          if not self._huiSelected then
-            self:SetBackdropColor(0.12, 0.09, 0.16, 0.88)
-            self:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.68)
-          end
-          if GameTooltip then
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(self._label, ORANGE[1], ORANGE[2], ORANGE[3])
-            GameTooltip:Show()
-          end
-        end)
-        b:SetScript("OnLeave", function(self)
-          ApplyNavButtonState(self)
-          if GameTooltip then GameTooltip:Hide() end
-        end)
-        b:SetScript("OnClick", function()
-          SelectNavKey(navKey)
-        end)
-      end
+      RegisterTheme(function(c)
+        if b._selected then
+          b.glow:SetVertexColor(c[1], c[2], c[3], 0.55)
+        end
+      end)
 
-      nav._huiButtons = nav._huiButtons or {}
-      table.insert(nav._huiButtons, b)
+      table.insert(navBtns, b)
+      prevBtn = b
     end
 
+    -- Size the navRow to exactly fit the button cluster
+    navRow:SetWidth(#navDefs * NAV_BTN_SZ + (#navDefs - 1) * NAV_GAP)
+
     UpdateNavIndicators = function()
-      if not nav._huiButtons then return end
-      for _, btn in ipairs(nav._huiButtons) do
-        if not btn._isPlaceholder then
-          local enabled = IsNavEnabled(btn._key)
-          btn._huiEnabledState = enabled
-          ApplyNavButtonState(btn)
-        end
-      end
       UpdateVersionIndicator()
     end
 
     UpdateNavIndicators()
 
     SelectNavKey("general")
-
-    RegisterTheme(function(c)
-      if not nav._huiButtons then return end
-      for _, btn in ipairs(nav._huiButtons) do
-        ApplyNavButtonState(btn)
-      end
-    end)
 
     panel.refresh = function()
       if NS.SetFramesLocked then NS:SetFramesLocked(db.general.framesLocked) end

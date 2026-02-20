@@ -27,8 +27,6 @@ function NS.OptionsPages.BuildFriendlyPage(pages, content, MakeModuleHeader, Bui
       return false
     end
 
-    local friendlyEnable = MakeModuleHeader(pages.friendly, "friendlyplates")
-
     if not db.friendlyplates.nameColor then
       db.friendlyplates.nameColor = { r = 1, g = 1, b = 1 }
     end
@@ -44,8 +42,6 @@ function NS.OptionsPages.BuildFriendlyPage(pages, content, MakeModuleHeader, Bui
 
     local cards = BuildStandardModuleCards(pages.friendly)
 
-    NS.OptionsPages.AttachModuleEnableToggle(friendlyEnable, cards.general.content, ApplyToggleSkin)
-
     local function RefreshFriendly()
       if NS.Modules and NS.Modules.friendlyplates and NS.Modules.friendlyplates.Refresh then
         NS.Modules.friendlyplates:Refresh()
@@ -53,7 +49,7 @@ function NS.OptionsPages.BuildFriendlyPage(pages, content, MakeModuleHeader, Bui
     end
 
     local classColor = MakeCheckbox(cards.general.content, "Use Class Color", "Class colors override custom color.")
-    classColor:SetPoint("TOPLEFT", 330, -4)
+    classColor:SetPoint("TOPLEFT", 6, -4)
     classColor:SetChecked(db.friendlyplates.classColor)
     classColor:SetScript("OnClick", function()
       db.friendlyplates.classColor = classColor:GetChecked()

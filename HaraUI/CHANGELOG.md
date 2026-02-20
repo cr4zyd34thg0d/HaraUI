@@ -1,5 +1,14 @@
 # HaraUI
 
+## [v2.2.1-alpha](https://github.com/cr4zyd34thg0d/HaraUI/tree/v2.2.1-alpha) (2026-02-20)
+[Full Changelog](https://github.com/cr4zyd34thg0d/HaraUI/commits/v2.2.1-alpha)
+
+- feat(codex): add "None" glyph theme — clears all watermark textures and resets containers to page size
+- feat(codex): left-click module entry navigates to its settings page; right-click toggles enable/disable
+- feat(codex): add green/red row gradient and bar color per enabled state (green = on, red = off, value = 1)
+- feat(options): replace top nav icon button grid with compact rune icon cluster (40px, frame ring + glow)
+- chore: remove 7 unused nav screenshot PNG media files
+
 ## [v2.1.1-alpha](https://github.com/cr4zyd34thg0d/HaraUI/tree/v2.1.1-alpha) (2026-02-18)
 [Full Changelog](https://github.com/cr4zyd34thg0d/HaraUI/commits/v2.1.1-alpha)
 

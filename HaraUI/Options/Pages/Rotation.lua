@@ -5,8 +5,6 @@ NS.OptionsPages = NS.OptionsPages or {}
 function NS.OptionsPages.BuildRotationPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeButton, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
   pages.rotation = CreateFrame("Frame", nil, content); pages.rotation:SetAllPoints(true)
   do
-    local rotationEnable = MakeModuleHeader(pages.rotation, "rotationhelper")
-
     if not db.rotationhelper then
       db.rotationhelper = {}
     end
@@ -22,15 +20,13 @@ function NS.OptionsPages.BuildRotationPage(pages, content, MakeModuleHeader, Bui
 
     local cards = BuildStandardModuleCards(pages.rotation)
 
-    NS.OptionsPages.AttachModuleEnableToggle(rotationEnable, cards.general.content, ApplyToggleSkin)
-
     local preview = MakeButton(cards.general.content, "Preview", 170, 24)
-    preview:SetPoint("TOPLEFT", 6, -40)
+    preview:SetPoint("TOPLEFT", 6, -4)
     NS.OptionsPages.SetModulePreviewOnClick(preview, "rotationhelper", NS)
 
     local generalDivider = MakeAccentDivider(cards.general.content)
-    generalDivider:SetPoint("TOPLEFT", 0, -84)
-    generalDivider:SetPoint("TOPRIGHT", 0, -84)
+    generalDivider:SetPoint("TOPLEFT", 0, -48)
+    generalDivider:SetPoint("TOPRIGHT", 0, -48)
 
     local scale = BuildStandardSliderRow(
       cards.sizing.content,

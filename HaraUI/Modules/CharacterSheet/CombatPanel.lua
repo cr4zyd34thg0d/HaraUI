@@ -4,6 +4,7 @@ if not CS then return end
 
 CS.CombatPanel = CS.CombatPanel or {}
 local CombatPanel = CS.CombatPanel
+local Utils = CS.Utils
 
 ---------------------------------------------------------------------------
 -- Combat-mode cleanup module.
@@ -37,11 +38,6 @@ CombatPanel._state = CombatPanel._state or {
   tabHookInstalled = false,
   currentPane = "character",
 }
-
-local function GetFactoryState()
-  local factory = CS and CS.FrameFactory or nil
-  return factory and factory._state or nil
-end
 
 local function NormalizePaneName(token)
   local pm = CS and CS.PaneManager or nil
@@ -163,7 +159,7 @@ end
 
 function CombatPanel:_ApplyCombatPaneVisibility()
   local state = self._state
-  local fState = GetFactoryState()
+  local fState = Utils.GetFactoryState()
   if not fState then return end
 
   if state.currentPane == "character" then
@@ -188,15 +184,15 @@ function CombatPanel:Show()
   if C_Timer and C_Timer.After then
     C_Timer.After(0, function()
       if not state.active then return end
-      local fState = GetFactoryState()
+      local fState = Utils.GetFactoryState()
       if not fState then return end
       local panels = fState.panels
 
       -- 1) Stats panel + sidebar buttons (panels.right → rightTop/rightBottom)
       Suppress(panels and panels.right)
-      -- 2) RightPanel + PortalPanel (suppress individually, NOT characterOverlay,
+      -- 2) MythicPanel + PortalPanel (suppress individually, NOT characterOverlay,
       --    because the character name/title header is also parented there).
-      local rp = CS and CS.RightPanel or nil
+      local rp = CS and CS.MythicPanel or nil
       local rpRoot = rp and rp._state and rp._state.root or nil
       Suppress(rpRoot)
       local pp = CS and CS.PortalPanel or nil
@@ -237,12 +233,12 @@ function CombatPanel:Hide()
   if not state.active then return end
   state.active = false
 
-  local fState = GetFactoryState()
+  local fState = Utils.GetFactoryState()
   if not fState then return end
   local panels = fState.panels
 
   Restore(panels and panels.right)
-  local rp = CS and CS.RightPanel or nil
+  local rp = CS and CS.MythicPanel or nil
   local rpRoot = rp and rp._state and rp._state.root or nil
   Restore(rpRoot)
   local pp = CS and CS.PortalPanel or nil

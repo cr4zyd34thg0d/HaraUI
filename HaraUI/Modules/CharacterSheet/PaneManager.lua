@@ -4,6 +4,7 @@ if not CS then return end
 
 CS.PaneManager = CS.PaneManager or {}
 local PaneManager = CS.PaneManager
+local Utils = CS.Utils
 
 ---------------------------------------------------------------------------
 -- CurrencyLayout accessor (loaded before PaneManager in TOC)
@@ -119,37 +120,6 @@ end
 PaneManager.NormalizePane = NormalizePane
 
 ---------------------------------------------------------------------------
--- Shared helpers
----------------------------------------------------------------------------
-local function IsFrameVisible(frame)
-  return frame and frame.IsShown and frame:IsShown()
-end
-
-local function IsAccountTransferBuild()
-  return C_CurrencyInfo
-    and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
-    or false
-end
-
-local function IsInLockdown()
-  return InCombatLockdown and InCombatLockdown()
-end
-
-local function IsSecureExecution()
-  if type(issecure) ~= "function" then return false end
-  local ok, secure = pcall(issecure)
-  return ok and secure == true
-end
-
----------------------------------------------------------------------------
--- FrameFactory state accessor
----------------------------------------------------------------------------
-local function GetFactoryState()
-  local factory = CS and CS.FrameFactory or nil
-  return factory and factory._state or nil
-end
-
----------------------------------------------------------------------------
 -- Character-pane frame visibility (unified show/hide)
 --
 -- Every visual element that should ONLY appear on the character pane is
@@ -164,8 +134,8 @@ local function GetCharacterPaneFrames()
   -- protected frame and calling Show/Hide on it from addon code during combat
   -- lockdown causes ADDON_ACTION_BLOCKED.  Blizzard's own tab-switching code
   -- manages its visibility; we only manage our own CreateFrame frames here.
-  -- Character overlay: parent of RightPanel, PortalPanel, specPanel, etc.
-  local fState = GetFactoryState()
+  -- Character overlay: parent of MythicPanel, PortalPanel, specPanel, etc.
+  local fState = Utils.GetFactoryState()
   local co = fState and fState.characterOverlay or nil
   if co then out[#out + 1] = co end
   -- GearDisplay root (gear item rows, slot info)
@@ -186,7 +156,7 @@ local function ShowCharacterPaneFrames()
   -- Trigger data refreshes for character sub-components.
   local gear = CS and CS.GearDisplay or nil
   if gear and gear.RequestUpdate then pcall(gear.RequestUpdate, gear, "pane_switch.character") end
-  local rp = CS and CS.RightPanel or nil
+  local rp = CS and CS.MythicPanel or nil
   if rp and rp.Update then pcall(rp.Update, rp, "pane_switch.character") end
   local pp = CS and CS.PortalPanel or nil
   if pp and pp.OnShow then pcall(pp.OnShow, pp, "pane_switch.character") end
@@ -197,7 +167,7 @@ local function HideCharacterPaneFrames()
     if frame.Hide then frame:Hide() end
   end
   -- Stop tickers for hidden sub-components.
-  local rp = CS and CS.RightPanel or nil
+  local rp = CS and CS.MythicPanel or nil
   if rp and rp._StopTicker then pcall(rp._StopTicker, rp) end
 end
 
@@ -208,7 +178,7 @@ end
 -- Gradient is ALWAYS visible while CharacterFrame is open.
 ---------------------------------------------------------------------------
 local function ShowBaseChrome(pane)
-  local fState = GetFactoryState()
+  local fState = Utils.GetFactoryState()
   if not fState then return end
   -- Gradient: always visible while CharacterFrame is open.
   local gradient = fState.gradient
@@ -242,7 +212,7 @@ local function ShowBaseChrome(pane)
 end
 
 local function HideBaseChrome()
-  local fState = GetFactoryState()
+  local fState = Utils.GetFactoryState()
   if not fState then return end
   local gradient = fState.gradient
   if gradient and gradient.Hide then gradient:Hide() end
@@ -250,6 +220,12 @@ local function HideBaseChrome()
   if root and root.Hide then root:Hide() end
   local heading = fState.leftPaneHeading
   if heading and heading.Hide then heading:SetText("") heading:Hide() end
+end
+
+-- Show chrome and character-pane frames/tickers for the given pane.
+local function ApplyPaneChrome(pane)
+  ShowBaseChrome(pane)
+  if pane == "character" then ShowCharacterPaneFrames() else HideCharacterPaneFrames() end
 end
 
 ---------------------------------------------------------------------------
@@ -261,7 +237,7 @@ function PaneManager.BuildPaneFrameMap()
   local unique = cl and cl.BuildCurrencyCandidateFrames(currencyFrame) or {}
   local selectedCurrency = nil
   for _, frame in ipairs(unique) do
-    if IsFrameVisible(frame) then
+    if Utils.IsFrameVisible(frame) then
       selectedCurrency = frame
       break
     end
@@ -326,10 +302,10 @@ end
 ---------------------------------------------------------------------------
 local function ResolveActivePaneFromFrames(frames)
   if type(frames) ~= "table" then return "character" end
-  if IsFrameVisible(frames.reputation) then return "reputation" end
-  if IsFrameVisible(frames.currency) then return "currency" end
+  if Utils.IsFrameVisible(frames.reputation) then return "reputation" end
+  if Utils.IsFrameVisible(frames.currency) then return "currency" end
   for _, frame in ipairs(frames.currencyCandidates or {}) do
-    if IsFrameVisible(frame) then return "currency" end
+    if Utils.IsFrameVisible(frame) then return "currency" end
   end
   return "character"
 end
@@ -358,7 +334,7 @@ end
 ---------------------------------------------------------------------------
 local function NormalizeSubFramePlacement(state, frame)
   if not (state and frame) then return false end
-  local fState = GetFactoryState()
+  local fState = Utils.GetFactoryState()
   local panels = fState and fState.panels or nil
   local leftPanel = panels and panels.left or nil
   if not leftPanel then return false end
@@ -401,14 +377,14 @@ end
 ---------------------------------------------------------------------------
 -- Currency layout delegation (thin wrappers to CurrencyLayout)
 ---------------------------------------------------------------------------
-function PaneManager:_ApplyCurrencyRightPanelLayering()
+function PaneManager:_ApplyCurrencyMythicPanelLayering()
   local state = EnsureState(self)
   local cl = GetCL()
-  if cl then cl.SetCurrencyRightPanelLayering(NormalizePane(state.activePane) == "currency") end
+  if cl then cl.SetCurrencyMythicPanelLayering(NormalizePane(state.activePane) == "currency") end
 end
 
 function PaneManager:_ApplyCurrencySizingDeferred(source)
-  if IsAccountTransferBuild() then return false end
+  if Utils.IsAccountTransferBuild() then return false end
   local cl = GetCL()
   if cl then return cl.ApplyCurrencySizingDeferred(source) end
   return false
@@ -420,7 +396,7 @@ end
 function PaneManager:_UpdatePaneTabsVisual(pane)
   local state = EnsureState(self)
   local normalized = NormalizePane(pane) or state.activePane or "character"
-  local fState = GetFactoryState()
+  local fState = Utils.GetFactoryState()
   local tabs = fState and fState.tabs or nil
   if not tabs then return end
   local function Apply(tab, active)
@@ -428,7 +404,7 @@ function PaneManager:_UpdatePaneTabsVisual(pane)
     if tab.SetBackdropColor then
       tab:SetBackdropColor(0.03, 0.02, 0.05, 0.92)
       if active then
-        tab:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.98)
+        tab:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.95)
       else
         tab:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
       end
@@ -491,7 +467,7 @@ function PaneManager:_SchedulePendingPaneRetry(pane)
 end
 
 function PaneManager:_ScheduleCurrencyPaneGuard(_reason)
-  if IsAccountTransferBuild() then return false end
+  if Utils.IsAccountTransferBuild() then return false end
   local state = EnsureState(self)
   local cl = GetCL()
   state.currencyPaneGuardToken = (tonumber(state.currencyPaneGuardToken) or 0) + 1
@@ -548,15 +524,14 @@ function PaneManager:SetActivePane(pane, reason)
   end
   if normalized == state.activePane and not state.pendingPane then
     -- Even on redundant pane switch, ensure visibility is correct.
-    ShowBaseChrome(normalized)
-    if normalized == "character" then ShowCharacterPaneFrames() else HideCharacterPaneFrames() end
+    ApplyPaneChrome(normalized)
     return true
   end
-  local fState = GetFactoryState()
+  local fState = Utils.GetFactoryState()
 
   -- Account-transfer currency mode: Blizzard owns the currency sub-frames,
   -- but we still provide the dark background (root + gradient).
-  if IsAccountTransferBuild() and normalized == "currency" then
+  if Utils.IsAccountTransferBuild() and normalized == "currency" then
     state.nativeCurrencyMode = true
     ClearPendingPaneState(state)
     HideCharacterPaneFrames()
@@ -615,7 +590,7 @@ function PaneManager:SetActivePane(pane, reason)
     end
 
     state.activePane = normalized
-    local accountTransferBuild = IsAccountTransferBuild()
+    local accountTransferBuild = Utils.IsAccountTransferBuild()
 
     -- Hide all panes first
     if frames.character and frames.character ~= activeFrame and frames.character.Hide then frames.character:Hide() end
@@ -633,7 +608,7 @@ function PaneManager:SetActivePane(pane, reason)
       elseif normalized == "currency" then
         if accountTransferBuild or (cl and cl.IsTransferVisible()) then
           if cl then cl.DeferTransferOverlayTopmost(activeFrame) end
-        elseif IsInLockdown() or IsSecureExecution() then
+        elseif Utils.IsInLockdown() or Utils.IsSecureExecution() then
           self:_ApplyCurrencySizingDeferred("set_active_pane.transfer_deferred")
         else
           if cl then cl.NormalizeCurrencyFrameSafe(state, activeFrame, "set_active_pane." .. tostring(reason or "unknown")) end
@@ -658,23 +633,17 @@ function PaneManager:SetActivePane(pane, reason)
     end
 
     -- Base chrome (root + gradient) and character-pane elements.
-    ShowBaseChrome(normalized)
-    if normalized == "character" then
-      ShowCharacterPaneFrames()
-    else
-      HideCharacterPaneFrames()
-    end
+    ApplyPaneChrome(normalized)
 
-    if cl then cl.EnsureCurrencyRightPanelCreateHook() end
-    self:_ApplyCurrencyRightPanelLayering()
+    if cl then cl.EnsureCurrencyMythicPanelCreateHook() end
+    self:_ApplyCurrencyMythicPanelLayering()
   end)
 
   state.paneSwitchDepth = math.max((state.paneSwitchDepth or 1) - 1, 0)
 
   -- Ensure visibility is correct even if pcall errored midway.
   local resolvedPane = state.activePane
-  ShowBaseChrome(resolvedPane)
-  if resolvedPane == "character" then ShowCharacterPaneFrames() else HideCharacterPaneFrames() end
+  ApplyPaneChrome(resolvedPane)
 
   -- Always update heading, tabs, and skin outside pcall so they run
   -- even if an error occurred midway through the pane switch.
@@ -743,8 +712,8 @@ function PaneManager:RestoreSubFrames()
   state.activePane = "character"
   CS._characterOverlay = nil
   ShowCharacterPaneFrames()
-  if cl then cl.EnsureCurrencyRightPanelCreateHook() end
-  self:_ApplyCurrencyRightPanelLayering()
+  if cl then cl.EnsureCurrencyMythicPanelCreateHook() end
+  self:_ApplyCurrencyMythicPanelLayering()
   self:_UpdatePaneTabsVisual("character")
   if Skin and Skin.ApplyNativeBottomTabSkin then Skin.ApplyNativeBottomTabSkin() end
 end
@@ -753,10 +722,10 @@ end
 -- Hook installation (tab hooks, CharacterFrame_ShowSubFrame, ToggleCharacter)
 ---------------------------------------------------------------------------
 function PaneManager:_HookCustomPaneTabs()
-  if IsAccountTransferBuild() then return end
+  if Utils.IsAccountTransferBuild() then return end
   local state = EnsureState(self)
   local cl = GetCL()
-  local fState = GetFactoryState()
+  local fState = Utils.GetFactoryState()
   local tabs = fState and fState.tabs or nil
   if not tabs then return end
   local function Hook(tab, pane, key)
@@ -781,7 +750,7 @@ function PaneManager:_HookCustomPaneTabs()
 end
 
 function PaneManager:_HookBlizzardPaneTabs()
-  if IsAccountTransferBuild() then return end
+  if Utils.IsAccountTransferBuild() then return end
   local state = EnsureState(self)
   local indexMap = { [1] = "character", [2] = "reputation", [3] = "currency" }
   for i = 1, 8 do
@@ -830,7 +799,7 @@ function PaneManager:_EnsureBootstrapHooks()
   local cl = GetCL()
   self:_EnsureSubFrameHooks()
   if cl then
-    cl.EnsureCurrencyRightPanelCreateHook()
+    cl.EnsureCurrencyMythicPanelCreateHook()
     cl.InstallTransferVisibilityHooks()
   end
   if state.hookBootstrapDone then return end
@@ -844,7 +813,7 @@ function PaneManager:_EnsureBootstrapHooks()
       if gear and gear.OnShow then pcall(gear.OnShow, gear, reason) end
       local stats = CS and CS.StatsPanel or nil
       if stats and stats.OnShow then pcall(stats.OnShow, stats, reason) end
-      local right = CS and CS.RightPanel or nil
+      local right = CS and CS.MythicPanel or nil
       if right and right.OnShow then pcall(right.OnShow, right, reason) end
     end
 
@@ -877,9 +846,9 @@ function PaneManager:_EnsureBootstrapHooks()
         -- is blocked by WoW from within the ToggleCharacter secure execution context.
         -- Skip frame visibility management here; PLAYER_REGEN_ENABLED will trigger
         -- a layout update that restores everything once combat ends.
-        if IsInLockdown() then return end
+        if Utils.IsInLockdown() then return end
         self:SetActivePaneFromToken(subFrameToken, "ToggleCharacter")
-        if IsAccountTransferBuild() and state.nativeCurrencyMode then
+        if Utils.IsAccountTransferBuild() and state.nativeCurrencyMode then
           if factory and factory._ScheduleBoundedApply then
             factory:_ScheduleBoundedApply("ToggleCharacter.nativeCurrency")
           end

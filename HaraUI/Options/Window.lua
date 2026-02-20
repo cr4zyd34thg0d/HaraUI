@@ -12,54 +12,6 @@ local Title = Widgets.Title
 local Small = Widgets.Small
 local MakeButton = Widgets.MakeButton
 
-local function ToOnOff(flag)
-  return flag and "yes" or "no"
-end
-
-local function IsInOpenUIPanels(window)
-  local list = rawget(_G, "OpenUIPanels")
-  if type(list) ~= "table" then
-    return false
-  end
-
-  for k, v in pairs(list) do
-    if k == window or v == window then
-      return true
-    end
-  end
-  return false
-end
-
-local function DebugOptionsWindowIntegration(window, source)
-  if not (NS and NS.Print) then
-    return
-  end
-
-  local globalName = "HaraUIOptionsWindow"
-  local globalExists = _G and _G[globalName] ~= nil
-  local inUIPanelWindows = type(UIPanelWindows) == "table" and UIPanelWindows[globalName] ~= nil
-  local inOpenUIPanels = IsInOpenUIPanels(window)
-  local inUISpecialFrames = false
-  if type(UISpecialFrames) == "table" then
-    for _, name in ipairs(UISpecialFrames) do
-      if name == globalName then
-        inUISpecialFrames = true
-        break
-      end
-    end
-  end
-
-  NS.Print(
-    ("Options toggle [%s]: _G[%s]=%s UIPanelWindows=%s UIParentPanelManager(OpenUIPanels)=%s UISpecialFrames=%s"):format(
-      tostring(source or "unknown"),
-      globalName,
-      ToOnOff(globalExists),
-      ToOnOff(inUIPanelWindows),
-      ToOnOff(inOpenUIPanels),
-      ToOnOff(inUISpecialFrames)
-    )
-  )
-end
 
 function NS:BuildOptionsWindow(BuildFullUI, db)
   -- =========================================================
@@ -261,8 +213,7 @@ function NS:BuildOptionsWindow(BuildFullUI, db)
   function NS:CloseOptionsWindow()
     window:Hide()
   end
-  function NS:ToggleOptionsWindow(source)
-    DebugOptionsWindowIntegration(window, source or "toggle")
+  function NS:ToggleOptionsWindow()
     if window:IsShown() then
       NS:CloseOptionsWindow()
       return false
@@ -311,7 +262,7 @@ function NS:BuildOptionsWindow(BuildFullUI, db)
     local categoryID = category:GetID()
     function NS:OpenOptions()
       if NS.ToggleOptionsWindow then
-        NS:ToggleOptionsWindow("open_options.settings")
+        NS:ToggleOptionsWindow()
       elseif NS.OpenOptionsWindow then
         NS:OpenOptionsWindow()
       else
@@ -321,7 +272,7 @@ function NS:BuildOptionsWindow(BuildFullUI, db)
   else
     function NS:OpenOptions()
       if NS.ToggleOptionsWindow then
-        NS:ToggleOptionsWindow("open_options.legacy")
+        NS:ToggleOptionsWindow()
       elseif NS.OpenOptionsWindow then
         NS:OpenOptionsWindow()
       elseif InterfaceOptionsFrame_OpenToCategory then

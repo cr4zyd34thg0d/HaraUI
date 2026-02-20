@@ -4,14 +4,9 @@ if not CS then return end
 
 CS.Coordinator = CS.Coordinator or {}
 local Coordinator = CS.Coordinator
+local Utils = CS.Utils
 
 local DIRTY_KEYS = { "layout", "data", "stats", "gear", "rightpanel", "portalpanel" }
-
-local function IsAccountTransferBuild()
-  return C_CurrencyInfo
-    and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
-    or false
-end
 
 local LIFECYCLE_UNINITIALIZED = "UNINITIALIZED"
 local LIFECYCLE_CREATED       = "CREATED"
@@ -172,36 +167,6 @@ function Coordinator:FlushUpdates()
       return true
     end
 
-    local dataProvider = CS and CS.Data or nil
-    local fullSnapshotLoaded = false
-    local fullSnapshot = nil
-    local function GetFullSnapshot()
-      if fullSnapshotLoaded then
-        return fullSnapshot
-      end
-      fullSnapshotLoaded = true
-      if dataProvider and dataProvider.GetFullSnapshot then
-        local ok, snapshot = pcall(dataProvider.GetFullSnapshot, dataProvider, {
-          currencyLimit = 3,
-          runLimit = 1,
-        })
-        if ok and type(snapshot) == "table" then
-          fullSnapshot = snapshot
-        end
-      end
-      return fullSnapshot
-    end
-    local function BuildRightPanelSnapshot(full)
-      if type(full) ~= "table" then
-        return nil
-      end
-      return {
-        mythicPlus = full.mythicPlus,
-        vault = full.vault,
-        currency = full.currency,
-      }
-    end
-
     -- Deterministic coordinator update order for the refactor runtime:
     -- layout first, then data-driven panels.
     if dirtySnapshot.layout then
@@ -225,44 +190,30 @@ function Coordinator:FlushUpdates()
     end
 
     if dirtySnapshot.gear then
-      local snapshot = nil
-      local full = GetFullSnapshot()
-      if type(full) == "table" then
-        snapshot = full.gear
-      end
       local gearDisplay = CS and CS.GearDisplay or nil
-      MarkAndCall("gear", gearDisplay and gearDisplay.Update, gearDisplay, reason, snapshot, dirtySnapshot)
+      MarkAndCall("gear", gearDisplay and gearDisplay.Update, gearDisplay, reason)
     end
 
     if dirtySnapshot.stats then
-      local snapshot = nil
-      local full = GetFullSnapshot()
-      if type(full) == "table" then
-        snapshot = full.stats
-      end
       local statsPanel = CS and CS.StatsPanel or nil
-      MarkAndCall("stats", statsPanel and statsPanel.Update, statsPanel, reason, snapshot, dirtySnapshot)
+      MarkAndCall("stats", statsPanel and statsPanel.Update, statsPanel, reason)
     end
 
     if dirtySnapshot.rightpanel then
-      local full = GetFullSnapshot()
-      local snapshot = BuildRightPanelSnapshot(full)
-      local rightPanel = CS and CS.RightPanel or nil
-      MarkAndCall("rightpanel", rightPanel and rightPanel.Update, rightPanel, reason, snapshot, dirtySnapshot)
+      local rightPanel = CS and CS.MythicPanel or nil
+      MarkAndCall("rightpanel", rightPanel and rightPanel.Update, rightPanel, reason)
     end
 
     if dirtySnapshot.portalpanel then
       local portalPanel = CS and CS.PortalPanel or nil
-      MarkAndCall("portalpanel", portalPanel and portalPanel.Update, portalPanel, reason, dirtySnapshot)
+      MarkAndCall("portalpanel", portalPanel and portalPanel.Update, portalPanel, reason)
     end
 
     -- Core event routing emits data-only updates for currency/reputation changes.
     -- Fan those into the right panel so data refreshes are not dropped.
     if dirtySnapshot.data and not dirtySnapshot.rightpanel then
-      local full = GetFullSnapshot()
-      local snapshot = BuildRightPanelSnapshot(full)
-      local rightPanel = CS and CS.RightPanel or nil
-      MarkAndCall("data", rightPanel and rightPanel.Update, rightPanel, reason, snapshot, dirtySnapshot)
+      local rightPanel = CS and CS.MythicPanel or nil
+      MarkAndCall("data", rightPanel and rightPanel.Update, rightPanel, reason)
     end
 
   end
@@ -278,14 +229,6 @@ function Coordinator:FlushUpdates()
   return hadDirty
 end
 
-function Coordinator:GetDirtyFlags()
-  local state = EnsureState(self)
-  local copy = NewDirtyMap()
-  for _, key in ipairs(DIRTY_KEYS) do
-    copy[key] = state.dirty[key] == true
-  end
-  return copy
-end
 
 ---------------------------------------------------------------------------
 -- Consolidated CharacterFrame OnShow / OnHide hook
@@ -304,7 +247,7 @@ local function DispatchOnShow(reason)
   if gear and gear.OnShow then pcall(gear.OnShow, gear, reason) end
   local stats = CS and CS.StatsPanel or nil
   if stats and stats.OnShow then pcall(stats.OnShow, stats, reason) end
-  local right = CS and CS.RightPanel or nil
+  local right = CS and CS.MythicPanel or nil
   if right and right.OnShow then pcall(right.OnShow, right, reason) end
   local portal = CS and CS.PortalPanel or nil
   if portal and portal.OnShow then pcall(portal.OnShow, portal, reason) end
@@ -315,7 +258,7 @@ local function DispatchOnHide()
   if gear and gear.OnHide then pcall(gear.OnHide, gear) end
   local stats = CS and CS.StatsPanel or nil
   if stats and stats.OnHide then pcall(stats.OnHide, stats) end
-  local right = CS and CS.RightPanel or nil
+  local right = CS and CS.MythicPanel or nil
   if right and right.OnHide then pcall(right.OnHide, right) end
   local portal = CS and CS.PortalPanel or nil
   if portal and portal.OnHide then pcall(portal.OnHide, portal) end
@@ -393,7 +336,7 @@ function Coordinator:_EnsureCharacterFrameHooks()
     if factory and factory.SyncExpandSize then
       factory.SyncExpandSize()
     end
-    if IsAccountTransferBuild() then
+    if Utils.IsAccountTransferBuild() then
       -- Transfer builds: defer by one frame so sub-frame layouts settle.
       if C_Timer and C_Timer.After then
         C_Timer.After(0, function()
@@ -522,7 +465,7 @@ function Coordinator:Disable()
     stats._state.root:Hide()
   end
 
-  local right = CS and CS.RightPanel or nil
+  local right = CS and CS.MythicPanel or nil
   if right and right._StopTicker then
     pcall(right._StopTicker, right)
   end

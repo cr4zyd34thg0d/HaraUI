@@ -2,6 +2,7 @@ local ADDON, NS = ...
 
 NS.CharacterSheet = NS.CharacterSheet or {}
 local CS = NS.CharacterSheet
+local Utils = CS.Utils
 
 CS.State = CS.State or {
   activeBackend = "refactor",
@@ -95,19 +96,15 @@ local function RegisterCoreEvents(frame)
   RegisterEventIfExists(frame, "PLAYER_AVG_ITEM_LEVEL_UPDATE")
 end
 
-local function IsFrameVisible(frame)
-  return frame and frame.IsShown and frame:IsShown()
-end
-
 local function IsCharacterVisible()
-  return IsFrameVisible(CharacterFrame)
+  return Utils.IsFrameVisible(CharacterFrame)
 end
 
 local function IsReputationPaneVisible()
   if not IsCharacterVisible() then
     return false
   end
-  return IsFrameVisible(_G and _G.ReputationFrame)
+  return Utils.IsFrameVisible(_G and _G.ReputationFrame)
 end
 
 local function IsCurrencyPaneVisible()
@@ -122,7 +119,7 @@ local function IsCurrencyPaneVisible()
     _G and _G.TokenFrameTokenFrame,
   }
   for _, frame in ipairs(candidates) do
-    if IsFrameVisible(frame) then
+    if Utils.IsFrameVisible(frame) then
       return true
     end
   end

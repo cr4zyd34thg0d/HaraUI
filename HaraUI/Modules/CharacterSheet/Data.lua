@@ -868,14 +868,3 @@ function Data:GetVaultSummary()
   }
 end
 
-function Data:GetFullSnapshot(options)
-  options = type(options) == "table" and options or {}
-  return {
-    playerKey = ResolvePlayerSnapshotKey(),
-    stats = self:GetStatsSnapshot(),
-    gear = self:GetGearSnapshot(),
-    currency = self:GetCurrencySummary(options.currencyLimit),
-    mythicPlus = self:GetMythicPlusSummary(options.runLimit),
-    vault = self:GetVaultSummary(),
-  }
-end

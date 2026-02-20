@@ -18,14 +18,8 @@ GearDisplay._state = GearDisplay._state or {
   leftRows = nil,
   rightRows = nil,
   eventFrame = nil,
-  hooksInstalled = false,
   specResyncToken = 0,
   lootResyncToken = 0,
-  counters = {
-    creates = 0,
-    updateRequests = 0,
-    updatesApplied = 0,
-  },
 }
 
 local function EnsureSkin()
@@ -47,7 +41,6 @@ local function EnsureState(self)
   s.rightRows = s.rightRows or {}
   s.specResyncToken = tonumber(s.specResyncToken) or 0
   s.lootResyncToken = tonumber(s.lootResyncToken) or 0
-  s.counters = s.counters or { creates = 0, updateRequests = 0, updatesApplied = 0 }
   return s
 end
 
@@ -588,7 +581,6 @@ function GearDisplay:Create(parent)
   end
 
   state.created = true
-  state.counters.creates = (state.counters.creates or 0) + 1
   return state.root
 end
 
@@ -635,7 +627,6 @@ function GearDisplay:UpdateGear()
   -- Update specialization + loot spec buttons
   self:_UpdateSpecButtons(state)
 
-  state.counters.updatesApplied = (state.counters.updatesApplied or 0) + 1
   return true
 end
 
@@ -761,9 +752,6 @@ end
 -- Request throttled update
 ---------------------------------------------------------------------------
 function GearDisplay:RequestUpdate(reason)
-  local state = EnsureState(self)
-  state.counters.updateRequests = (state.counters.updateRequests or 0) + 1
-
   local function runUpdate()
     self:UpdateGear()
   end
@@ -851,12 +839,4 @@ function GearDisplay:Update(reason)
   return self:RequestUpdate(reason or "coordinator.gear")
 end
 
-function GearDisplay:GetDebugCounters()
-  local state = EnsureState(self)
-  return {
-    creates = state.counters.creates or 0,
-    updateRequests = state.counters.updateRequests or 0,
-    updatesApplied = state.counters.updatesApplied or 0,
-  }
-end
 

@@ -3,7 +3,7 @@
 :sparkles: A curated World of Warcraft UI focused on clean gameplay UX, practical QoL modules, and battle-tested nameplate behavior.
 
 ![WoW Interface](https://img.shields.io/badge/WoW-12.0.1-1f6feb?style=for-the-badge)
-![HaraUI](https://img.shields.io/badge/HaraUI-2.2.0-f97316?style=for-the-badge)
+![HaraUI](https://img.shields.io/badge/HaraUI-2.2.1--alpha-f97316?style=for-the-badge)
 
 ## :school_satchel: Overview
 
@@ -13,7 +13,7 @@
 
 | Addon | Version | Interface | Author | Purpose |
 |-------|---------|-----------|--------|---------|
-| HaraUI | 2.2.0 | 120001 | Harath | Modular UI/QoL suite |
+| HaraUI | 2.2.1-alpha | 120001 | Harath | Modular UI/QoL suite |
 
 ## :jigsaw: Current Feature Set
 
@@ -71,6 +71,13 @@ World of Warcraft/_retail_/Interface/AddOns/
 3. Run `/reload` in-game.
 
 ## :spiral_notepad: Changelog (Recent)
+
+### v2.2.1-alpha - 2026-02-20
+- **Added:** "None" Codex glyph theme — clean pages and spine with no watermark textures.
+- **Changed:** Codex module entries: left-click navigates to the module settings page; right-click toggles enable/disable. Tooltip updated to reflect both actions.
+- **Added:** Subtle green (on) / red (off) gradient per Codex entry row and power bar color to indicate enabled state at a glance.
+- **Changed:** Options nav replaced with compact rune icon cluster — same icons as the Codex panel, 40px each, with frame ring, glow, and tooltip. General/home uses the charsheet rune.
+- **Removed:** Unused nav screenshot PNG media files (General, XP_Rep_Bar, Cast_Bar, Friendly_Nameplates, Rotation_Helper, Minimap_Bar, Loot_Toasts).
 
 ### v2.2.0 - 2026-02-19
 - **Refactored:** Complete CharacterSheet 8-phase rewrite — Coordinator state machine, FrameFactory extraction, CurrencyLayout extraction, PaneManager, sub-module lifecycle (OnShow/OnHide), dead code removal.

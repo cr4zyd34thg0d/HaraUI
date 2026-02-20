@@ -50,17 +50,8 @@ StatsPanel._state = StatsPanel._state or {
   titlesOffset = 0,
   titleResyncToken = 0,
   pendingTitleID = nil,
-  -- M+ toggle
-  mplusToggle = nil,
   -- hooks/events
   eventFrame = nil,
-  hooksInstalled = false,
-  counters = {
-    creates = 0,
-    updateRequests = 0,
-    updatesApplied = 0,
-    modeSwitches = 0,
-  },
 }
 
 local function EnsureSkin()
@@ -91,7 +82,6 @@ local function EnsureState(self)
   if s.titlesOffset < 0 then s.titlesOffset = 0 end
   s.titleResyncToken = tonumber(s.titleResyncToken) or 0
   if type(s.pendingTitleID) ~= "number" then s.pendingTitleID = nil end
-  s.counters = s.counters or { creates = 0, updateRequests = 0, updatesApplied = 0, modeSwitches = 0 }
   if type(s.mode) ~= "string" or not MODE_LABELS[s.mode] then
     s.mode = "stats"
   end
@@ -121,7 +111,7 @@ local function GetCharSheetDB()
   return db.charsheet
 end
 
-local function IsRightPanelPreferenceEnabled()
+local function IsMythicPanelPreferenceEnabled()
   local csdb = GetCharSheetDB()
   if type(csdb) ~= "table" then
     return true
@@ -129,7 +119,7 @@ local function IsRightPanelPreferenceEnabled()
   return csdb.showRightPanel ~= false
 end
 
-local function SetRightPanelPreferenceEnabled(enabled)
+local function SetMythicPanelPreferenceEnabled(enabled)
   local csdb = GetCharSheetDB()
   if type(csdb) == "table" then
     csdb.showRightPanel = enabled and true or false
@@ -151,10 +141,10 @@ local function SetPortalPanelPreferenceEnabled(enabled)
   end
 end
 
-local function ApplyRightPanelPreference()
-  local rp = CS and CS.RightPanel or nil
+local function ApplyMythicPanelPreference()
+  local rp = CS and CS.MythicPanel or nil
   local rpRoot = rp and rp._state and rp._state.root or nil
-  local shouldShow = IsRightPanelPreferenceEnabled()
+  local shouldShow = IsMythicPanelPreferenceEnabled()
   if not rpRoot then
     return shouldShow
   end
@@ -724,12 +714,12 @@ local function UpdateSidebarVisuals(state)
   for i, btn in ipairs(state.sidebarButtons) do
     if btn and btn.SetBackdropBorderColor then
       if i == selectedIdx then
-        btn:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.98)
+        btn:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.95)
       elseif i == 4 then
         -- M+ toggle: red when collapsed, purple when expanded
-        local rp = CS and CS.RightPanel or nil
+        local rp = CS and CS.MythicPanel or nil
         local rpRoot = rp and rp._state and rp._state.root or nil
-        local prefEnabled = IsRightPanelPreferenceEnabled()
+        local prefEnabled = IsMythicPanelPreferenceEnabled()
         local shown = prefEnabled and (not rpRoot or (rpRoot.IsShown and rpRoot:IsShown()))
         if shown then
           btn:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
@@ -854,7 +844,7 @@ local function CreateEquipmentActionButton(parent, label, xOffset)
     insets = { left = 0, right = 0, top = 0, bottom = 0 },
   })
   button:SetBackdropColor(0.05, 0.02, 0.08, 0.90)
-  button:SetBackdropBorderColor(0.26, 0.18, 0.36, 0.95)
+  button:SetBackdropBorderColor(0.24, 0.18, 0.32, 0.95)
   button.text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   button.text:SetPoint("CENTER")
   button.text:SetText(label)
@@ -1048,7 +1038,7 @@ end
 
 local function ApplyTitleRowPendingStyle(row)
   if not row then return end
-  row:SetBackdropBorderColor(0.95, 0.85, 0.22, 0.95)
+  row:SetBackdropBorderColor(0.98, 0.64, 0.14, 0.95)
   row:SetBackdropColor(0.08, 0.03, 0.10, 0.75)
   if row.label then row.label:SetTextColor(1, 1, 1, 1) end
 end
@@ -1345,16 +1335,16 @@ function StatsPanel:Create(parent)
         self:SetMode(modeKey)
       elseif sidebarIdx == 4 then
         -- Button 4: toggle M+ panel
-        local rp = CS and CS.RightPanel or nil
+        local rp = CS and CS.MythicPanel or nil
         local rpRoot = rp and rp._state and rp._state.root or nil
         local nextVisible = true
         if rpRoot then
           nextVisible = not rpRoot:IsShown()
           if nextVisible then rpRoot:Show() else rpRoot:Hide() end
         else
-          nextVisible = not IsRightPanelPreferenceEnabled()
+          nextVisible = not IsMythicPanelPreferenceEnabled()
         end
-        SetRightPanelPreferenceEnabled(nextVisible)
+        SetMythicPanelPreferenceEnabled(nextVisible)
         if rp and rp.MarkDirty then
           pcall(rp.MarkDirty, rp, "sidebar_toggle")
         end
@@ -1533,10 +1523,9 @@ function StatsPanel:Create(parent)
     end
   end)
 
-  ApplyRightPanelPreference()
+  ApplyMythicPanelPreference()
   UpdateSidebarVisuals(state)
   state.created = true
-  state.counters.creates = (state.counters.creates or 0) + 1
   return state.root
 end
 
@@ -1551,7 +1540,7 @@ function StatsPanel:UpdateStats()
   if not state.created or not state.root then return false end
 
   local mode = state.mode or "stats"
-  ApplyRightPanelPreference()
+  ApplyMythicPanelPreference()
   UpdateSidebarVisuals(state)
 
   -- Hide all mode containers, then show the active one
@@ -1712,7 +1701,6 @@ function StatsPanel:UpdateStats()
     state.root:Hide()
   end
 
-  state.counters.updatesApplied = (state.counters.updatesApplied or 0) + 1
   return true
 end
 
@@ -1725,7 +1713,6 @@ function StatsPanel:SetMode(mode)
   if not MODE_LABELS[mode] then return false end
   if state.mode == mode then return true end
   state.mode = mode
-  state.counters.modeSwitches = (state.counters.modeSwitches or 0) + 1
   self:RequestUpdate("mode_switch:" .. mode)
   return true
 end
@@ -1740,7 +1727,6 @@ end
 function StatsPanel:RequestUpdate(_reason)
   local state = EnsureState(self)
   if not state.created then self:Create(ResolveParent() or state.parent) end
-  state.counters.updateRequests = (state.counters.updateRequests or 0) + 1
   local function runUpdate() self:UpdateStats() end
   local guards = CS and CS.Guards or nil
   if guards and guards.Throttle then
@@ -1756,7 +1742,7 @@ end
 function StatsPanel:OnShow(reason)
   local state = EnsureState(self)
   self:Create(ResolveParent())
-  ApplyRightPanelPreference()
+  ApplyMythicPanelPreference()
   local pm = CS and CS.PaneManager or nil
   local pane = pm and pm:GetActivePane() or "character"
   if pane == "character" and state.root then state.root:Show() end
@@ -1831,14 +1817,4 @@ function StatsPanel:Update(reason)
   return self:RequestUpdate(reason or "coordinator.stats")
 end
 
-function StatsPanel:GetDebugCounters()
-  local state = EnsureState(self)
-  return {
-    creates = state.counters.creates or 0,
-    updateRequests = state.counters.updateRequests or 0,
-    updatesApplied = state.counters.updatesApplied or 0,
-    modeSwitches = state.counters.modeSwitches or 0,
-    mode = state.mode,
-  }
-end
 

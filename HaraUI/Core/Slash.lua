@@ -5,7 +5,7 @@ local function HandleSlash(msg)
 
   if msg == "" or msg == "options" or msg == "config" then
     if NS.ToggleOptionsWindow then
-      NS:ToggleOptionsWindow("slash")
+      NS:ToggleOptionsWindow()
     elseif NS.OpenOptions then
       NS:OpenOptions()
     end
@@ -49,6 +49,7 @@ local function HandleSlash(msg)
     NS:ApplyAll()
     return
   end
+
 
   if msg == "debug" then
     local db = NS:GetDB(); db.general.debug = not db.general.debug
@@ -95,8 +96,18 @@ local function HandleSlash(msg)
     ))
     return
   end
-  NS.Print("Commands: /hui (options) | lock | xp | cast | loot | summon | debug | layoutdebug | layoutsnap | version")
+  NS.Print("Commands: /hui (options) | lock | xp | cast | loot | summon | debug | version")
 end
 
 NS._huiHandleSlash = HandleSlash
+
+SLASH_HARALT1 = "/haralt"
+SlashCmdList["HARALT"] = function()
+  local mod = NS.Modules and NS.Modules.altpanel
+  if mod and mod.Toggle then
+    mod:Toggle()
+  else
+    NS.Print("AltPanel module is not loaded.")
+  end
+end
 

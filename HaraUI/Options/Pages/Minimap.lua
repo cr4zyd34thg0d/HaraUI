@@ -5,8 +5,6 @@ NS.OptionsPages = NS.OptionsPages or {}
 function NS.OptionsPages.BuildMinimapPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
   pages.minimap = CreateFrame("Frame", nil, content); pages.minimap:SetAllPoints(true)
   do
-    local minimapEnable = MakeModuleHeader(pages.minimap, "minimapbar")
-
     if db.minimapbar.locked == nil then
       db.minimapbar.locked = false
     end
@@ -22,10 +20,8 @@ function NS.OptionsPages.BuildMinimapPage(pages, content, MakeModuleHeader, Buil
 
     local cards = BuildStandardModuleCards(pages.minimap)
 
-    NS.OptionsPages.AttachModuleEnableToggle(minimapEnable, cards.general.content, ApplyToggleSkin)
-
     local lockCB = MakeCheckbox(cards.general.content, "Lock Bar", "Prevents dragging the minimap bar.")
-    lockCB:SetPoint("TOPLEFT", 330, -4)
+    lockCB:SetPoint("TOPLEFT", 6, -4)
     lockCB:SetChecked(db.minimapbar.locked == true)
     lockCB:SetScript("OnClick", function()
       db.minimapbar.locked = lockCB:GetChecked()

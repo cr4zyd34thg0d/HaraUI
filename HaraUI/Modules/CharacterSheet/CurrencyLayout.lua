@@ -4,6 +4,7 @@ if not CS then return end
 
 CS.CurrencyLayout = CS.CurrencyLayout or {}
 local CL = CS.CurrencyLayout
+local Utils = CS.Utils
 
 ---------------------------------------------------------------------------
 -- State (persists across /reload)
@@ -45,18 +46,9 @@ local function GetPM()
   return CS and CS.PaneManager or nil
 end
 
-local function GetFactoryState()
-  local factory = CS and CS.FrameFactory or nil
-  return factory and factory._state or nil
-end
-
 ---------------------------------------------------------------------------
--- Utility locals (small helpers, duplicated for file locality)
+-- Utility locals
 ---------------------------------------------------------------------------
-local function IsFrameVisible(frame)
-  return frame and frame.IsShown and frame:IsShown()
-end
-
 local function IsFrameShownSafe(frame)
   if not (frame and frame.IsShown) then return false end
   local ok, shown = pcall(frame.IsShown, frame)
@@ -80,22 +72,6 @@ local function IsDescendantOf(frame, ancestor)
     cursor = parent
   end
   return false
-end
-
-local function IsAccountTransferBuild()
-  return C_CurrencyInfo
-    and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
-    or false
-end
-
-local function IsInLockdown()
-  return InCombatLockdown and InCombatLockdown()
-end
-
-local function IsSecureExecution()
-  if type(issecure) ~= "function" then return false end
-  local ok, secure = pcall(issecure)
-  return ok and secure == true
 end
 
 local function IsProtectedFrameSafe(frame)
@@ -225,7 +201,7 @@ local function InstallTransferVisibilityHooks()
 end
 
 local function GuardLayoutDuringTransfer(entrypoint, detail, deferredKey, deferredFn)
-  if IsAccountTransferBuild() then
+  if Utils.IsAccountTransferBuild() then
     return IsTransferVisible() and true or false
   end
   InstallTransferVisibilityHooks()
@@ -313,7 +289,7 @@ local function ResolveCurrencyFrame()
   local resolved = GetCurrencyPaneFrame()
   local candidates = BuildCurrencyCandidateFrames(resolved)
   for _, frame in ipairs(candidates) do
-    if IsFrameVisible(frame) then return frame end
+    if Utils.IsFrameVisible(frame) then return frame end
   end
   return resolved or candidates[1] or nil
 end
@@ -387,10 +363,10 @@ local _currencyOverlayHookMap = setmetatable({}, { __mode = "k" })
 
 local function RunCurrencyMutation(fn)
   if type(fn) ~= "function" then return false end
-  if IsInLockdown() then
+  if Utils.IsInLockdown() then
     if C_Timer and C_Timer.After then
       C_Timer.After(0, function()
-        if not IsInLockdown() then pcall(fn) end
+        if not Utils.IsInLockdown() then pcall(fn) end
       end)
     end
     return false
@@ -399,7 +375,7 @@ local function RunCurrencyMutation(fn)
 end
 
 local function ForceCurrencyOverlayFrameTopmost(frame, opts)
-  if IsAccountTransferBuild() or not frame then return false end
+  if Utils.IsAccountTransferBuild() or not frame then return false end
   if IsFrameForbidden and IsFrameForbidden(frame) then return false end
   if not CanMutateFrameLayout(frame) then return false end
   opts = type(opts) == "table" and opts or nil
@@ -416,7 +392,7 @@ local function ForceCurrencyOverlayFrameTopmost(frame, opts)
 end
 
 local function HookCurrencyOverlayOnShow(frame, opts)
-  if IsAccountTransferBuild() or not frame then return false end
+  if Utils.IsAccountTransferBuild() or not frame then return false end
   if IsFrameForbidden and IsFrameForbidden(frame) then return false end
   if not CanMutateFrameLayout(frame) or not frame.HookScript then return false end
   opts = type(opts) == "table" and opts or nil
@@ -429,7 +405,7 @@ local function HookCurrencyOverlayOnShow(frame, opts)
   frame:HookScript("OnShow", function()
     local config = _currencyOverlayHookMap[frame]
     local function runDeferred()
-      if not frame or not IsFrameShownSafe(frame) or IsInLockdown() then return end
+      if not frame or not IsFrameShownSafe(frame) or Utils.IsInLockdown() then return end
       ForceCurrencyOverlayFrameTopmost(frame, config)
     end
     if C_Timer and C_Timer.After then C_Timer.After(0, runDeferred) else runDeferred() end
@@ -456,7 +432,7 @@ local function BuildTransferOverlayFrames(active)
 end
 
 local function RaiseTransferOverlaysTopmost(active, opts)
-  if IsAccountTransferBuild() then return false end
+  if Utils.IsAccountTransferBuild() then return false end
   for _, frame in ipairs(BuildTransferOverlayFrames(active)) do
     if IsFrameShownSafe(frame) and CanMutateFrameLayout(frame) then
       HookCurrencyOverlayOnShow(frame, { keepParent = false })
@@ -466,7 +442,7 @@ local function RaiseTransferOverlaysTopmost(active, opts)
 end
 
 local function RaiseCurrencyPopupLayers(active, opts)
-  if IsAccountTransferBuild() then return false end
+  if Utils.IsAccountTransferBuild() then return false end
   InstallTransferVisibilityHooks()
   opts = type(opts) == "table" and opts or nil
   local optionsOnly = opts and opts.optionsOnly == true
@@ -507,8 +483,8 @@ end
 ---------------------------------------------------------------------------
 local _rightPanelCreateHookInstalled = false
 
-local function SetCurrencyRightPanelLayering(active)
-  local rightPanel = CS and CS.RightPanel or nil
+local function SetCurrencyMythicPanelLayering(active)
+  local rightPanel = CS and CS.MythicPanel or nil
   local rightRoot = rightPanel and rightPanel._state and rightPanel._state.root or nil
   if not rightRoot then return false end
   if active then
@@ -531,14 +507,14 @@ local function SetCurrencyRightPanelLayering(active)
   return true
 end
 
-local function EnsureCurrencyRightPanelCreateHook()
+local function EnsureCurrencyMythicPanelCreateHook()
   if _rightPanelCreateHookInstalled then return end
-  local rightPanel = CS and CS.RightPanel or nil
+  local rightPanel = CS and CS.MythicPanel or nil
   if not (hooksecurefunc and rightPanel and type(rightPanel.Create) == "function") then return end
   hooksecurefunc(rightPanel, "Create", function()
     local pm = GetPM()
-    if pm and pm._ApplyCurrencyRightPanelLayering then
-      pm:_ApplyCurrencyRightPanelLayering()
+    if pm and pm._ApplyCurrencyMythicPanelLayering then
+      pm:_ApplyCurrencyMythicPanelLayering()
     end
   end)
   _rightPanelCreateHookInstalled = true
@@ -568,10 +544,10 @@ local function PositionCurrencyDropdown(state, active, leftContainer, transferAn
     DeferTransferOverlayTopmost(active)
     return dropdown
   end
-  if IsInLockdown() then
+  if Utils.IsInLockdown() then
     if C_Timer and C_Timer.After then
       C_Timer.After(0, function()
-        if not IsInLockdown() then
+        if not Utils.IsInLockdown() then
           local pm = GetPM()
           if pm then pm:_ScheduleCurrencyPaneGuard("currency.dropdown.defer") end
         end
@@ -580,7 +556,7 @@ local function PositionCurrencyDropdown(state, active, leftContainer, transferAn
     return dropdown
   end
   if not CanMutateFrameLayout(dropdown) then return dropdown end
-  local fState = GetFactoryState()
+  local fState = Utils.GetFactoryState()
   local root = fState and fState.root or nil
   local dropdownParent = leftContainer or root or CharacterFrame
   if dropdownParent and dropdown.SetParent and dropdown.GetParent and dropdown:GetParent() ~= dropdownParent then
@@ -754,15 +730,15 @@ end
 -- ApplyCurrencySizing / ApplyCurrencySizingDeferred
 ---------------------------------------------------------------------------
 local function ApplyCurrencySizing()
-  local fState = GetFactoryState()
+  local fState = Utils.GetFactoryState()
   local leftContainer = fState and fState.panels and fState.panels.left or nil
   local active = ResolveCurrencyFrame()
   local transferVisible = IsTransferVisible(active)
-  if IsAccountTransferBuild() then
+  if Utils.IsAccountTransferBuild() then
     if transferVisible then DeferTransferOverlayTopmost(active) end
     return false
   end
-  if transferVisible or IsInLockdown() or IsSecureExecution() then
+  if transferVisible or Utils.IsInLockdown() or Utils.IsSecureExecution() then
     if transferVisible then DeferTransferOverlayTopmost(active) end
     return false
   end
@@ -805,7 +781,7 @@ local function NormalizeCurrencyFrameSafe(state, frame, source)
   end) then
     return false
   end
-  local fState = GetFactoryState()
+  local fState = Utils.GetFactoryState()
   local panels = fState and fState.panels or nil
   local leftContainer = panels and panels.left or nil
   local rootContainer = fState and fState.root or nil
@@ -813,11 +789,11 @@ local function NormalizeCurrencyFrameSafe(state, frame, source)
   local rightContainer = panels and panels.right or nil
   if not currencyContainer then return false end
   CaptureFrameLayout(state, frame)
-  if IsAccountTransferBuild() then
+  if Utils.IsAccountTransferBuild() then
     RaiseCurrencyPopupLayers(frame, { optionsOnly = true, keepParent = true })
     return true
   end
-  if IsInLockdown() or IsSecureExecution() then
+  if Utils.IsInLockdown() or Utils.IsSecureExecution() then
     ApplyCurrencySizingDeferred((source or "normalize.currency") .. ".deferred")
     return false
   end
@@ -922,8 +898,8 @@ CL.RaiseCurrencyPopupLayers = RaiseCurrencyPopupLayers
 CL.NormalizeCurrencyFrameSafe = NormalizeCurrencyFrameSafe
 CL.ApplyCurrencySizingDeferred = ApplyCurrencySizingDeferred
 CL.ApplyCurrencySizing = ApplyCurrencySizing
-CL.SetCurrencyRightPanelLayering = SetCurrencyRightPanelLayering
-CL.EnsureCurrencyRightPanelCreateHook = EnsureCurrencyRightPanelCreateHook
+CL.SetCurrencyMythicPanelLayering = SetCurrencyMythicPanelLayering
+CL.EnsureCurrencyMythicPanelCreateHook = EnsureCurrencyMythicPanelCreateHook
 CL.BuildCurrencySubFrameTokens = BuildCurrencySubFrameTokens
 CL.ShowNativeSubFrame = ShowNativeSubFrame
 CL.CaptureFrameLayout = CaptureFrameLayout

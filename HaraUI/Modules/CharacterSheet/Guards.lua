@@ -119,8 +119,3 @@ function Guards:Throttle(key, interval, fn)
   end)
 end
 
--- Helper for future unit tests; intentionally unused by runtime paths.
-function Guards:_ResetForTests()
-  wipe(self._debounce)
-  wipe(self._throttle)
-end

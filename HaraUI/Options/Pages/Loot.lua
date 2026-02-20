@@ -5,18 +5,15 @@ NS.OptionsPages = NS.OptionsPages or {}
 function NS.OptionsPages.BuildLootPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeButton, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
   pages.loot = CreateFrame("Frame", nil, content); pages.loot:SetAllPoints(true)
   do
-    local lootEnable = MakeModuleHeader(pages.loot, "loot")
     local cards = BuildStandardModuleCards(pages.loot)
 
-    NS.OptionsPages.AttachModuleEnableToggle(lootEnable, cards.general.content, ApplyToggleSkin)
-
     local preview = MakeButton(cards.general.content, "Preview Toasts", 170, 24)
-    preview:SetPoint("TOPLEFT", 6, -40)
+    preview:SetPoint("TOPLEFT", 6, -4)
     NS.OptionsPages.SetModulePreviewOnClick(preview, "loot", NS)
 
     local generalDivider = MakeAccentDivider(cards.general.content)
-    generalDivider:SetPoint("TOPLEFT", 0, -84)
-    generalDivider:SetPoint("TOPRIGHT", 0, -84)
+    generalDivider:SetPoint("TOPLEFT", 0, -48)
+    generalDivider:SetPoint("TOPRIGHT", 0, -48)
 
     local scale = BuildStandardSliderRow(
       cards.sizing.content,

@@ -5,8 +5,6 @@ NS.OptionsPages = NS.OptionsPages or {}
 function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeButton, MakeAccentDivider, BuildStandardSliderRow, Round2, MakeColorSwatch, ApplyUIFont, ORANGE_SIZE, ORANGE, ApplyDropdownFont, RegisterTheme, Small, db)
   pages.cast = CreateFrame("Frame", nil, content); pages.cast:SetAllPoints(true)
   do
-    local castEnable = MakeModuleHeader(pages.cast, "castbar")
-
     if not db.castbar.barTexture then db.castbar.barTexture = "Interface/TargetingFrame/UI-StatusBar" end
     if not db.castbar.barColor then db.castbar.barColor = { r = 0.5, g = 0.5, b = 1.0 } end
     if not db.castbar.textColor then db.castbar.textColor = { r = 1, g = 1, b = 1 } end
@@ -20,8 +18,6 @@ function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildSt
     local cards = BuildStandardModuleCards(pages.cast)
 
     -- General card controls.
-    NS.OptionsPages.AttachModuleEnableToggle(castEnable, cards.general.content, ApplyToggleSkin)
-
     local showIcon = MakeCheckbox(cards.general.content, "Show Spell Icon", "Show the spell icon on the left.")
     showIcon:SetPoint("TOPLEFT", 330, -4)
     showIcon:SetChecked(db.castbar.showIcon)
@@ -32,7 +28,7 @@ function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildSt
     ApplyToggleSkin(showIcon)
 
     local shield = MakeCheckbox(cards.general.content, "Show Interrupt Shield", "Shield icon on uninterruptible casts.")
-    shield:SetPoint("TOPLEFT", 6, -40)
+    shield:SetPoint("TOPLEFT", 6, -4)
     shield:SetChecked(db.castbar.showShield)
     shield:SetScript("OnClick", function()
       db.castbar.showShield = shield:GetChecked()
@@ -41,7 +37,7 @@ function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildSt
     ApplyToggleSkin(shield)
 
     local latency = MakeCheckbox(cards.general.content, "Show Latency Spark", "Latency spark at the bar edge (best-effort).")
-    latency:SetPoint("TOPLEFT", 330, -40)
+    latency:SetPoint("TOPLEFT", 6, -40)
     latency:SetChecked(db.castbar.showLatencySpark)
     latency:SetScript("OnClick", function()
       db.castbar.showLatencySpark = latency:GetChecked()

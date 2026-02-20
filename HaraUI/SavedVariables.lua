@@ -13,6 +13,7 @@ NS.DEFAULTS = {
       showSpellIDs = false,
       themeColor = { r = 0.949, g = 0.431, b = 0.031 },
       closeStyle = "round",
+      codexTheme = "necromancer",
     },
 
     debug = {
@@ -81,6 +82,7 @@ NS.DEFAULTS = {
       frameAnchor = nil,
       frameX = 0,
       frameY = 0,
+      scale = 1.0,
       stripeAlpha = 0.22,
       font = "Tahoma Bold",
       fontSize = 12,
@@ -136,6 +138,14 @@ NS.DEFAULTS = {
 
     summons = {
       enabled = true,
+    },
+
+    altpanel = {
+      enabled = true,
+      characters = {},
+      weeklyReset = 0,
+      showRealms = true,
+      showZeroRated = true,
     },
   },
 }

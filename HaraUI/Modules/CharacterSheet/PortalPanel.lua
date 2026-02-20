@@ -4,11 +4,12 @@ if not CS then return end
 
 CS.PortalPanel = CS.PortalPanel or {}
 local PortalPanel = CS.PortalPanel
+local SpellScanner = CS.SpellScanner
 
 ---------------------------------------------------------------------------
 -- Constants
 ---------------------------------------------------------------------------
-local PANEL_WIDTH = 360
+local PANEL_WIDTH = 320
 local PANEL_HEIGHT = 620
 local ROW_HEIGHT = 28
 local ROW_SPACING = 30
@@ -56,26 +57,10 @@ end
 ---------------------------------------------------------------------------
 -- Portal spell scanner — Hero's Path dungeon teleports by expansion
 ---------------------------------------------------------------------------
-local function NormalizeName(s)
-  if type(s) ~= "string" then return "" end
-  s = string.lower(s)
-  s = s:gsub("[%p]", " ")
-  s = s:gsub("%s+", " ")
-  s = s:gsub("^%s+", ""):gsub("%s+$", "")
-  return s
-end
-
-local function IsSpellKnownCompat(spellID)
-  if not spellID then return false end
-  if IsSpellKnownOrOverridesKnown then return IsSpellKnownOrOverridesKnown(spellID) end
-  if IsSpellKnown then return IsSpellKnown(spellID) end
-  if IsPlayerSpell then return IsPlayerSpell(spellID) end
-  return false
-end
 
 local function LooksLikeTravelSpell(spellName, spellDesc)
-  local name = NormalizeName(spellName)
-  local desc = NormalizeName(spellDesc)
+  local name = SpellScanner.NormalizeName(spellName)
+  local desc = SpellScanner.NormalizeName(spellDesc)
   -- Exclude non-dungeon spells
   if name:find("pathfinder") then return false end
   if name:find("warband bank") or name:find("distance inhibitor") then return false end
@@ -250,7 +235,7 @@ end
 --- Returns displayName, expansionName or nil, nil if no match.
 local function ResolveDungeonInfo(rawName)
   local stripped = StripSpellPrefix(rawName)
-  local normalized = NormalizeName(stripped)
+  local normalized = SpellScanner.NormalizeName(stripped)
   if normalized == "" then return nil, nil end
 
   -- Try longest-match first: check if any key is found within the normalized text
@@ -268,72 +253,6 @@ local function ResolveDungeonInfo(rawName)
   return nil, nil
 end
 
-local function IsItemType(itemType, want)
-  if itemType == want then return true end
-  if type(itemType) == "number" and Enum and Enum.SpellBookItemType then
-    if want == "SPELL" and itemType == Enum.SpellBookItemType.Spell then return true end
-    if want == "FLYOUT" and itemType == Enum.SpellBookItemType.Flyout then return true end
-  end
-  return false
-end
-
-local function UnpackSpellBookItemInfo(a, b)
-  if type(a) == "table" then
-    local itemType = a.itemType or a.spellType
-    local id
-    if IsItemType(itemType, "SPELL") then
-      id = a.spellID or a.actionID
-    elseif IsItemType(itemType, "FLYOUT") then
-      id = a.flyoutID or a.actionID
-    else
-      id = a.spellID or a.flyoutID or a.actionID
-    end
-    return itemType, id
-  end
-  return a, b
-end
-
-local function GetSkillLineRange(tab)
-  if type(tab) == "table" then
-    local offset = tab.itemIndexOffset or tab.offset or tab.offSet
-    local count = tab.numSpellBookItems or tab.numSlots or tab.numSpells
-    if type(offset) == "number" and type(count) == "number" then
-      return offset, count
-    end
-  end
-  return nil, nil
-end
-
-local function GetFlyoutSlots(flyoutID)
-  if not flyoutID then return 0 end
-  if C_SpellBook and C_SpellBook.GetFlyoutInfo then
-    local info = C_SpellBook.GetFlyoutInfo(flyoutID)
-    if type(info) == "table" then
-      return tonumber(info.numSlots) or tonumber(info.numKnownSlots) or 0
-    end
-    local _, _, numSlots = C_SpellBook.GetFlyoutInfo(flyoutID)
-    return tonumber(numSlots) or 0
-  end
-  if GetFlyoutInfo then
-    local _, _, numSlots = GetFlyoutInfo(flyoutID)
-    return tonumber(numSlots) or 0
-  end
-  return 0
-end
-
-local function GetFlyoutSpellAt(flyoutID, slotIndex)
-  if C_SpellBook and C_SpellBook.GetFlyoutSlotInfo then
-    local a, b, c = C_SpellBook.GetFlyoutSlotInfo(flyoutID, slotIndex)
-    if type(a) == "table" then
-      return a.spellID, a.overrideSpellID, a.isKnown
-    end
-    return a, b, c
-  end
-  if GetFlyoutSlotInfo then
-    return GetFlyoutSlotInfo(flyoutID, slotIndex)
-  end
-  return nil, nil, nil
-end
 
 --- Scan the entire spellbook and return Hero's Path dungeon teleport spells grouped by expansion.
 --- Returns: { { name = "The War Within", spells = { {spellID, rawName, dest, icon, known}, ... } }, ... }
@@ -364,7 +283,7 @@ local function ScanAllPortalSpells()
     local dest = descDest or displayName or StripSpellPrefix(rawName)
     local expansion = lookupExpansion or tabName or "Other"
     local icon = GetSpellDisplayIcon(spellID)
-    local known = IsSpellKnownCompat(spellID)
+    local known = SpellScanner.IsSpellKnownCompat(spellID)
 
     if not groupByName[expansion] then
       local group = { name = expansion, spells = {} }
@@ -389,13 +308,13 @@ local function ScanAllPortalSpells()
       if rawA == nil and spellBookBank ~= spellBookType then
         rawA, rawB = GetItemInfo(i, spellBookType)
       end
-      local spellType, spellID = UnpackSpellBookItemInfo(rawA, rawB)
-      if IsItemType(spellType, "SPELL") and spellID then
+      local spellType, spellID = SpellScanner.UnpackSpellBookItemInfo(rawA, rawB)
+      if SpellScanner.IsItemType(spellType, "SPELL") and spellID then
         ProcessSpell(spellID, expansionName)
-      elseif IsItemType(spellType, "FLYOUT") and spellID then
-        local numFlyoutSlots = GetFlyoutSlots(spellID)
+      elseif SpellScanner.IsItemType(spellType, "FLYOUT") and spellID then
+        local numFlyoutSlots = SpellScanner.GetFlyoutSlots(spellID)
         for s = 1, numFlyoutSlots do
-          local flyID, overID, isKnown = GetFlyoutSpellAt(spellID, s)
+          local flyID, overID, isKnown = SpellScanner.GetFlyoutSpellAt(spellID, s)
           if isKnown == nil or isKnown then
             if flyID then ProcessSpell(flyID, expansionName) end
             if overID and overID ~= flyID then ProcessSpell(overID, expansionName) end
@@ -410,7 +329,7 @@ local function ScanAllPortalSpells()
     for line = 1, numLines do
       local info = C_SpellBook.GetSpellBookSkillLineInfo(line)
       local tabName = info and info.name or ("Tab " .. line)
-      local offset, numSlots = GetSkillLineRange(info)
+      local offset, numSlots = SpellScanner.GetSkillLineRange(info)
       if offset == nil or numSlots == nil then
         local _, _, tupleOffset, tupleCount = C_SpellBook.GetSpellBookSkillLineInfo(line)
         offset = tupleOffset
@@ -456,8 +375,8 @@ local function MakeGlassCard(parent, title)
     edgeSize = 1,
     insets = { left = 1, right = 1, top = 1, bottom = 1 },
   })
-  card:SetBackdropColor(0, 0, 0, 0.08)
-  card:SetBackdropBorderColor(0.58, 0.60, 0.70, 0.22)
+  card:SetBackdropColor(0, 0, 0, 0)
+  card:SetBackdropBorderColor(0, 0, 0, 0)
 
   if title and title ~= "" then
     card.title = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -665,7 +584,7 @@ local function UpdateGridCellSecure(cell, state)
 
   local btn = cell.castBtn
   local spellID = cell.assignedSpellID
-  if spellID and IsSpellKnownCompat(spellID) then
+  if spellID and SpellScanner.IsSpellKnownCompat(spellID) then
     btn:SetAttribute("type", "spell")
     btn:SetAttribute("type1", "spell")
     btn:SetAttribute("spell", spellID)
@@ -683,7 +602,7 @@ local function ApplyGridCellVisual(cell)
   if spellID then
     local icon = GetSpellDisplayIcon(spellID)
     cell.icon:SetTexture(icon or 134400)
-    local known = IsSpellKnownCompat(spellID)
+    local known = SpellScanner.IsSpellKnownCompat(spellID)
     cell.icon:SetDesaturated(not known)
     if known then
       cell:SetBackdropBorderColor(0.40, 0.30, 0.65, 0.85)
@@ -798,7 +717,7 @@ function PortalPanel:CreateQuickAccessGrid()
         local sid = cellRef.assignedSpellID
         if sid then
           GameTooltip:SetSpellByID(sid)
-          if IsSpellKnownCompat(sid) then
+          if SpellScanner.IsSpellKnownCompat(sid) then
             GameTooltip:AddLine(" ")
             GameTooltip:AddLine("Left-click to cast", 0.4, 0.9, 0.4)
           else
@@ -889,7 +808,7 @@ function PortalPanel:Create()
   f:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 82)
   f:EnableMouse(true)
 
-  -- Black-to-purple vertical gradient background (same as RightPanel)
+  -- Black-to-purple vertical gradient background (same as MythicPanel)
   f.bgGradient = f:CreateTexture(nil, "BACKGROUND")
   f.bgGradient:SetAllPoints()
   f.bgGradient:SetTexture("Interface/Buttons/WHITE8x8")
@@ -914,19 +833,29 @@ function PortalPanel:Create()
   f.headerSubtitle:SetTextColor(0.75, 0.70, 0.85, 0.95)
   ApplyFont(f.headerSubtitle, 10)
 
-  -- Scroll frame for expansion cards
+  -- Scroll frame for expansion cards (scrollbar hidden, mouse wheel still works)
   f.scrollFrame = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
-  f.scrollFrame:SetPoint("TOPLEFT", 8, -46)
-  f.scrollFrame:SetPoint("BOTTOMRIGHT", -28, 8)
+  f.scrollFrame:SetPoint("TOPLEFT", 2, -46)
+  f.scrollFrame:SetPoint("BOTTOMRIGHT", -2, 8)
 
   f.scrollChild = CreateFrame("Frame", nil, f.scrollFrame)
-  f.scrollChild:SetWidth(PANEL_WIDTH - 44)
+  f.scrollChild:SetWidth(PANEL_WIDTH - 4)
   f.scrollFrame:SetScrollChild(f.scrollChild)
 
-  -- Style the scrollbar to be less obtrusive
-  local scrollBar = f.scrollFrame.ScrollBar or _G[f.scrollFrame:GetName() and (f.scrollFrame:GetName() .. "ScrollBar") or ""]
-  if scrollBar and scrollBar.SetAlpha then
-    scrollBar:SetAlpha(0.5)
+  local scrollBar = f.scrollFrame.ScrollBar
+    or _G[f.scrollFrame:GetName() and (f.scrollFrame:GetName() .. "ScrollBar") or ""]
+  if scrollBar then
+    scrollBar:Hide()
+    scrollBar:SetAlpha(0)
+    if scrollBar.ScrollUpButton then scrollBar.ScrollUpButton:Hide() end
+    if scrollBar.ScrollDownButton then scrollBar.ScrollDownButton:Hide() end
+    if scrollBar.ThumbTexture then scrollBar.ThumbTexture:Hide() end
+    for _, child in pairs({ scrollBar:GetChildren() }) do
+      child:Hide()
+    end
+    for _, region in pairs({ scrollBar:GetRegions() }) do
+      region:Hide()
+    end
   end
 
   state.cards = {}
@@ -1067,7 +996,7 @@ function PortalPanel:UpdateAnchoring()
 
   state.root:ClearAllPoints()
 
-  local rp = CS and CS.RightPanel or nil
+  local rp = CS and CS.MythicPanel or nil
   local rpRoot = rp and rp._state and rp._state.root or nil
   local rpVisible = rpRoot and rpRoot.IsShown and rpRoot:IsShown()
 

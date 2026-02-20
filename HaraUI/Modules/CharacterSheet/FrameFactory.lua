@@ -4,6 +4,7 @@ if not CS then return end
 
 CS.FrameFactory = CS.FrameFactory or {}
 local FrameFactory = CS.FrameFactory
+local Utils = CS.Utils
 
 ---------------------------------------------------------------------------
 -- Constants (exposed for other modules that need creation-time values)
@@ -33,11 +34,6 @@ FrameFactory._state = FrameFactory._state or {
 ---------------------------------------------------------------------------
 -- Shared helpers (used by CreateAll)
 ---------------------------------------------------------------------------
-local function IsAccountTransferBuild()
-  return C_CurrencyInfo
-    and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
-end
-
 local function SetAllPointsColor(tex, r, g, b, a)
   if not tex then return end
   tex:SetAllPoints()
@@ -124,7 +120,7 @@ end
 local function CreateTab(parent, text, tabIndex)
   local Skin = CS and CS.Skin or nil
   local CFG = Skin and Skin.CFG or {}
-  local template = IsAccountTransferBuild()
+  local template = Utils.IsAccountTransferBuild()
     and "BackdropTemplate"
     or "SecureActionButtonTemplate,BackdropTemplate"
   local tab = CreateFrame("Button", nil, parent, template)
@@ -459,7 +455,7 @@ local function ExpandCharacterFrame(state, parent)
       panelHeight = parent.GetAttribute and parent:GetAttribute("UIPanelLayout-height") or nil,
     }
   end
-  local isTransfer = IsAccountTransferBuild()
+  local isTransfer = Utils.IsAccountTransferBuild()
   if not isTransfer and parent.SetAttribute
      and not (InCombatLockdown and InCombatLockdown()) then
     -- Capture Blizzard originals if PresetFrameAttributes didn't already.
@@ -525,7 +521,7 @@ local function RestoreCharacterFrame(state)
   _sizeGuardActive = false
   local parent = (state and state.parent) or CharacterFrame
   local orig   = state and state.originalFrameSize or nil
-  local isTransfer = IsAccountTransferBuild()
+  local isTransfer = Utils.IsAccountTransferBuild()
 
   -- Restore UIPanelLayout attributes in all cases (covers pre-set-only path
   -- where frame was never visually expanded but attributes were changed).
@@ -597,7 +593,7 @@ end
 local function RefreshTabSecureBindings(tabs)
   if not tabs then return end
   local buttons = { tabs.tabCharacter, tabs.tabReputation, tabs.tabCurrency }
-  if IsAccountTransferBuild() then
+  if Utils.IsAccountTransferBuild() then
     for _, btn in ipairs(buttons) do
       if btn and btn.SetAttribute then
         btn._nativeTabName = nil
@@ -765,7 +761,7 @@ local function ApplyAnchors(state)
   tabs:SetPoint("TOPLEFT", parent, "BOTTOMLEFT", 22, -1)
   tabs:SetSize(barW, btnH)
   RefreshTabSecureBindings(tabs)
-  if IsAccountTransferBuild() then
+  if Utils.IsAccountTransferBuild() then
     if tabs.Hide then tabs:Hide() end
   else
     if tabs.Show then tabs:Show() end
@@ -803,7 +799,7 @@ function FrameFactory:Apply(reason)
 
   -- Transfer + native-currency mode: expand frame and show chrome but let
   -- Blizzard own the sub-frame content; do not run the full anchor pass.
-  if IsAccountTransferBuild() and pm and pm:IsNativeCurrencyMode() then
+  if Utils.IsAccountTransferBuild() and pm and pm:IsNativeCurrencyMode() then
     ExpandCharacterFrame(state, state.parent or CharacterFrame)
     -- ExpandCharacterFrame hides CharacterFrameInset; restore it so Blizzard's
     -- native currency background is visible.
@@ -826,6 +822,11 @@ function FrameFactory:Apply(reason)
   local root = self:CreateAll(state.parent or CharacterFrame)
   if not root then return false end
   if pm then pm:_EnsureSubFrameHooks() end
+
+  local csDB = NS:GetDB() and NS:GetDB().charsheet
+  local scale = csDB and csDB.scale or 1.0
+  local parent = state.parent or CharacterFrame
+  if parent and parent.SetScale then parent:SetScale(scale) end
 
   ApplyAnchors(state)
 
@@ -876,7 +877,7 @@ function FrameFactory:_ScheduleBoundedApply(reason)
     invoke()
     return
   end
-  if IsAccountTransferBuild() then
+  if Utils.IsAccountTransferBuild() then
     C_Timer.After(0, invoke)
     return
   end
@@ -892,7 +893,7 @@ function FrameFactory:_HookParent(parent)
   if state.hookedParents[parent] then return end
 
   parent:HookScript("OnShow", function()
-    if IsAccountTransferBuild() and C_Timer and C_Timer.After then
+    if Utils.IsAccountTransferBuild() and C_Timer and C_Timer.After then
       C_Timer.After(0, function()
         if not (state.parent and state.parent.IsShown and state.parent:IsShown()) then return end
         self:_ScheduleBoundedApply("CharacterFrame.OnShow.deferred")

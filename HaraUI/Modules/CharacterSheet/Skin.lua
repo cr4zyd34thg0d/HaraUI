@@ -6,13 +6,10 @@ end
 
 CS.Skin = CS.Skin or {}
 local Skin = CS.Skin
-
-local function IsAccountTransferBuild()
-	return C_CurrencyInfo and type(C_CurrencyInfo.RequestCurrencyFromAccountCharacter) == "function"
-end
+local Utils = CS.Utils
 
 ---------------------------------------------------------------------------
--- CFG: shared constants used by GearDisplay, StatsPanel, RightPanel
+-- CFG: shared constants used by GearDisplay, StatsPanel, MythicPanel
 ---------------------------------------------------------------------------
 Skin.CFG = {
 	SLOT_ICON_SIZE = 38,
@@ -548,7 +545,7 @@ function Skin.HideBlizzardChrome()
 	---------------------------------------------------------------------------
 	-- 8. Blizzard tabs (we use custom tabs)
 	---------------------------------------------------------------------------
-	if not IsAccountTransferBuild() then
+	if not Utils.IsAccountTransferBuild() then
 		for i = 1, 4 do
 			local tab = _G["CharacterFrameTab" .. i]
 			if tab then
@@ -579,7 +576,7 @@ function Skin.HideBlizzardChrome()
 	---------------------------------------------------------------------------
 	-- 8.5. PaperDoll sidebar tabs (includes Blizzard Equipment Manager button)
 	---------------------------------------------------------------------------
-	if not IsAccountTransferBuild() then
+	if not Utils.IsAccountTransferBuild() then
 		for i = 1, 8 do
 			local btn = GetSidebarTabButton(i)
 			if btn then

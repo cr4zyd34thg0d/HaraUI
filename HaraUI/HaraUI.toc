@@ -26,6 +26,7 @@ Options/Theme.lua
 Options/Widgets.lua
 Options/Window.lua
 Options/Pages/General.lua
+Options/Pages/Codex.lua
 Options/Pages/XP.lua
 Options/Pages/Cast.lua
 Options/Pages/Friendly.lua
@@ -39,6 +40,7 @@ Core/GlobalsShim.lua
 Modules/Fonts.lua
 Modules/XPBar.lua
 Modules/CastBar.lua
+Modules/CharacterSheet/SharedUtils.lua
 Modules/CharacterSheet/Core.lua
 Modules/CharacterSheet/Coordinator.lua
 Modules/CharacterSheet/FrameFactory.lua
@@ -46,13 +48,18 @@ Modules/CharacterSheet/CurrencyLayout.lua
 Modules/CharacterSheet/PaneManager.lua
 Modules/CharacterSheet/Data.lua
 Modules/CharacterSheet/Skin.lua
-Modules/CharacterSheet/RightPanel.lua
+Modules/CharacterSheet/SpellScanner.lua
+Modules/CharacterSheet/MythicPanel.lua
 Modules/CharacterSheet/PortalPanel.lua
 Modules/CharacterSheet/GearDisplay.lua
 Modules/CharacterSheet/StatsPanel.lua
 Modules/CharacterSheet/CombatPanel.lua
 Modules/CharacterSheet/Guards.lua
 Modules/CharacterSheet.lua
+Modules/AltPanel/Data.lua
+Modules/AltPanel/Window.lua
+Modules/AltPanel/Equipment.lua
+Modules/AltPanel/AltPanel.lua
 Modules/TrackedBars.lua
 Modules/FriendlyNameplates.lua
 Modules/RotationHelper.lua

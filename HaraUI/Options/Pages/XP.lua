@@ -5,13 +5,9 @@ NS.OptionsPages = NS.OptionsPages or {}
 function NS.OptionsPages.BuildXPPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, MakeButton, NS, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
   pages.xp = CreateFrame("Frame", nil, content); pages.xp:SetAllPoints(true)
   do
-    local xpEnable = MakeModuleHeader(pages.xp, "xpbar")
-
     local cards = BuildStandardModuleCards(pages.xp)
 
     -- General card controls.
-    NS.OptionsPages.AttachModuleEnableToggle(xpEnable, cards.general.content, ApplyToggleSkin)
-
     local showAtMax = MakeCheckbox(cards.general.content, "Show Bar at Max Level", "Keep XP bar visible at max level.")
     showAtMax:SetPoint("TOPLEFT", 330, -4)
     showAtMax:SetChecked(db.xpbar.showAtMaxLevel)
@@ -22,12 +18,12 @@ function NS.OptionsPages.BuildXPPage(pages, content, MakeModuleHeader, BuildStan
     ApplyToggleSkin(showAtMax)
 
     local preview = MakeButton(cards.general.content, "Preview Bar", 170, 24)
-    preview:SetPoint("TOPLEFT", 6, -40)
+    preview:SetPoint("TOPLEFT", 6, -4)
     NS.OptionsPages.SetModulePreviewOnClick(preview, "xpbar", NS)
 
     local generalDivider = MakeAccentDivider(cards.general.content)
-    generalDivider:SetPoint("TOPLEFT", 0, -84)
-    generalDivider:SetPoint("TOPRIGHT", 0, -84)
+    generalDivider:SetPoint("TOPLEFT", 0, -48)
+    generalDivider:SetPoint("TOPRIGHT", 0, -48)
 
     -- Sizing card controls.
     local scale = BuildStandardSliderRow(
