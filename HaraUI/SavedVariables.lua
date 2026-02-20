@@ -17,7 +17,6 @@ NS.DEFAULTS = {
     },
 
     debug = {
-      currencyLayout = false,
     },
 
     xpbar = {
@@ -71,14 +70,7 @@ NS.DEFAULTS = {
     charsheet = {
       enabled = true,
       hideArt = true,
-      styleStats = true,
       showRightPanel = true,
-      rightPanelDetached = false,
-      rightPanelAnchor = "TOPLEFT",
-      rightPanelX = 0,
-      rightPanelY = 0,
-      rightPanelOffsetX = 8,
-      rightPanelOffsetY = 0,
       frameAnchor = nil,
       frameX = 0,
       frameY = 0,
