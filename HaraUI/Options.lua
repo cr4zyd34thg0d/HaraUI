@@ -26,8 +26,17 @@ local function GetAddonMetadataField(field)
   return nil
 end
 
-local DEV_VERSION = "2.2.1-alpha"
-local VERSION_TOKEN = "v2.2.1-alpha"
+local function GetDevVersionFallback()
+  local dev = NS and NS.DEV_VERSION or nil
+  if type(dev) == "string" and dev ~= "" then
+    return dev
+  end
+  local meta = GetAddonMetadataField("Version")
+  if type(meta) == "string" and meta ~= "" and not meta:find("@project-version@", 1, true) then
+    return meta
+  end
+  return "0.0.0-dev"
+end
 
 local function GetVersionString()
   if NS and NS.GetVersionString then
@@ -36,10 +45,7 @@ local function GetVersionString()
 
   local version = GetAddonMetadataField("Version")
   if type(version) ~= "string" or version == "" then
-    return DEV_VERSION
-  end
-  if version:find(VERSION_TOKEN, 1, true) then
-    return DEV_VERSION
+    return GetDevVersionFallback()
   end
   return version
 end
@@ -47,7 +53,7 @@ end
 local function GetDisplayVersionString(version)
   local text = type(version) == "string" and version or ""
   if text == "" then
-    text = DEV_VERSION
+    text = GetDevVersionFallback()
   end
   -- Keep release/beta/alpha tags intact; only strip local dev suffix.
   return (text:gsub("%-dev$", ""))
@@ -272,7 +278,7 @@ function NS:InitOptions()
       local installed = info and info.installed or nil
       local status = (info and (info.status or GetVersionStatus(info))) or "unknown"
 
-      navVersion:SetText(GetDisplayVersionString(installed or DEV_VERSION))
+      navVersion:SetText(GetDisplayVersionString(installed or GetDevVersionFallback()))
 
       navGitIndicator:Show()
       if status == "out-of-date" then
