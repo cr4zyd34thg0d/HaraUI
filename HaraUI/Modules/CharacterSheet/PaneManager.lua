@@ -756,6 +756,19 @@ function PaneManager:_EnsureSubFrameHooks()
     hooksecurefunc("CharacterFrame_ShowSubFrame", function(subFrameToken)
       local core = CS and CS.Core or nil
       if core and core._OnShowSubFrame then pcall(core._OnShowSubFrame, core, subFrameToken) end
+
+      -- During combat, avoid SetActivePane() because it performs Show/Hide and
+      -- re-parent operations on CharacterFrame children, which are protected.
+      -- Track only logical pane state; CombatPanel handles visual suppression.
+      if Utils.IsInLockdown() then
+        local pane = ResolvePaneFromToken(subFrameToken)
+        if pane then
+          local lockedState = EnsureState(self)
+          lockedState.activePane = pane
+        end
+        return
+      end
+
       if cl and cl.GuardLayoutDuringTransfer("ShowSubFrame.hook", tostring(subFrameToken), "ShowSubFrame.hook", function()
         self:SetActivePaneFromToken(subFrameToken, "CharacterFrame_ShowSubFrame.transfer_hidden")
         if ResolvePaneFromToken(subFrameToken) == "currency" then
