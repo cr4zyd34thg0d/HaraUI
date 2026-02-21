@@ -336,8 +336,16 @@ function Coordinator:_EnsureCharacterFrameHooks()
   if not (CharacterFrame and CharacterFrame.HookScript) then return end
   state.characterFrameHooked = true
 
+  local factory = CS and CS.FrameFactory or nil
+  if factory and factory.PresetFrameAttributes then
+    factory.PresetFrameAttributes()
+  end
+
   CharacterFrame:HookScript("OnShow", function()
     local factory = CS and CS.FrameFactory or nil
+    if factory and factory.PresetFrameAttributes then
+      factory.PresetFrameAttributes()
+    end
     if factory and factory.SyncExpandSize then
       factory.SyncExpandSize()
     end

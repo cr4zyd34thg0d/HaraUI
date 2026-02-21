@@ -40,10 +40,18 @@ CombatPanel._state = CombatPanel._state or {
 }
 
 local function NormalizePaneName(token)
+  if type(token) == "table" and token.GetName then
+    token = token:GetName()
+  end
+
   local pm = CS and CS.PaneManager or nil
   if pm and pm.NormalizePane then
-    return pm.NormalizePane(token)
+    local normalized = pm.NormalizePane(token)
+    if normalized then
+      return normalized
+    end
   end
+
   -- Minimal fallback if PaneManager not loaded yet
   if type(token) ~= "string" then return nil end
   local lower = string.lower(token)
@@ -181,6 +189,14 @@ function CombatPanel:Show()
   state.active = true
   state.currentPane = "character"
 
+  local pm = CS and CS.PaneManager or nil
+  if pm and pm.GetActivePane then
+    local pane = NormalizePaneName(pm:GetActivePane())
+    if pane then
+      state.currentPane = pane
+    end
+  end
+
   if C_Timer and C_Timer.After then
     C_Timer.After(0, function()
       if not state.active then return end
@@ -218,6 +234,9 @@ function CombatPanel:Show()
 
       -- 6) Install tab-switch hook (idempotent, one-time install).
       self:_EnsureTabHook()
+      -- Enforce pane visibility immediately in case the active pane is already
+      -- non-character when combat view is shown.
+      self:_ApplyCombatPaneVisibility()
     end)
   end
 end
