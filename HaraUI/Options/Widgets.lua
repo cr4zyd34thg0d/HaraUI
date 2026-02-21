@@ -188,9 +188,6 @@ local function MakeButton(parent, text, w, h)
   function b:SetText(t)
     b.text:SetText(t)
   end
-  function b:GetFontString()
-    return b.text
-  end
 
   return b
 end
@@ -356,11 +353,6 @@ local function MakeSlider(parent, label, minv, maxv, step)
   s.Label:SetPoint("BOTTOMLEFT", s, "TOPLEFT", 0, 4)
   s.Label:SetText(label)
   ApplyUIFont(s.Label, ORANGE_SIZE, "OUTLINE", ORANGE)
-
-  function s:SetLabelValue(v, fmt)
-    local f = fmt or "%.2f"
-    self.Text:SetText(f:format(v))
-  end
 
   return s
 end
