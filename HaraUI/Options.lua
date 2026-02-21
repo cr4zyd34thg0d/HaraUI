@@ -503,55 +503,80 @@ function NS:InitOptions()
     end
 
   -- =========================================================
+  -- PAGE BUILD CONTEXT
+  -- =========================================================
+    local pageCtx = {
+      pages = pages,
+      content = content,
+      db = db,
+      NS = NS,
+      ORANGE = ORANGE,
+      ORANGE_SIZE = ORANGE_SIZE,
+      RegisterTheme = RegisterTheme,
+      ApplyUIFont = ApplyUIFont,
+      ApplyDropdownFont = ApplyDropdownFont,
+      MakeModuleHeader = MakeModuleHeader,
+      BuildStandardModuleCards = BuildStandardModuleCards,
+      ApplyToggleSkin = ApplyToggleSkin,
+      MakeCheckbox = MakeCheckbox,
+      MakeButton = MakeButton,
+      MakeAccentDivider = MakeAccentDivider,
+      BuildStandardSliderRow = BuildStandardSliderRow,
+      Round2 = Round2,
+      Small = Small,
+      MakeColorSwatch = MakeColorSwatch,
+    }
+
+  -- =========================================================
   -- GENERAL PAGE
   -- =========================================================
-    local BuildGeneralPageCards = Pages.CreateBuildGeneralPageCards(
-      db,
-      ORANGE,
-      MakeCheckbox,
-      NS,
-      function() UpdateNavIndicators() end,
-      ApplyToggleSkin,
-      MakeButton,
-      MakeColorSwatch,
-      SetThemeColor,
-      Small,
-      BuildStandardSliderRow,
-      Round2,
-      RegisterTheme,
-      ApplyUIFont
-    )
-    Pages.BuildGeneralPage(pages, content, BuildStandardModuleCards, BuildGeneralPageCards)
+    pageCtx.BuildGeneralPageCards = Pages.CreateBuildGeneralPageCards({
+      db = db,
+      ORANGE = ORANGE,
+      MakeCheckbox = MakeCheckbox,
+      NS = NS,
+      UpdateNavIndicators = function() UpdateNavIndicators() end,
+      ApplyToggleSkin = ApplyToggleSkin,
+      MakeButton = MakeButton,
+      MakeColorSwatch = MakeColorSwatch,
+      SetThemeColor = SetThemeColor,
+      Small = Small,
+      BuildStandardSliderRow = BuildStandardSliderRow,
+      Round2 = Round2,
+      RegisterTheme = RegisterTheme,
+      ApplyUIFont = ApplyUIFont,
+    })
+    Pages.BuildGeneralPage(pageCtx)
 
   -- =========================================================
   -- XP / REP BAR PAGE
   -- =========================================================
-    Pages.BuildXPPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, MakeButton, NS, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
+    Pages.BuildXPPage(pageCtx)
 
   -- =========================================================
   -- CAST BAR PAGE
   -- =========================================================
-    Pages.BuildCastPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeButton, MakeAccentDivider, BuildStandardSliderRow, Round2, MakeColorSwatch, ApplyUIFont, ORANGE_SIZE, ORANGE, ApplyDropdownFont, RegisterTheme, Small, db)
+    Pages.BuildCastPage(pageCtx)
 
   -- =========================================================
   -- LOOT TOASTS PAGE
   -- =========================================================
-    Pages.BuildLootPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeButton, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
+    Pages.BuildLootPage(pageCtx)
 
   -- =========================================================
   -- FRIENDLY NAMEPLATES PAGE
   -- =========================================================
-    Pages.BuildFriendlyPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, MakeColorSwatch, BuildStandardSliderRow, Small, db)
+    Pages.BuildFriendlyPage(pageCtx)
 
   -- =========================================================
   -- ROTATION HELPER PAGE
   -- =========================================================
-    Pages.BuildRotationPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeButton, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
+    Pages.BuildRotationPage(pageCtx)
 
   -- =========================================================
   -- MINIMAP BAR PAGE
   -- =========================================================
-    Pages.BuildMinimapPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
+    Pages.BuildMinimapPage(pageCtx)
 
   -- =========================================================
   -- NAVIGATION

@@ -2,7 +2,19 @@ local ADDON, NS = ...
 
 NS.OptionsPages = NS.OptionsPages or {}
 
-function NS.OptionsPages.BuildXPPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, MakeButton, NS, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
+function NS.OptionsPages.BuildXPPage(ctx)
+  local pages = ctx.pages
+  local content = ctx.content
+  local BuildStandardModuleCards = ctx.BuildStandardModuleCards
+  local MakeButton = ctx.MakeButton
+  local NS = ctx.NS
+  local ApplyToggleSkin = ctx.ApplyToggleSkin
+  local MakeCheckbox = ctx.MakeCheckbox
+  local MakeAccentDivider = ctx.MakeAccentDivider
+  local BuildStandardSliderRow = ctx.BuildStandardSliderRow
+  local Round2 = ctx.Round2
+  local Small = ctx.Small
+  local db = ctx.db
   pages.xp = CreateFrame("Frame", nil, content); pages.xp:SetAllPoints(true)
   do
     local cards = BuildStandardModuleCards(pages.xp)

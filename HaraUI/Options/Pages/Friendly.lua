@@ -2,7 +2,18 @@ local ADDON, NS = ...
 
 NS.OptionsPages = NS.OptionsPages or {}
 
-function NS.OptionsPages.BuildFriendlyPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, MakeColorSwatch, BuildStandardSliderRow, Small, db)
+function NS.OptionsPages.BuildFriendlyPage(ctx)
+  local pages = ctx.pages
+  local content = ctx.content
+  local BuildStandardModuleCards = ctx.BuildStandardModuleCards
+  local ApplyToggleSkin = ctx.ApplyToggleSkin
+  local MakeCheckbox = ctx.MakeCheckbox
+  local MakeAccentDivider = ctx.MakeAccentDivider
+  local MakeColorSwatch = ctx.MakeColorSwatch
+  local BuildStandardSliderRow = ctx.BuildStandardSliderRow
+  local Small = ctx.Small
+  local db = ctx.db
+  local NS = ctx.NS
   pages.friendly = CreateFrame("Frame", nil, content); pages.friendly:SetAllPoints(true)
   do
     local function IsPlatynatorInstalled()
