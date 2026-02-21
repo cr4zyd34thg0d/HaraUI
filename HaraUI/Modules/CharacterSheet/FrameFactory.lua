@@ -341,19 +341,6 @@ function FrameFactory:CreateAll(parent)
   return state.root
 end
 
----------------------------------------------------------------------------
--- Getters
----------------------------------------------------------------------------
-function FrameFactory:GetRoot() return self._state.root end
-function FrameFactory:GetGradient() return self._state.gradient end
-function FrameFactory:GetParent() return self._state.parent end
-function FrameFactory:GetTabs() return self._state.tabs end
-function FrameFactory:GetPanels() return self._state.panels end
-function FrameFactory:GetCharacterOverlay() return self._state.characterOverlay end
-function FrameFactory:GetHeadingHost() return self._state.leftPaneHeadingHost end
-function FrameFactory:GetHeading() return self._state.leftPaneHeading end
-function FrameFactory:IsCreated() return self._state.created == true end
-
 -- Expose constants for other modules
 FrameFactory.EXPANDED_WIDTH = EXPANDED_WIDTH
 FrameFactory.EXPANDED_HEIGHT = EXPANDED_HEIGHT
