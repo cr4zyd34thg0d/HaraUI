@@ -295,10 +295,6 @@ function Core:DispatchEvent(event, ...)
   -- Re-apply layout when combat ends as a safety net (ensures UpdateUIPanelPositions
   -- runs with the correct expanded attributes after any combat-blocked open).
   if event == "PLAYER_REGEN_ENABLED" then
-    local factory = CS and CS.FrameFactory or nil
-    if factory and factory.PresetFrameAttributes then
-      factory.PresetFrameAttributes()
-    end
     -- Dismiss the compact combat overlay now that full HaraUI can take over.
     local cp = CS and CS.CombatPanel or nil
     if cp and cp.Hide then cp:Hide() end
