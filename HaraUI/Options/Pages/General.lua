@@ -8,13 +8,6 @@ function NS.OptionsPages.CoerceInt(v)
   return floor(v + 0.5)
 end
 
-function NS.OptionsPages.AttachModuleEnableToggle(toggle, parent, ApplyToggleSkin)
-  toggle:ClearAllPoints()
-  toggle:SetParent(parent)
-  toggle:SetPoint("TOPLEFT", 6, -4)
-  ApplyToggleSkin(toggle)
-end
-
 function NS.OptionsPages.SetModulePreviewOnClick(button, moduleKey, NS)
   button:SetScript("OnClick", function()
     if NS.Modules and NS.Modules[moduleKey] and NS.Modules[moduleKey].Preview then
