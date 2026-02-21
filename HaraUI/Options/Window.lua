@@ -6,7 +6,6 @@ local ORANGE = Theme.ORANGE
 local ORANGE_SIZE = Theme.ORANGE_SIZE
 local RegisterTheme = Theme.RegisterTheme
 local ApplyUIFont = Theme.ApplyUIFont
-local SetUIFont = Theme.SetUIFont
 local ApplyDarkBackdrop = Widgets.ApplyDarkBackdrop
 local Title = Widgets.Title
 local Small = Widgets.Small
@@ -198,14 +197,6 @@ function NS:BuildOptionsWindow(BuildFullUI, db)
 
   BuildFullUI(window)
   NS.OptionsWindow = window
-  function NS:RefreshOptionsFonts()
-    if not NS._huiFontRegistry then return end
-    for fs, meta in pairs(NS._huiFontRegistry) do
-      if fs and fs.SetFont then
-        SetUIFont(fs, meta.size, nil, meta.color)
-      end
-    end
-  end
   function NS:OpenOptionsWindow()
     window:Show()
     window:Raise()
