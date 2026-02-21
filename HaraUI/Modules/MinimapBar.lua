@@ -64,6 +64,8 @@ local ignoreByName = {
 local buttonCache
 local buttonCacheTime = 0
 local buttonCacheTTL = 2
+local fallbackScanCooldown = 8
+local fallbackScanAt = 0
 
 local function RunReflowPipeline()
   CreateFrames()
@@ -478,16 +480,23 @@ local function CollectButtons()
 
   -- Fallback: enumerate all frames looking for LDB buttons (only if we found nothing)
   if #list == 0 and EnumerateFrames then
-    local f = EnumerateFrames()
-    local iter = 0
-    while f do
-      iter = iter + 1
-      local name = f.GetName and f:GetName()
-      if type(name) == "string" and name:find("^LibDBIcon10_") then
-        Add(f)
+    local now = GetTime()
+    if (now - fallbackScanAt) >= fallbackScanCooldown then
+      fallbackScanAt = now
+      local f = EnumerateFrames()
+      local iter = 0
+      local found = 0
+      while f do
+        iter = iter + 1
+        local name = f.GetName and f:GetName()
+        if type(name) == "string" and name:find("^LibDBIcon10_") then
+          Add(f)
+          found = found + 1
+          if found >= 64 then break end
+        end
+        f = EnumerateFrames(f)
+        if iter > 4000 then break end
       end
-      f = EnumerateFrames(f)
-      if iter > 10000 then break end
     end
   end
 
