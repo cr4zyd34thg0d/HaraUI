@@ -48,8 +48,6 @@ StatsPanel._state = StatsPanel._state or {
   topInfo = nil,
   -- 5 section frames
   sections = nil,
-  -- mode bar
-  buttons = nil,
   -- Equipment sets
   equipmentFrame = nil,
   equipmentRows = nil,
@@ -86,7 +84,6 @@ end
 local function EnsureState(self)
   local s = self._state
   s.sections = s.sections or {}
-  s.buttons = s.buttons or {}
   s.equipmentRows = s.equipmentRows or {}
   s.equipmentActionButtons = s.equipmentActionButtons or {}
   s.equipmentRowsData = s.equipmentRowsData or {}
