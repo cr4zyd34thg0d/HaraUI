@@ -955,13 +955,6 @@ function M:ApplyPopoutAlpha()
   ApplyPopoutAlpha()
 end
 
-function M:RefreshLayout()
-  if InCombatLockdown and InCombatLockdown() then return end
-  LayoutButtons()
-  ApplyOrientation()
-  ApplyPopoutAlpha()
-end
-
 ApplyPosition = function()
   local db = GetDB()
   if not db or not holder then return end
