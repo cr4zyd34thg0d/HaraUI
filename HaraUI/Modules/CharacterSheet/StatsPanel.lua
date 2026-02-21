@@ -1717,10 +1717,6 @@ function StatsPanel:SetMode(mode)
   return true
 end
 
-function StatsPanel:GetMode()
-  return EnsureState(self).mode
-end
-
 ---------------------------------------------------------------------------
 -- Request / hooks / events
 ---------------------------------------------------------------------------
