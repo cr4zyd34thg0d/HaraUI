@@ -419,12 +419,26 @@ local function ClearPendingPaneState(state)
   state.currencyPaneGuardToken = (tonumber(state.currencyPaneGuardToken) or 0) + 1
 end
 
+local function NextFrame(fn)
+  if type(fn) ~= "function" then return false end
+  if C_Timer and C_Timer.After then
+    C_Timer.After(0, fn)
+  else
+    fn()
+  end
+  return true
+end
+
+local function BumpToken(state, field)
+  state[field] = (tonumber(state[field]) or 0) + 1
+  return state[field]
+end
+
 function PaneManager:_SchedulePendingPaneRetry(pane)
   local state = EnsureState(self)
   if type(pane) ~= "string" or pane == "" or state.pendingPaneRetryScheduled then return false end
   state.pendingPaneRetryScheduled = true
-  state.pendingPaneRetryToken = (tonumber(state.pendingPaneRetryToken) or 0) + 1
-  local token = state.pendingPaneRetryToken
+  local token = BumpToken(state, "pendingPaneRetryToken")
   local function retry()
     local ls = EnsureState(self)
     if ls.pendingPaneRetryToken ~= token then return end
@@ -433,7 +447,7 @@ function PaneManager:_SchedulePendingPaneRetry(pane)
     if not (CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()) then return end
     self:SetActivePane(pane, "pending_pane_retry")
   end
-  if C_Timer and C_Timer.After then C_Timer.After(0, retry) else retry() end
+  NextFrame(retry)
   return true
 end
 
@@ -441,8 +455,7 @@ function PaneManager:_ScheduleCurrencyPaneGuard(_reason)
   if Utils.IsAccountTransferBuild() then return false end
   local state = EnsureState(self)
   local cl = GetCL()
-  state.currencyPaneGuardToken = (tonumber(state.currencyPaneGuardToken) or 0) + 1
-  local token = state.currencyPaneGuardToken
+  local token = BumpToken(state, "currencyPaneGuardToken")
   local function enforce(attempt)
     local ls = EnsureState(self)
     if ls.currencyPaneGuardToken ~= token then return end
@@ -452,8 +465,8 @@ function PaneManager:_ScheduleCurrencyPaneGuard(_reason)
     local frames = PaneManager.BuildPaneFrameMap()
     local activeFrame = frames.currency
     if not activeFrame then
-      if attempt < CURRENCY_GUARD_MAX_RETRIES and C_Timer and C_Timer.After then
-        C_Timer.After(0, function() enforce(attempt + 1) end)
+      if attempt < CURRENCY_GUARD_MAX_RETRIES then
+        NextFrame(function() enforce(attempt + 1) end)
       end
       return
     end
@@ -463,11 +476,7 @@ function PaneManager:_ScheduleCurrencyPaneGuard(_reason)
     HideCharacterPaneFrames()
     ShowBaseChrome("currency")
   end
-  if C_Timer and C_Timer.After then
-    C_Timer.After(0, function() enforce(0) end)
-  else
-    enforce(0)
-  end
+  NextFrame(function() enforce(0) end)
   return true
 end
 
