@@ -363,6 +363,25 @@ local _sizeGuardInstalled = false
 local _sizeGuardActive    = false
 local _dragRegistered     = false
 
+local function EnsureSizeGuardHooks(parent)
+  if not (parent and hooksecurefunc) then return end
+  if _sizeGuardInstalled then return end
+
+  _sizeGuardInstalled = true
+  hooksecurefunc(parent, "SetSize", function(_, w, h)
+    if not _sizeGuardActive then return end
+    if InCombatLockdown and InCombatLockdown() then return end
+    if w < EXPANDED_WIDTH or h < EXPANDED_HEIGHT then
+      parent:SetSize(EXPANDED_WIDTH, EXPANDED_HEIGHT)
+    end
+  end)
+  hooksecurefunc(parent, "SetWidth", function(_, w)
+    if not _sizeGuardActive then return end
+    if InCombatLockdown and InCombatLockdown() then return end
+    if w < EXPANDED_WIDTH then parent:SetWidth(EXPANDED_WIDTH) end
+  end)
+end
+
 ---------------------------------------------------------------------------
 -- EnsureApplyState: lazily initialises ephemeral apply-time fields
 ---------------------------------------------------------------------------
@@ -419,21 +438,7 @@ function FrameFactory.SyncExpandSize()
   _sizeGuardActive = false
   parent:SetSize(EXPANDED_WIDTH, EXPANDED_HEIGHT)
   _sizeGuardActive = true
-  if not _sizeGuardInstalled and hooksecurefunc then
-    _sizeGuardInstalled = true
-    hooksecurefunc(parent, "SetSize", function(_, w, h)
-      if not _sizeGuardActive then return end
-      if InCombatLockdown and InCombatLockdown() then return end
-      if w < EXPANDED_WIDTH or h < EXPANDED_HEIGHT then
-        parent:SetSize(EXPANDED_WIDTH, EXPANDED_HEIGHT)
-      end
-    end)
-    hooksecurefunc(parent, "SetWidth", function(_, w)
-      if not _sizeGuardActive then return end
-      if InCombatLockdown and InCombatLockdown() then return end
-      if w < EXPANDED_WIDTH then parent:SetWidth(EXPANDED_WIDTH) end
-    end)
-  end
+  EnsureSizeGuardHooks(parent)
 end
 
 ---------------------------------------------------------------------------
@@ -489,21 +494,7 @@ local function ExpandCharacterFrame(state, parent)
      and not (InCombatLockdown and InCombatLockdown()) then
     pcall(UpdateUIPanelPositions, parent)
   end
-  if not _sizeGuardInstalled and hooksecurefunc then
-    _sizeGuardInstalled = true
-    hooksecurefunc(parent, "SetSize", function(_, w, h)
-      if not _sizeGuardActive then return end
-      if InCombatLockdown and InCombatLockdown() then return end
-      if w < EXPANDED_WIDTH or h < EXPANDED_HEIGHT then
-        parent:SetSize(EXPANDED_WIDTH, EXPANDED_HEIGHT)
-      end
-    end)
-    hooksecurefunc(parent, "SetWidth", function(_, w)
-      if not _sizeGuardActive then return end
-      if InCombatLockdown and InCombatLockdown() then return end
-      if w < EXPANDED_WIDTH then parent:SetWidth(EXPANDED_WIDTH) end
-    end)
-  end
+  EnsureSizeGuardHooks(parent)
   local inset = _G and _G.CharacterFrameInset or nil
   if inset then
     if inset.SetAlpha  then inset:SetAlpha(0)        end
