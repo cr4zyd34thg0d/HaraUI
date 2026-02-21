@@ -406,20 +406,7 @@ function PaneManager:_UpdatePaneTabsVisual(pane)
   Apply(tabs.tabCurrency, normalized == "currency")
 end
 
----------------------------------------------------------------------------
 -- Hook helpers
----------------------------------------------------------------------------
-local function HookScriptOnce(state, frame, hookKey, scriptName, fn)
-  if not (state and frame and hookKey and scriptName and type(fn) == "function") then return false end
-  if not frame.HookScript then return false end
-  local byKey = state.subFrameHookMap[frame]
-  if type(byKey) ~= "table" then byKey = {}; state.subFrameHookMap[frame] = byKey end
-  if byKey[hookKey] then return false end
-  frame:HookScript(scriptName, fn)
-  byKey[hookKey] = true
-  return true
-end
-
 ---------------------------------------------------------------------------
 -- Pending pane / currency guard scheduling
 ---------------------------------------------------------------------------
@@ -715,7 +702,7 @@ function PaneManager:_HookCustomPaneTabs()
   local function Hook(tab, pane, key)
     if not tab then return end
     tab:EnableMouse(true)
-    HookScriptOnce(state, tab, key, "OnClick", function(_, button)
+    Utils.HookScriptOnce(state.subFrameHookMap, tab, key, "OnClick", function(_, button)
       if button and button ~= "LeftButton" then return end
       if pane == "currency" and type(tab._nativeTabName) == "string" and tab._nativeTabName ~= "" then return end
       if pane == "currency" then
@@ -741,7 +728,7 @@ function PaneManager:_HookBlizzardPaneTabs()
     local tab = _G and _G["CharacterFrameTab" .. i] or nil
     local pane = indexMap[i]
     if tab and pane then
-      HookScriptOnce(state, tab, "blizzard_tab_" .. tostring(i), "OnClick", function()
+      Utils.HookScriptOnce(state.subFrameHookMap, tab, "blizzard_tab_" .. tostring(i), "OnClick", function()
         self:SetActivePane(pane, "CharacterFrameTab" .. tostring(i))
       end)
     end

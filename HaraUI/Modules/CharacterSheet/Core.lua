@@ -176,21 +176,15 @@ end
 function Core:EnsurePaneVisibilityHooks()
   local state = self._state
   if not state.hookMap then
-    state.hookMap = {}
+    state.hookMap = setmetatable({}, { __mode = "k" })
   end
   local hookMap = state.hookMap
 
   local function HookOnShow(frame, key, eventName)
-    if hookMap[key] then
-      return
-    end
-    if not (frame and frame.HookScript) then
-      return
-    end
-    frame:HookScript("OnShow", function()
+    if not (Utils and Utils.HookScriptOnce) then return end
+    Utils.HookScriptOnce(hookMap, frame, key, "OnShow", function()
       self:QueueCurrencyRepUpdate(eventName)
     end)
-    hookMap[key] = true
   end
 
   -- NOTE: Core installs pane-level OnShow hooks to trigger currency/reputation
