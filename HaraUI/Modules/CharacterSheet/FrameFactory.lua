@@ -908,15 +908,3 @@ end
 function FrameFactory.RestoreCharacterFrameSize()
   RestoreCharacterFrame(FrameFactory._state)
 end
-
--- Thin delegation wrappers so Coordinator/PaneManager can call these
--- without needing a direct reference to PaneManager.
-function FrameFactory:_EnsureSubFrameHooks()
-  local pm = CS and CS.PaneManager or nil
-  if pm and pm._EnsureSubFrameHooks then pm:_EnsureSubFrameHooks() end
-end
-
-function FrameFactory:_EnsureBootstrapHooks()
-  local pm = CS and CS.PaneManager or nil
-  if pm and pm._EnsureBootstrapHooks then pm:_EnsureBootstrapHooks() end
-end
