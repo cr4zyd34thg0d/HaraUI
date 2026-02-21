@@ -65,6 +65,13 @@ local buttonCache
 local buttonCacheTime = 0
 local buttonCacheTTL = 2
 
+local function RunReflowPipeline()
+  CreateFrames()
+  if ApplyPosition then
+    ApplyPosition()
+  end
+end
+
 local function GetDB()
   local db = NS:GetDB()
   return db and db.minimapbar
@@ -729,6 +736,7 @@ end
 
 local function StartHoverRefresh()
   if hoverTicker then return end
+  if not (C_Timer and C_Timer.NewTicker) then return end
   local ticks = 0
   hoverTicker = C_Timer.NewTicker(0.1, function()
     if not bar or not bar:IsShown() then
@@ -748,14 +756,12 @@ end
 local function StartWarmupRefresh()
   if not M.active then return end
   if warmupTicker then return end
+  if not (C_Timer and C_Timer.NewTicker) then return end
   local ticks = 0
   warmupTicker = C_Timer.NewTicker(0.1, function()
     if not M.active then return end
     if InCombatLockdown and InCombatLockdown() then return end
-    CreateFrames()
-    LayoutButtons()
-    ApplyOrientation()
-    ApplyPopoutAlpha()
+    RunReflowPipeline()
     ticks = ticks + 1
     if ticks >= 20 then
       if warmupTicker then warmupTicker:Cancel() end
@@ -774,10 +780,7 @@ local function ShowBar(fromTab)
   bar:EnableMouse(true)
   C_Timer.After(0, function()
     if not bar or not bar:IsShown() then return end
-    if ApplyPosition then
-      ApplyPosition()
-    end
-    LayoutButtons()
+    RunReflowPipeline()
     StartHoverRefresh()
   end)
 end
@@ -981,11 +984,7 @@ Refresh = function()
   if InCombatLockdown and InCombatLockdown() then return end
   EnsureMinimapParent()
   EnsureZoomButtonsVisible()
-  CreateFrames()
-  ApplyPosition()
-  LayoutButtons()
-  ApplyOrientation()
-  ApplyPopoutAlpha()
+  RunReflowPipeline()
 end
 
 function M:SetLocked(locked, fromOptions)
@@ -1064,10 +1063,7 @@ function M:Apply()
   if db.minimapbar.popoutStay == nil then
     db.minimapbar.popoutStay = 2.0
   end
-  CreateFrames()
-  ApplyPosition()
-  LayoutButtons()
-  ApplyPopoutAlpha()
+  RunReflowPipeline()
   HideBar()
   if tab then tab:Show() end
   self:SetLocked(db.minimapbar.locked)
