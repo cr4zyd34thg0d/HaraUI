@@ -258,6 +258,14 @@ local function DispatchOnHide()
   if portal and portal.OnHide then pcall(portal.OnHide, portal) end
 end
 
+function Coordinator:DispatchCharacterPaneOnShow(reason)
+  local state = EnsureState(self)
+  if not state.active then return false end
+  if InCombatLockdown and InCombatLockdown() then return false end
+  DispatchOnShow(reason)
+  return true
+end
+
 -- Called from FlushUpdates after Apply completes.  Defined here (after the
 -- DispatchOnShow local) so it can reference it; FlushUpdates itself is defined
 -- earlier in the file where the local is not yet in scope.

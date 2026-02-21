@@ -787,14 +787,10 @@ function PaneManager:_EnsureBootstrapHooks()
 
   if hooksecurefunc and type(ToggleCharacter) == "function" then
     local function dispatchSubModules(reason)
-      -- Only dispatch to character-pane modules when on the character pane.
-      if not self:IsCharacterPaneActive() then return end
-      local gear = CS and CS.GearDisplay or nil
-      if gear and gear.OnShow then pcall(gear.OnShow, gear, reason) end
-      local stats = CS and CS.StatsPanel or nil
-      if stats and stats.OnShow then pcall(stats.OnShow, stats, reason) end
-      local right = CS and CS.MythicPanel or nil
-      if right and right.OnShow then pcall(right.OnShow, right, reason) end
+      local coordinator = CS and CS.Coordinator or nil
+      if coordinator and coordinator.DispatchCharacterPaneOnShow then
+        pcall(coordinator.DispatchCharacterPaneOnShow, coordinator, reason)
+      end
     end
 
     hooksecurefunc("ToggleCharacter", function(subFrameToken)
