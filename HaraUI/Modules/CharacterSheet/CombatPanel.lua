@@ -37,6 +37,7 @@ CombatPanel._state = CombatPanel._state or {
   active = false,
   tabHookInstalled = false,
   currentPane = "character",
+  paneWatchTicker = nil,
 }
 
 local function NormalizePaneName(token)
@@ -201,6 +202,35 @@ function CombatPanel:_ApplyCombatPaneVisibility()
   end
 end
 
+function CombatPanel:_StopPaneWatchTicker()
+  local state = self._state
+  local ticker = state.paneWatchTicker
+  if ticker and ticker.Cancel then
+    ticker:Cancel()
+  end
+  state.paneWatchTicker = nil
+end
+
+function CombatPanel:_StartPaneWatchTicker()
+  local state = self._state
+  self:_StopPaneWatchTicker()
+  if not (C_Timer and C_Timer.NewTicker) then
+    return
+  end
+
+  state.paneWatchTicker = C_Timer.NewTicker(0.05, function()
+    if not state.active then
+      self:_StopPaneWatchTicker()
+      return
+    end
+    if not (CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()) then
+      return
+    end
+    state.currentPane = ResolvePaneFromVisibility()
+    self:_ApplyCombatPaneVisibility()
+  end)
+end
+
 ---------------------------------------------------------------------------
 -- Show: suppress non-essential containers for a clean combat view.
 -- Deferred one tick to run outside the secure execution context.
@@ -208,6 +238,7 @@ end
 function CombatPanel:Show()
   local state = self._state
   state.active = true
+  self:_StartPaneWatchTicker()
   self:_EnsureTabHook()
   state.currentPane = ResolvePaneFromVisibility()
 
@@ -272,6 +303,7 @@ function CombatPanel:Hide()
   local state = self._state
   if not state.active then return end
   state.active = false
+  self:_StopPaneWatchTicker()
 
   local fState = Utils.GetFactoryState()
   if not fState then return end
