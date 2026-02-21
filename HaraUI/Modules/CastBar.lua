@@ -28,7 +28,6 @@ local state = {
   empowerStageDurations = {},
   empowerStageTotalMS = 0,
   empowerHoldMS = 0,
-  empowerStage = 0,
   spellName = nil,
   startMS = 0,
   endMS = 0,
@@ -268,7 +267,6 @@ local function UpdateEmpowerVisuals(nowMS, durationMS)
 
   local elapsedMS = math_max(0, nowMS - state.startMS)
   local currentStage = GetEmpowerStageAtTime(elapsedMS)
-  state.empowerStage = currentStage
 
   local total = durationMS
   local prevBoundary = 0
@@ -341,7 +339,6 @@ local function ShowUnlockPlaceholder()
   f.bar:SetValue(0)
   state.empower = false
   state.empowerStages = 0
-  state.empowerStage = 0
   state.spellName = nil
   ClearEmpowerVisuals()
   if f.spark then f.spark:Hide() end
@@ -386,7 +383,6 @@ local function StartCast(preview, manualPreview)
   state.empower = (not preview) and ((isEmpowered and true) or ((numEmpowerStages or 0) > 0)) or false
   state.empowerStages = state.empower and math_min(numEmpowerStages or 0, 4) or 0
   state.empowerHoldMS = 0
-  state.empowerStage = 0
   state.spellName = name
   state.startMS = startMS
   state.endMS = endMS
@@ -414,7 +410,6 @@ local function Stop()
   state.manualPreview = false
   state.empower = false
   state.empowerStages = 0
-  state.empowerStage = 0
   state.empowerStageTotalMS = 0
   state.empowerHoldMS = 0
   state.spellName = nil
