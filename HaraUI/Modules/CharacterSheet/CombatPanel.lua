@@ -61,6 +61,26 @@ local function NormalizePaneName(token)
   return nil
 end
 
+local function ResolvePaneFromVisibility()
+  if Utils and Utils.IsFrameVisible then
+    if Utils.IsFrameVisible(_G and _G.ReputationFrame) then
+      return "reputation"
+    end
+    local currencyFrames = {
+      _G and _G.CurrencyFrame,
+      _G and _G.TokenFrame,
+      _G and _G.CharacterFrameTokenFrame,
+      _G and _G.TokenFrameTokenFrame,
+    }
+    for _, frame in ipairs(currencyFrames) do
+      if Utils.IsFrameVisible(frame) then
+        return "currency"
+      end
+    end
+  end
+  return "character"
+end
+
 -- Suppress a container frame: alpha-zero hides it and all children.
 local function Suppress(frame)
   if not frame then return end
@@ -158,8 +178,7 @@ function CombatPanel:_EnsureTabHook()
 
   hooksecurefunc("CharacterFrame_ShowSubFrame", function(subFrameToken)
     if not state.active then return end
-    local pane = NormalizePaneName(subFrameToken)
-    if not pane then return end
+    local pane = NormalizePaneName(subFrameToken) or ResolvePaneFromVisibility()
     state.currentPane = pane
     self:_ApplyCombatPaneVisibility()
   end)
@@ -173,10 +192,12 @@ function CombatPanel:_ApplyCombatPaneVisibility()
   if state.currentPane == "character" then
     -- Character tab: show root (dark bg + slot icons visible)
     Restore(fState.root)
+    Restore(fState.characterOverlay)
   else
     -- Rep/Currency tabs: hide root entirely — alpha propagates to all
     -- children (panels.left, panels.right, etc.)
     Suppress(fState.root)
+    Suppress(fState.characterOverlay)
   end
 end
 
@@ -187,7 +208,8 @@ end
 function CombatPanel:Show()
   local state = self._state
   state.active = true
-  state.currentPane = "character"
+  self:_EnsureTabHook()
+  state.currentPane = ResolvePaneFromVisibility()
 
   local pm = CS and CS.PaneManager or nil
   if pm and pm.GetActivePane then
@@ -232,8 +254,7 @@ function CombatPanel:Show()
       local Skin = CS and CS.Skin or nil
       if Skin and Skin.SetHeaderCentered then Skin.SetHeaderCentered(true) end
 
-      -- 6) Install tab-switch hook (idempotent, one-time install).
-      self:_EnsureTabHook()
+      state.currentPane = ResolvePaneFromVisibility()
       -- Enforce pane visibility immediately in case the active pane is already
       -- non-character when combat view is shown.
       self:_ApplyCombatPaneVisibility()
@@ -265,6 +286,7 @@ function CombatPanel:Hide()
   Restore(ppState and ppState.root)
   Restore(ppState and ppState.gridRoot)
   Restore(fState.leftPaneHeadingHost)
+  Restore(fState.characterOverlay)
   Restore(fState.root)
 
   -- Restore header to normal offset (ApplyCustomHeader will also do this,
