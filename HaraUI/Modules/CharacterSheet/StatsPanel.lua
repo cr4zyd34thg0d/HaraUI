@@ -1766,7 +1766,7 @@ function StatsPanel:_EnsureEventFrame()
   state.eventFrame:RegisterEvent("EQUIPMENT_SETS_CHANGED")
   state.eventFrame:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
   state.eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-  state.eventFrame:RegisterEvent("PLAYER_TITLE_CHANGED")
+  pcall(state.eventFrame.RegisterEvent, state.eventFrame, "PLAYER_TITLE_CHANGED") -- removed in WoW 12.0
   state.eventFrame:RegisterEvent("KNOWN_TITLES_UPDATE")
   state.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
   -- PLAYER_AVG_ITEM_LEVEL_UPDATE fires *after* ilvl recalculation completes;
