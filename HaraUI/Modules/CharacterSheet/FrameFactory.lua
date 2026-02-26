@@ -341,19 +341,6 @@ function FrameFactory:CreateAll(parent)
   return state.root
 end
 
----------------------------------------------------------------------------
--- Getters
----------------------------------------------------------------------------
-function FrameFactory:GetRoot() return self._state.root end
-function FrameFactory:GetGradient() return self._state.gradient end
-function FrameFactory:GetParent() return self._state.parent end
-function FrameFactory:GetTabs() return self._state.tabs end
-function FrameFactory:GetPanels() return self._state.panels end
-function FrameFactory:GetCharacterOverlay() return self._state.characterOverlay end
-function FrameFactory:GetHeadingHost() return self._state.leftPaneHeadingHost end
-function FrameFactory:GetHeading() return self._state.leftPaneHeading end
-function FrameFactory:IsCreated() return self._state.created == true end
-
 -- Expose constants for other modules
 FrameFactory.EXPANDED_WIDTH = EXPANDED_WIDTH
 FrameFactory.EXPANDED_HEIGHT = EXPANDED_HEIGHT
@@ -375,6 +362,40 @@ FrameFactory._state.retryToken = FrameFactory._state.retryToken or 0
 local _sizeGuardInstalled = false
 local _sizeGuardActive    = false
 local _dragRegistered     = false
+
+local function IsTransferBuild()
+  return Utils and Utils.IsAccountTransferBuild and Utils.IsAccountTransferBuild() or false
+end
+
+local function IsInLockdown()
+  if Utils and Utils.IsInLockdown then
+    return Utils.IsInLockdown()
+  end
+  return InCombatLockdown and InCombatLockdown()
+end
+
+local function CanMutateProtectedLayout()
+  return not IsInLockdown()
+end
+
+local function EnsureSizeGuardHooks(parent)
+  if not (parent and hooksecurefunc) then return end
+  if _sizeGuardInstalled then return end
+
+  _sizeGuardInstalled = true
+  hooksecurefunc(parent, "SetSize", function(_, w, h)
+    if not _sizeGuardActive then return end
+    if IsInLockdown() then return end
+    if w < EXPANDED_WIDTH or h < EXPANDED_HEIGHT then
+      parent:SetSize(EXPANDED_WIDTH, EXPANDED_HEIGHT)
+    end
+  end)
+  hooksecurefunc(parent, "SetWidth", function(_, w)
+    if not _sizeGuardActive then return end
+    if IsInLockdown() then return end
+    if w < EXPANDED_WIDTH then parent:SetWidth(EXPANDED_WIDTH) end
+  end)
+end
 
 ---------------------------------------------------------------------------
 -- EnsureApplyState: lazily initialises ephemeral apply-time fields
@@ -398,7 +419,7 @@ end
 function FrameFactory.PresetFrameAttributes()
   local cf = CharacterFrame
   if not (cf and cf.SetAttribute) then return end
-  if InCombatLockdown and InCombatLockdown() then return end
+  if IsInLockdown() then return end
   local state = FrameFactory._state
   -- Capture true Blizzard originals once, before we overwrite them.
   if not state.blizzardPanelAttributes then
@@ -425,28 +446,14 @@ end
 -- Whichever fires first installs the hooks; the other path is a no-op for hooks
 -- but still calls SetSize to enforce the expanded dimensions.
 function FrameFactory.SyncExpandSize()
-  if InCombatLockdown and InCombatLockdown() then return end
+  if IsInLockdown() then return end
   local state = FrameFactory._state
   local parent = (state and state.parent) or CharacterFrame
   if not (parent and parent.SetSize) then return end
   _sizeGuardActive = false
   parent:SetSize(EXPANDED_WIDTH, EXPANDED_HEIGHT)
   _sizeGuardActive = true
-  if not _sizeGuardInstalled and hooksecurefunc then
-    _sizeGuardInstalled = true
-    hooksecurefunc(parent, "SetSize", function(_, w, h)
-      if not _sizeGuardActive then return end
-      if InCombatLockdown and InCombatLockdown() then return end
-      if w < EXPANDED_WIDTH or h < EXPANDED_HEIGHT then
-        parent:SetSize(EXPANDED_WIDTH, EXPANDED_HEIGHT)
-      end
-    end)
-    hooksecurefunc(parent, "SetWidth", function(_, w)
-      if not _sizeGuardActive then return end
-      if InCombatLockdown and InCombatLockdown() then return end
-      if w < EXPANDED_WIDTH then parent:SetWidth(EXPANDED_WIDTH) end
-    end)
-  end
+  EnsureSizeGuardHooks(parent)
 end
 
 ---------------------------------------------------------------------------
@@ -462,9 +469,9 @@ local function ExpandCharacterFrame(state, parent)
       panelHeight = parent.GetAttribute and parent:GetAttribute("UIPanelLayout-height") or nil,
     }
   end
-  local isTransfer = Utils.IsAccountTransferBuild()
+  local isTransfer = IsTransferBuild()
   if not isTransfer and parent.SetAttribute
-     and not (InCombatLockdown and InCombatLockdown()) then
+     and CanMutateProtectedLayout() then
     -- Capture Blizzard originals if PresetFrameAttributes didn't already.
     if not state.blizzardPanelAttributes then
       state.blizzardPanelAttributes = {
@@ -478,12 +485,12 @@ local function ExpandCharacterFrame(state, parent)
     parent:SetAttribute("UIPanelLayout-defined", true)
   end
   _sizeGuardActive = false
-  if not (InCombatLockdown and InCombatLockdown()) then
+  if CanMutateProtectedLayout() then
     parent:SetSize(EXPANDED_WIDTH, EXPANDED_HEIGHT)
   end
   _sizeGuardActive = true
   -- ClearAllPoints / SetPoint on CharacterFrame are protected during combat.
-  if not (InCombatLockdown and InCombatLockdown()) then
+  if CanMutateProtectedLayout() then
     local db   = NS and NS.GetDB and NS:GetDB() or nil
     local csDB = db and db.charsheet or nil
     if csDB and csDB.frameAnchor and csDB.frameX and csDB.frameY and UIParent then
@@ -499,24 +506,10 @@ local function ExpandCharacterFrame(state, parent)
     end
   end
   if not isTransfer and UpdateUIPanelPositions
-     and not (InCombatLockdown and InCombatLockdown()) then
+     and CanMutateProtectedLayout() then
     pcall(UpdateUIPanelPositions, parent)
   end
-  if not _sizeGuardInstalled and hooksecurefunc then
-    _sizeGuardInstalled = true
-    hooksecurefunc(parent, "SetSize", function(_, w, h)
-      if not _sizeGuardActive then return end
-      if InCombatLockdown and InCombatLockdown() then return end
-      if w < EXPANDED_WIDTH or h < EXPANDED_HEIGHT then
-        parent:SetSize(EXPANDED_WIDTH, EXPANDED_HEIGHT)
-      end
-    end)
-    hooksecurefunc(parent, "SetWidth", function(_, w)
-      if not _sizeGuardActive then return end
-      if InCombatLockdown and InCombatLockdown() then return end
-      if w < EXPANDED_WIDTH then parent:SetWidth(EXPANDED_WIDTH) end
-    end)
-  end
+  EnsureSizeGuardHooks(parent)
   local inset = _G and _G.CharacterFrameInset or nil
   if inset then
     if inset.SetAlpha  then inset:SetAlpha(0)        end
@@ -528,7 +521,7 @@ local function RestoreCharacterFrame(state)
   _sizeGuardActive = false
   local parent = (state and state.parent) or CharacterFrame
   local orig   = state and state.originalFrameSize or nil
-  local isTransfer = Utils.IsAccountTransferBuild()
+  local isTransfer = IsTransferBuild()
 
   -- Restore UIPanelLayout attributes in all cases (covers pre-set-only path
   -- where frame was never visually expanded but attributes were changed).
@@ -575,7 +568,7 @@ end
 
 local function BindTabToNativeTab(btn, index)
   if not (btn and btn.SetAttribute) then return false end
-  if InCombatLockdown and InCombatLockdown() then return false end
+  if IsInLockdown() then return false end
   local nativeTab = GetNativeTabButton(index)
   local name = nativeTab and nativeTab.GetName and nativeTab:GetName() or nil
   if type(name) == "string" and name ~= "" then
@@ -600,7 +593,7 @@ end
 local function RefreshTabSecureBindings(tabs)
   if not tabs then return end
   local buttons = { tabs.tabCharacter, tabs.tabReputation, tabs.tabCurrency }
-  if Utils.IsAccountTransferBuild() then
+  if IsTransferBuild() then
     for _, btn in ipairs(buttons) do
       if btn and btn.SetAttribute then
         btn._nativeTabName = nil
@@ -619,7 +612,7 @@ local function RefreshTabSecureBindings(tabs)
   end
   if anyFailed and C_Timer and C_Timer.After then
     C_Timer.After(0.5, function()
-      if InCombatLockdown and InCombatLockdown() then return end
+      if IsInLockdown() then return end
       for i, btn in ipairs(buttons) do
         if not btn._nativeTabName then BindTabToNativeTab(btn, i) end
       end
@@ -643,7 +636,7 @@ local function SaveFramePosition(parent)
 end
 
 local function RestoreFramePosition(parent)
-  if InCombatLockdown and InCombatLockdown() then return end
+  if IsInLockdown() then return end
   local db = NS and NS.GetDB and NS:GetDB() or nil
   local cs = db and db.charsheet or nil
   if not (cs and cs.frameAnchor and cs.frameX and cs.frameY) then return end
@@ -657,7 +650,7 @@ local function RegisterDragOnFrame(frame, moveTarget)
   frame:EnableMouse(true)
   if frame.RegisterForDrag then frame:RegisterForDrag("LeftButton") end
   frame:SetScript("OnDragStart", function()
-    if InCombatLockdown and InCombatLockdown() then return end
+    if IsInLockdown() then return end
     if moveTarget.StartMoving then moveTarget:StartMoving() end
   end)
   frame:SetScript("OnDragStop", function()
@@ -668,7 +661,7 @@ end
 
 local function ApplyMovableProps(parent)
   -- SetMovable and SetClampedToScreen ARE restricted on CharacterFrame during combat.
-  if InCombatLockdown and InCombatLockdown() then return end
+  if IsInLockdown() then return end
   if parent.SetMovable         then parent:SetMovable(true)          end
   if parent.SetClampedToScreen then parent:SetClampedToScreen(true)  end
 end
@@ -768,7 +761,7 @@ local function ApplyAnchors(state)
   tabs:SetPoint("TOPLEFT", parent, "BOTTOMLEFT", 22, -1)
   tabs:SetSize(barW, btnH)
   RefreshTabSecureBindings(tabs)
-  if Utils.IsAccountTransferBuild() then
+  if IsTransferBuild() then
     if tabs.Hide then tabs:Hide() end
   else
     if tabs.Show then tabs:Show() end
@@ -806,7 +799,7 @@ function FrameFactory:Apply(reason)
 
   -- Transfer + native-currency mode: expand frame and show chrome but let
   -- Blizzard own the sub-frame content; do not run the full anchor pass.
-  if Utils.IsAccountTransferBuild() and pm and pm:IsNativeCurrencyMode() then
+  if IsTransferBuild() and pm and pm:IsNativeCurrencyMode() then
     ExpandCharacterFrame(state, state.parent or CharacterFrame)
     -- ExpandCharacterFrame hides CharacterFrameInset; restore it so Blizzard's
     -- native currency background is visible.
@@ -848,7 +841,7 @@ function FrameFactory:Apply(reason)
   -- which calls Show/Hide on frames parented to CharacterFrame (blocked by
   -- combat lockdown).  Just show root + gradient so the dark background and
   -- purple overlay are visible; CombatPanel suppresses everything else.
-  if InCombatLockdown and InCombatLockdown() then
+  if IsInLockdown() then
     if state.root and state.root.Show then state.root:Show() end
     if state.gradient and state.gradient.Show then state.gradient:Show() end
   else
@@ -884,7 +877,7 @@ function FrameFactory:_ScheduleBoundedApply(reason)
     invoke()
     return
   end
-  if Utils.IsAccountTransferBuild() then
+  if IsTransferBuild() then
     C_Timer.After(0, invoke)
     return
   end
@@ -900,7 +893,7 @@ function FrameFactory:_HookParent(parent)
   if state.hookedParents[parent] then return end
 
   parent:HookScript("OnShow", function()
-    if Utils.IsAccountTransferBuild() and C_Timer and C_Timer.After then
+    if IsTransferBuild() and C_Timer and C_Timer.After then
       C_Timer.After(0, function()
         if not (state.parent and state.parent.IsShown and state.parent:IsShown()) then return end
         self:_ScheduleBoundedApply("CharacterFrame.OnShow.deferred")
@@ -920,16 +913,4 @@ end
 
 function FrameFactory.RestoreCharacterFrameSize()
   RestoreCharacterFrame(FrameFactory._state)
-end
-
--- Thin delegation wrappers so Coordinator/PaneManager can call these
--- without needing a direct reference to PaneManager.
-function FrameFactory:_EnsureSubFrameHooks()
-  local pm = CS and CS.PaneManager or nil
-  if pm and pm._EnsureSubFrameHooks then pm:_EnsureSubFrameHooks() end
-end
-
-function FrameFactory:_EnsureBootstrapHooks()
-  local pm = CS and CS.PaneManager or nil
-  if pm and pm._EnsureBootstrapHooks then pm:_EnsureBootstrapHooks() end
 end

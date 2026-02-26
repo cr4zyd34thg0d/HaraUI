@@ -8,13 +8,6 @@ function NS.OptionsPages.CoerceInt(v)
   return floor(v + 0.5)
 end
 
-function NS.OptionsPages.AttachModuleEnableToggle(toggle, parent, ApplyToggleSkin)
-  toggle:ClearAllPoints()
-  toggle:SetParent(parent)
-  toggle:SetPoint("TOPLEFT", 6, -4)
-  ApplyToggleSkin(toggle)
-end
-
 function NS.OptionsPages.SetModulePreviewOnClick(button, moduleKey, NS)
   button:SetScript("OnClick", function()
     if NS.Modules and NS.Modules[moduleKey] and NS.Modules[moduleKey].Preview then
@@ -23,11 +16,21 @@ function NS.OptionsPages.SetModulePreviewOnClick(button, moduleKey, NS)
   end)
 end
 
-function NS.OptionsPages.CreateBuildGeneralPageCards(
-  db, ORANGE, MakeCheckbox, NS, UpdateNavIndicators, ApplyToggleSkin,
-  MakeButton, MakeColorSwatch, SetThemeColor, Small,
-  BuildStandardSliderRow, Round2, RegisterTheme, ApplyUIFont
-)
+function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
+  local db = ctx.db
+  local ORANGE = ctx.ORANGE
+  local MakeCheckbox = ctx.MakeCheckbox
+  local NS = ctx.NS
+  local UpdateNavIndicators = ctx.UpdateNavIndicators
+  local ApplyToggleSkin = ctx.ApplyToggleSkin
+  local MakeButton = ctx.MakeButton
+  local MakeColorSwatch = ctx.MakeColorSwatch
+  local SetThemeColor = ctx.SetThemeColor
+  local Small = ctx.Small
+  local BuildStandardSliderRow = ctx.BuildStandardSliderRow
+  local Round2 = ctx.Round2
+  local RegisterTheme = ctx.RegisterTheme
+  local ApplyUIFont = ctx.ApplyUIFont
   return function(cards)
     -- ── DB defaults ──────────────────────────────────────────────────────────
     db.summons        = db.summons        or {}
@@ -209,7 +212,11 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(
   end
 end
 
-function NS.OptionsPages.BuildGeneralPage(pages, content, BuildStandardModuleCards, BuildGeneralPageCards)
+function NS.OptionsPages.BuildGeneralPage(ctx)
+  local pages = ctx.pages
+  local content = ctx.content
+  local BuildStandardModuleCards = ctx.BuildStandardModuleCards
+  local BuildGeneralPageCards = ctx.BuildGeneralPageCards
   pages.general = CreateFrame("Frame", nil, content); pages.general:SetAllPoints(true)
   do
     local cards = BuildStandardModuleCards(pages.general)

@@ -2,7 +2,17 @@ local ADDON, NS = ...
 
 NS.OptionsPages = NS.OptionsPages or {}
 
-function NS.OptionsPages.BuildRotationPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeButton, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
+function NS.OptionsPages.BuildRotationPage(ctx)
+  local pages = ctx.pages
+  local content = ctx.content
+  local BuildStandardModuleCards = ctx.BuildStandardModuleCards
+  local MakeButton = ctx.MakeButton
+  local MakeAccentDivider = ctx.MakeAccentDivider
+  local BuildStandardSliderRow = ctx.BuildStandardSliderRow
+  local Round2 = ctx.Round2
+  local Small = ctx.Small
+  local db = ctx.db
+  local NS = ctx.NS
   pages.rotation = CreateFrame("Frame", nil, content); pages.rotation:SetAllPoints(true)
   do
     if not db.rotationhelper then

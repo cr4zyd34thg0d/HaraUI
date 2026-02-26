@@ -34,7 +34,6 @@ local function EnsureState(self)
   if s.created == nil then s.created = false end
   s.portalCache = s.portalCache or {}
   if s.pendingSecureUpdate == nil then s.pendingSecureUpdate = false end
-  if s.dirty == nil then s.dirty = false end
   -- Quick-access grid state
   if s.gridCreated == nil then s.gridCreated = false end
   s.gridCells = s.gridCells or {}
@@ -1047,7 +1046,6 @@ function PortalPanel:RequestUpdate(reason)
 
   local visible = state.root and state.root:IsShown()
   if not visible then
-    state.dirty = true
     return true
   end
 
@@ -1055,9 +1053,8 @@ function PortalPanel:RequestUpdate(reason)
   return true
 end
 
-function PortalPanel:MarkDirty(reason)
-  local state = EnsureState(self)
-  state.dirty = true
+function PortalPanel:MarkDirty(_reason)
+  return true
 end
 
 ---------------------------------------------------------------------------
@@ -1069,8 +1066,6 @@ function PortalPanel:OnShow(reason)
   self:ShowQuickAccessGrid()
   if ApplyPreferredVisibility(state) then
     self:RequestUpdate(reason or "CharacterFrame.OnShow")
-  else
-    state.dirty = true
   end
 end
 
@@ -1111,7 +1106,6 @@ function PortalPanel:_EnsureEventFrame()
     end
 
     if event == "SPELLS_CHANGED" or event == "LEARNED_SPELL_IN_TAB" then
-      state.dirty = true
       if state.root and state.root:IsShown() then
         self:RequestUpdate("event:" .. tostring(event))
       end
@@ -1134,11 +1128,8 @@ function PortalPanel:Update(reason)
     self:ShowQuickAccessGrid()
     if ApplyPreferredVisibility(state) then
       self:RequestUpdate(reason or "coordinator.portalpanel")
-    else
-      state.dirty = true
     end
   else
-    state.dirty = true
     if state.root then state.root:Hide() end
     self:HideQuickAccessGrid()
   end

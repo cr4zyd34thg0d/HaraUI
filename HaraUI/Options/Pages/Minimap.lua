@@ -2,7 +2,18 @@ local ADDON, NS = ...
 
 NS.OptionsPages = NS.OptionsPages or {}
 
-function NS.OptionsPages.BuildMinimapPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
+function NS.OptionsPages.BuildMinimapPage(ctx)
+  local pages = ctx.pages
+  local content = ctx.content
+  local BuildStandardModuleCards = ctx.BuildStandardModuleCards
+  local ApplyToggleSkin = ctx.ApplyToggleSkin
+  local MakeCheckbox = ctx.MakeCheckbox
+  local MakeAccentDivider = ctx.MakeAccentDivider
+  local BuildStandardSliderRow = ctx.BuildStandardSliderRow
+  local Round2 = ctx.Round2
+  local Small = ctx.Small
+  local db = ctx.db
+  local NS = ctx.NS
   pages.minimap = CreateFrame("Frame", nil, content); pages.minimap:SetAllPoints(true)
   do
     if db.minimapbar.locked == nil then

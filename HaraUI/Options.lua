@@ -26,8 +26,17 @@ local function GetAddonMetadataField(field)
   return nil
 end
 
-local DEV_VERSION = "2.2.1-alpha"
-local VERSION_TOKEN = "v2.2.1-alpha"
+local function GetDevVersionFallback()
+  local dev = NS and NS.DEV_VERSION or nil
+  if type(dev) == "string" and dev ~= "" then
+    return dev
+  end
+  local meta = GetAddonMetadataField("Version")
+  if type(meta) == "string" and meta ~= "" and not meta:find("@project-version@", 1, true) then
+    return meta
+  end
+  return "0.0.0-dev"
+end
 
 local function GetVersionString()
   if NS and NS.GetVersionString then
@@ -36,10 +45,7 @@ local function GetVersionString()
 
   local version = GetAddonMetadataField("Version")
   if type(version) ~= "string" or version == "" then
-    return DEV_VERSION
-  end
-  if version:find(VERSION_TOKEN, 1, true) then
-    return DEV_VERSION
+    return GetDevVersionFallback()
   end
   return version
 end
@@ -47,7 +53,7 @@ end
 local function GetDisplayVersionString(version)
   local text = type(version) == "string" and version or ""
   if text == "" then
-    text = DEV_VERSION
+    text = GetDevVersionFallback()
   end
   -- Keep release/beta/alpha tags intact; only strip local dev suffix.
   return (text:gsub("%-dev$", ""))
@@ -272,7 +278,7 @@ function NS:InitOptions()
       local installed = info and info.installed or nil
       local status = (info and (info.status or GetVersionStatus(info))) or "unknown"
 
-      navVersion:SetText(GetDisplayVersionString(installed or DEV_VERSION))
+      navVersion:SetText(GetDisplayVersionString(installed or GetDevVersionFallback()))
 
       navGitIndicator:Show()
       if status == "out-of-date" then
@@ -503,55 +509,80 @@ function NS:InitOptions()
     end
 
   -- =========================================================
+  -- PAGE BUILD CONTEXT
+  -- =========================================================
+    local pageCtx = {
+      pages = pages,
+      content = content,
+      db = db,
+      NS = NS,
+      ORANGE = ORANGE,
+      ORANGE_SIZE = ORANGE_SIZE,
+      RegisterTheme = RegisterTheme,
+      ApplyUIFont = ApplyUIFont,
+      ApplyDropdownFont = ApplyDropdownFont,
+      MakeModuleHeader = MakeModuleHeader,
+      BuildStandardModuleCards = BuildStandardModuleCards,
+      ApplyToggleSkin = ApplyToggleSkin,
+      MakeCheckbox = MakeCheckbox,
+      MakeButton = MakeButton,
+      MakeAccentDivider = MakeAccentDivider,
+      BuildStandardSliderRow = BuildStandardSliderRow,
+      Round2 = Round2,
+      Small = Small,
+      MakeColorSwatch = MakeColorSwatch,
+    }
+
+  -- =========================================================
   -- GENERAL PAGE
   -- =========================================================
-    local BuildGeneralPageCards = Pages.CreateBuildGeneralPageCards(
-      db,
-      ORANGE,
-      MakeCheckbox,
-      NS,
-      function() UpdateNavIndicators() end,
-      ApplyToggleSkin,
-      MakeButton,
-      MakeColorSwatch,
-      SetThemeColor,
-      Small,
-      BuildStandardSliderRow,
-      Round2,
-      RegisterTheme,
-      ApplyUIFont
-    )
-    Pages.BuildGeneralPage(pages, content, BuildStandardModuleCards, BuildGeneralPageCards)
+    pageCtx.BuildGeneralPageCards = Pages.CreateBuildGeneralPageCards({
+      db = db,
+      ORANGE = ORANGE,
+      MakeCheckbox = MakeCheckbox,
+      NS = NS,
+      UpdateNavIndicators = function() UpdateNavIndicators() end,
+      ApplyToggleSkin = ApplyToggleSkin,
+      MakeButton = MakeButton,
+      MakeColorSwatch = MakeColorSwatch,
+      SetThemeColor = SetThemeColor,
+      Small = Small,
+      BuildStandardSliderRow = BuildStandardSliderRow,
+      Round2 = Round2,
+      RegisterTheme = RegisterTheme,
+      ApplyUIFont = ApplyUIFont,
+    })
+    Pages.BuildGeneralPage(pageCtx)
 
   -- =========================================================
   -- XP / REP BAR PAGE
   -- =========================================================
-    Pages.BuildXPPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, MakeButton, NS, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
+    Pages.BuildXPPage(pageCtx)
 
   -- =========================================================
   -- CAST BAR PAGE
   -- =========================================================
-    Pages.BuildCastPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeButton, MakeAccentDivider, BuildStandardSliderRow, Round2, MakeColorSwatch, ApplyUIFont, ORANGE_SIZE, ORANGE, ApplyDropdownFont, RegisterTheme, Small, db)
+    Pages.BuildCastPage(pageCtx)
 
   -- =========================================================
   -- LOOT TOASTS PAGE
   -- =========================================================
-    Pages.BuildLootPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeButton, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
+    Pages.BuildLootPage(pageCtx)
 
   -- =========================================================
   -- FRIENDLY NAMEPLATES PAGE
   -- =========================================================
-    Pages.BuildFriendlyPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, MakeColorSwatch, BuildStandardSliderRow, Small, db)
+    Pages.BuildFriendlyPage(pageCtx)
 
   -- =========================================================
   -- ROTATION HELPER PAGE
   -- =========================================================
-    Pages.BuildRotationPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeButton, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
+    Pages.BuildRotationPage(pageCtx)
 
   -- =========================================================
   -- MINIMAP BAR PAGE
   -- =========================================================
-    Pages.BuildMinimapPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
+    Pages.BuildMinimapPage(pageCtx)
 
   -- =========================================================
   -- NAVIGATION

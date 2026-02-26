@@ -146,15 +146,6 @@ function NS:RegisterVersionInfoListener(fn)
   NS._huiVersionInfoListeners[#NS._huiVersionInfoListeners + 1] = fn
 end
 
-function NS:UnregisterVersionInfoListener(fn)
-  if type(fn) ~= "function" or not NS._huiVersionInfoListeners then return end
-  for i = #NS._huiVersionInfoListeners, 1, -1 do
-    if NS._huiVersionInfoListeners[i] == fn then
-      table.remove(NS._huiVersionInfoListeners, i)
-    end
-  end
-end
-
 function NS.NormalizeVersion(version)
   if type(version) ~= "string" then return nil end
   local parts = {}

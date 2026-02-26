@@ -22,7 +22,6 @@ local state = {
   pool = {},
   active = {},
   anchorFrame = nil,
-  pendingIcons = nil,
   toastTimers = {},
   eventFrame = nil,
 }
@@ -435,36 +434,6 @@ local function ShowToast(icon, text, durationOverride, itemID, itemLink, itemNam
   end)
 
   return t
-end
-
-local function UpdateToastIcon(toast, itemID)
-  if not toast or not toast.icon then return end
-
-  local itemName, link, quality, _, _, _, _, _, _, itemTexture = GetItemInfo(itemID)
-  if itemTexture then
-    toast.icon:SetTexture(itemTexture)
-    local linkColor = link and link:match("|c(%x%x%x%x%x%x%x%x)")
-    ApplyToastRarity(toast, quality, linkColor)
-    return true
-  end
-  return false
-end
-
-local function TryUpdatePending(itemID)
-  if not state.pendingIcons then return true end
-  local list = state.pendingIcons[itemID]
-  if not list then return true end
-  local anyUpdated = false
-  for i = #list, 1, -1 do
-    if UpdateToastIcon(list[i], itemID) then
-      anyUpdated = true
-    end
-  end
-  if anyUpdated then
-    state.pendingIcons[itemID] = nil
-    return true
-  end
-  return false
 end
 
 local function GetItemIconAndText(msg)

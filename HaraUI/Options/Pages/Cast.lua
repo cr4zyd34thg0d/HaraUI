@@ -2,7 +2,25 @@ local ADDON, NS = ...
 
 NS.OptionsPages = NS.OptionsPages or {}
 
-function NS.OptionsPages.BuildCastPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeCheckbox, MakeButton, MakeAccentDivider, BuildStandardSliderRow, Round2, MakeColorSwatch, ApplyUIFont, ORANGE_SIZE, ORANGE, ApplyDropdownFont, RegisterTheme, Small, db)
+function NS.OptionsPages.BuildCastPage(ctx)
+  local pages = ctx.pages
+  local content = ctx.content
+  local BuildStandardModuleCards = ctx.BuildStandardModuleCards
+  local ApplyToggleSkin = ctx.ApplyToggleSkin
+  local MakeCheckbox = ctx.MakeCheckbox
+  local MakeButton = ctx.MakeButton
+  local MakeAccentDivider = ctx.MakeAccentDivider
+  local BuildStandardSliderRow = ctx.BuildStandardSliderRow
+  local Round2 = ctx.Round2
+  local MakeColorSwatch = ctx.MakeColorSwatch
+  local ApplyUIFont = ctx.ApplyUIFont
+  local ORANGE_SIZE = ctx.ORANGE_SIZE
+  local ORANGE = ctx.ORANGE
+  local ApplyDropdownFont = ctx.ApplyDropdownFont
+  local RegisterTheme = ctx.RegisterTheme
+  local Small = ctx.Small
+  local db = ctx.db
+  local NS = ctx.NS
   pages.cast = CreateFrame("Frame", nil, content); pages.cast:SetAllPoints(true)
   do
     if not db.castbar.barTexture then db.castbar.barTexture = "Interface/TargetingFrame/UI-StatusBar" end

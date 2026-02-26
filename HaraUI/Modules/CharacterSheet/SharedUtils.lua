@@ -49,3 +49,25 @@ function Utils.GetFactoryState()
   local factory = CS and CS.FrameFactory or nil
   return factory and factory._state or nil
 end
+
+--- Installs a HookScript callback once per frame+hookKey in the given registry.
+function Utils.HookScriptOnce(registry, frame, hookKey, scriptName, fn)
+  if type(registry) ~= "table" then return false end
+  if not (frame and frame.HookScript) then return false end
+  if type(hookKey) ~= "string" or hookKey == "" then return false end
+  if type(scriptName) ~= "string" or scriptName == "" then return false end
+  if type(fn) ~= "function" then return false end
+
+  local byKey = registry[frame]
+  if type(byKey) ~= "table" then
+    byKey = {}
+    registry[frame] = byKey
+  end
+  if byKey[hookKey] then
+    return false
+  end
+
+  frame:HookScript(scriptName, fn)
+  byKey[hookKey] = true
+  return true
+end

@@ -1099,20 +1099,6 @@ local function EnsureModelFillFrame()
 	return _modelFillFrame
 end
 
-function Skin.ApplyCharacterPanelGradient()
-	local fill = EnsureModelFillFrame()
-	if fill and fill.Show then
-		fill:Show()
-	end
-end
-
-function Skin.HideCharacterPanelGradient()
-	local fill = EnsureModelFillFrame()
-	if fill and fill.Hide then
-		fill:Hide()
-	end
-end
-
 function Skin.ApplyHaraModelLayout()
 	-- CharacterModelScene is a protected frame. Position, mouse-config, and
 	-- SetScript calls on it are all blocked during combat lockdown.
@@ -1982,24 +1968,6 @@ function Skin.HideCustomHeader()
 		blizLevel:SetAlpha(1)
 		if blizLevel.Show then
 			blizLevel:Show()
-		end
-	end
-end
-
-function Skin.SetCustomHeaderVisible(visible)
-	if visible then
-		if _polishState.customNameText then
-			_polishState.customNameText:Show()
-		end
-		if _polishState.customLevelText then
-			_polishState.customLevelText:Show()
-		end
-	else
-		if _polishState.customNameText then
-			_polishState.customNameText:Hide()
-		end
-		if _polishState.customLevelText then
-			_polishState.customLevelText:Hide()
 		end
 	end
 end

@@ -2,7 +2,17 @@ local ADDON, NS = ...
 
 NS.OptionsPages = NS.OptionsPages or {}
 
-function NS.OptionsPages.BuildLootPage(pages, content, MakeModuleHeader, BuildStandardModuleCards, ApplyToggleSkin, MakeButton, MakeAccentDivider, BuildStandardSliderRow, Round2, Small, db)
+function NS.OptionsPages.BuildLootPage(ctx)
+  local pages = ctx.pages
+  local content = ctx.content
+  local BuildStandardModuleCards = ctx.BuildStandardModuleCards
+  local MakeButton = ctx.MakeButton
+  local MakeAccentDivider = ctx.MakeAccentDivider
+  local BuildStandardSliderRow = ctx.BuildStandardSliderRow
+  local Round2 = ctx.Round2
+  local Small = ctx.Small
+  local db = ctx.db
+  local NS = ctx.NS
   pages.loot = CreateFrame("Frame", nil, content); pages.loot:SetAllPoints(true)
   do
     local cards = BuildStandardModuleCards(pages.loot)

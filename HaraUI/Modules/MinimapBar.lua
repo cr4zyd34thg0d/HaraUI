@@ -64,6 +64,15 @@ local ignoreByName = {
 local buttonCache
 local buttonCacheTime = 0
 local buttonCacheTTL = 2
+local fallbackScanCooldown = 8
+local fallbackScanAt = 0
+
+local function RunReflowPipeline()
+  CreateFrames()
+  if ApplyPosition then
+    ApplyPosition()
+  end
+end
 
 local function GetDB()
   local db = NS:GetDB()
@@ -471,16 +480,23 @@ local function CollectButtons()
 
   -- Fallback: enumerate all frames looking for LDB buttons (only if we found nothing)
   if #list == 0 and EnumerateFrames then
-    local f = EnumerateFrames()
-    local iter = 0
-    while f do
-      iter = iter + 1
-      local name = f.GetName and f:GetName()
-      if type(name) == "string" and name:find("^LibDBIcon10_") then
-        Add(f)
+    local now = GetTime()
+    if (now - fallbackScanAt) >= fallbackScanCooldown then
+      fallbackScanAt = now
+      local f = EnumerateFrames()
+      local iter = 0
+      local found = 0
+      while f do
+        iter = iter + 1
+        local name = f.GetName and f:GetName()
+        if type(name) == "string" and name:find("^LibDBIcon10_") then
+          Add(f)
+          found = found + 1
+          if found >= 64 then break end
+        end
+        f = EnumerateFrames(f)
+        if iter > 4000 then break end
       end
-      f = EnumerateFrames(f)
-      if iter > 10000 then break end
     end
   end
 
@@ -729,6 +745,7 @@ end
 
 local function StartHoverRefresh()
   if hoverTicker then return end
+  if not (C_Timer and C_Timer.NewTicker) then return end
   local ticks = 0
   hoverTicker = C_Timer.NewTicker(0.1, function()
     if not bar or not bar:IsShown() then
@@ -748,14 +765,12 @@ end
 local function StartWarmupRefresh()
   if not M.active then return end
   if warmupTicker then return end
+  if not (C_Timer and C_Timer.NewTicker) then return end
   local ticks = 0
   warmupTicker = C_Timer.NewTicker(0.1, function()
     if not M.active then return end
     if InCombatLockdown and InCombatLockdown() then return end
-    CreateFrames()
-    LayoutButtons()
-    ApplyOrientation()
-    ApplyPopoutAlpha()
+    RunReflowPipeline()
     ticks = ticks + 1
     if ticks >= 20 then
       if warmupTicker then warmupTicker:Cancel() end
@@ -774,10 +789,7 @@ local function ShowBar(fromTab)
   bar:EnableMouse(true)
   C_Timer.After(0, function()
     if not bar or not bar:IsShown() then return end
-    if ApplyPosition then
-      ApplyPosition()
-    end
-    LayoutButtons()
+    RunReflowPipeline()
     StartHoverRefresh()
   end)
 end
@@ -955,13 +967,6 @@ function M:ApplyPopoutAlpha()
   ApplyPopoutAlpha()
 end
 
-function M:RefreshLayout()
-  if InCombatLockdown and InCombatLockdown() then return end
-  LayoutButtons()
-  ApplyOrientation()
-  ApplyPopoutAlpha()
-end
-
 ApplyPosition = function()
   local db = GetDB()
   if not db or not holder then return end
@@ -988,11 +993,7 @@ Refresh = function()
   if InCombatLockdown and InCombatLockdown() then return end
   EnsureMinimapParent()
   EnsureZoomButtonsVisible()
-  CreateFrames()
-  ApplyPosition()
-  LayoutButtons()
-  ApplyOrientation()
-  ApplyPopoutAlpha()
+  RunReflowPipeline()
 end
 
 function M:SetLocked(locked, fromOptions)
@@ -1071,10 +1072,7 @@ function M:Apply()
   if db.minimapbar.popoutStay == nil then
     db.minimapbar.popoutStay = 2.0
   end
-  CreateFrames()
-  ApplyPosition()
-  LayoutButtons()
-  ApplyPopoutAlpha()
+  RunReflowPipeline()
   HideBar()
   if tab then tab:Show() end
   self:SetLocked(db.minimapbar.locked)

@@ -206,10 +206,6 @@ function Data:GetSeasonDungeons()
   return dungeons
 end
 
-function Data:InvalidateDungeonCache()
-  seasonDungeonCache = nil
-end
-
 ---------------------------------------------------------------------------
 -- Lookup: get a character's score for a specific dungeon
 ---------------------------------------------------------------------------
@@ -592,12 +588,3 @@ function Data:CheckWeeklyReset()
   end
 end
 
----------------------------------------------------------------------------
--- Delete character
----------------------------------------------------------------------------
-function Data:DeleteCharacter(guid)
-  local chars = GetCharacterTable()
-  if chars and guid then
-    chars[guid] = nil
-  end
-end

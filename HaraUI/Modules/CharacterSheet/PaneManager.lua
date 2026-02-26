@@ -406,20 +406,7 @@ function PaneManager:_UpdatePaneTabsVisual(pane)
   Apply(tabs.tabCurrency, normalized == "currency")
 end
 
----------------------------------------------------------------------------
 -- Hook helpers
----------------------------------------------------------------------------
-local function HookScriptOnce(state, frame, hookKey, scriptName, fn)
-  if not (state and frame and hookKey and scriptName and type(fn) == "function") then return false end
-  if not frame.HookScript then return false end
-  local byKey = state.subFrameHookMap[frame]
-  if type(byKey) ~= "table" then byKey = {}; state.subFrameHookMap[frame] = byKey end
-  if byKey[hookKey] then return false end
-  frame:HookScript(scriptName, fn)
-  byKey[hookKey] = true
-  return true
-end
-
 ---------------------------------------------------------------------------
 -- Pending pane / currency guard scheduling
 ---------------------------------------------------------------------------
@@ -432,12 +419,26 @@ local function ClearPendingPaneState(state)
   state.currencyPaneGuardToken = (tonumber(state.currencyPaneGuardToken) or 0) + 1
 end
 
+local function NextFrame(fn)
+  if type(fn) ~= "function" then return false end
+  if C_Timer and C_Timer.After then
+    C_Timer.After(0, fn)
+  else
+    fn()
+  end
+  return true
+end
+
+local function BumpToken(state, field)
+  state[field] = (tonumber(state[field]) or 0) + 1
+  return state[field]
+end
+
 function PaneManager:_SchedulePendingPaneRetry(pane)
   local state = EnsureState(self)
   if type(pane) ~= "string" or pane == "" or state.pendingPaneRetryScheduled then return false end
   state.pendingPaneRetryScheduled = true
-  state.pendingPaneRetryToken = (tonumber(state.pendingPaneRetryToken) or 0) + 1
-  local token = state.pendingPaneRetryToken
+  local token = BumpToken(state, "pendingPaneRetryToken")
   local function retry()
     local ls = EnsureState(self)
     if ls.pendingPaneRetryToken ~= token then return end
@@ -446,7 +447,7 @@ function PaneManager:_SchedulePendingPaneRetry(pane)
     if not (CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()) then return end
     self:SetActivePane(pane, "pending_pane_retry")
   end
-  if C_Timer and C_Timer.After then C_Timer.After(0, retry) else retry() end
+  NextFrame(retry)
   return true
 end
 
@@ -454,8 +455,7 @@ function PaneManager:_ScheduleCurrencyPaneGuard(_reason)
   if Utils.IsAccountTransferBuild() then return false end
   local state = EnsureState(self)
   local cl = GetCL()
-  state.currencyPaneGuardToken = (tonumber(state.currencyPaneGuardToken) or 0) + 1
-  local token = state.currencyPaneGuardToken
+  local token = BumpToken(state, "currencyPaneGuardToken")
   local function enforce(attempt)
     local ls = EnsureState(self)
     if ls.currencyPaneGuardToken ~= token then return end
@@ -465,8 +465,8 @@ function PaneManager:_ScheduleCurrencyPaneGuard(_reason)
     local frames = PaneManager.BuildPaneFrameMap()
     local activeFrame = frames.currency
     if not activeFrame then
-      if attempt < CURRENCY_GUARD_MAX_RETRIES and C_Timer and C_Timer.After then
-        C_Timer.After(0, function() enforce(attempt + 1) end)
+      if attempt < CURRENCY_GUARD_MAX_RETRIES then
+        NextFrame(function() enforce(attempt + 1) end)
       end
       return
     end
@@ -476,11 +476,7 @@ function PaneManager:_ScheduleCurrencyPaneGuard(_reason)
     HideCharacterPaneFrames()
     ShowBaseChrome("currency")
   end
-  if C_Timer and C_Timer.After then
-    C_Timer.After(0, function() enforce(0) end)
-  else
-    enforce(0)
-  end
+  NextFrame(function() enforce(0) end)
   return true
 end
 
@@ -715,7 +711,7 @@ function PaneManager:_HookCustomPaneTabs()
   local function Hook(tab, pane, key)
     if not tab then return end
     tab:EnableMouse(true)
-    HookScriptOnce(state, tab, key, "OnClick", function(_, button)
+    Utils.HookScriptOnce(state.subFrameHookMap, tab, key, "OnClick", function(_, button)
       if button and button ~= "LeftButton" then return end
       if pane == "currency" and type(tab._nativeTabName) == "string" and tab._nativeTabName ~= "" then return end
       if pane == "currency" then
@@ -741,7 +737,7 @@ function PaneManager:_HookBlizzardPaneTabs()
     local tab = _G and _G["CharacterFrameTab" .. i] or nil
     local pane = indexMap[i]
     if tab and pane then
-      HookScriptOnce(state, tab, "blizzard_tab_" .. tostring(i), "OnClick", function()
+      Utils.HookScriptOnce(state.subFrameHookMap, tab, "blizzard_tab_" .. tostring(i), "OnClick", function()
         self:SetActivePane(pane, "CharacterFrameTab" .. tostring(i))
       end)
     end
@@ -791,14 +787,10 @@ function PaneManager:_EnsureBootstrapHooks()
 
   if hooksecurefunc and type(ToggleCharacter) == "function" then
     local function dispatchSubModules(reason)
-      -- Only dispatch to character-pane modules when on the character pane.
-      if not self:IsCharacterPaneActive() then return end
-      local gear = CS and CS.GearDisplay or nil
-      if gear and gear.OnShow then pcall(gear.OnShow, gear, reason) end
-      local stats = CS and CS.StatsPanel or nil
-      if stats and stats.OnShow then pcall(stats.OnShow, stats, reason) end
-      local right = CS and CS.MythicPanel or nil
-      if right and right.OnShow then pcall(right.OnShow, right, reason) end
+      local coordinator = CS and CS.Coordinator or nil
+      if coordinator and coordinator.DispatchCharacterPaneOnShow then
+        pcall(coordinator.DispatchCharacterPaneOnShow, coordinator, reason)
+      end
     end
 
     hooksecurefunc("ToggleCharacter", function(subFrameToken)
