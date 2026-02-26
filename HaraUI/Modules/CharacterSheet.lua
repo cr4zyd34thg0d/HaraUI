@@ -21,6 +21,11 @@ local function Forward(method, ...)
 end
 
 function M:Apply()
+  local db = NS and NS.GetDB and NS:GetDB() or nil
+  local csDB = db and db.charsheet or nil
+  if csDB and csDB.enabled == false then
+    return M:Disable()
+  end
   local applied = Forward("Apply")
   M.active = applied == true
   return applied
