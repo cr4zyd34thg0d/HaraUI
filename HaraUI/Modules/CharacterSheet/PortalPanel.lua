@@ -1090,7 +1090,7 @@ function PortalPanel:_EnsureEventFrame()
 
   state.eventFrame = CreateFrame("Frame")
   state.eventFrame:RegisterEvent("SPELLS_CHANGED")
-  state.eventFrame:RegisterEvent("LEARNED_SPELL_IN_TAB")
+  pcall(state.eventFrame.RegisterEvent, state.eventFrame, "LEARNED_SPELL_IN_TAB") -- removed in WoW 12.0
   state.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
   state.eventFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_REGEN_ENABLED" then
