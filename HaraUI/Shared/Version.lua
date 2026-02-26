@@ -1,7 +1,7 @@
 local ADDON, NS = ...
 
-local DEV_VERSION = "2.3.1"
-local VERSION_TOKEN = "v2.3.1"
+local DEV_VERSION = "2.3.2"
+local VERSION_TOKEN = "v2.3.2"
 
 local function ReadAddonVersion()
   if C_AddOns and C_AddOns.GetAddOnMetadata then
