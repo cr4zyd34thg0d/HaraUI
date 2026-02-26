@@ -1,4 +1,4 @@
-local ADDON, NS = ...
+﻿local ADDON, NS = ...
 local CS = NS.CharacterSheet
 if not CS then return end
 
@@ -54,7 +54,7 @@ local function EnsureSkin()
 end
 
 ---------------------------------------------------------------------------
--- Portal spell scanner — Hero's Path dungeon teleports by expansion
+-- Portal spell scanner ΓÇö Hero's Path dungeon teleports by expansion
 ---------------------------------------------------------------------------
 
 local function LooksLikeTravelSpell(spellName, spellDesc)
@@ -121,7 +121,7 @@ local function ExtractDestFromDesc(desc)
 end
 
 ---------------------------------------------------------------------------
--- Dungeon lookup: normalized keyword → { display, expansion }
+-- Dungeon lookup: normalized keyword ΓåÆ { display, expansion }
 -- Matched against the cleaned spell destination text.
 ---------------------------------------------------------------------------
 local DUNGEON_LOOKUP = {
@@ -516,10 +516,10 @@ local function IsCharacterPaneActive()
 end
 
 ---------------------------------------------------------------------------
--- Quick-access grid: 4×4 spell grid on CharacterFrame
+-- Quick-access grid: 4├ù4 spell grid on CharacterFrame
 ---------------------------------------------------------------------------
 local function CreateGridCell(parent, index)
-  -- Visual container (BackdropTemplate only — no SecureActionButton)
+  -- Visual container (BackdropTemplate only ΓÇö no SecureActionButton)
   local cell = CreateFrame("Frame", nil, parent, "BackdropTemplate")
   cell:SetSize(GRID_CELL_SIZE, GRID_CELL_SIZE)
   cell:SetBackdrop({
@@ -655,7 +655,7 @@ function PortalPanel:CreateQuickAccessGrid()
   gridFrame:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 44)
   gridFrame:EnableMouse(true)
 
-  -- No background — panel is invisible, only cells are visible
+  -- No background ΓÇö panel is invisible, only cells are visible
 
   -- Title
   gridFrame.title = gridFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -664,7 +664,7 @@ function PortalPanel:CreateQuickAccessGrid()
   gridFrame.title:SetTextColor(1, 1, 1, 1)
   ApplyFont(gridFrame.title, 10)
 
-  -- Create 4×4 grid cells
+  -- Create 4├ù4 grid cells
   state.gridCells = {}
   for row = 0, GRID_ROWS - 1 do
     for col = 0, GRID_COLS - 1 do
@@ -1085,7 +1085,7 @@ function PortalPanel:_EnsureEventFrame()
 
   state.eventFrame = CreateFrame("Frame")
   state.eventFrame:RegisterEvent("SPELLS_CHANGED")
-  state.eventFrame:RegisterEvent("LEARNED_SPELL_IN_TAB")
+  pcall(state.eventFrame.RegisterEvent, state.eventFrame, "LEARNED_SPELL_IN_TAB") -- removed in WoW 12.0
   state.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
   state.eventFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_REGEN_ENABLED" then

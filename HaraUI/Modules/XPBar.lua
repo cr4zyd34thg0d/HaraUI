@@ -1,4 +1,4 @@
---[[
+﻿--[[
   XP Bar Module
 
   Interface:
@@ -299,7 +299,8 @@ local function Update(forceQuest)
   local unlocked = IsFramesUnlocked(db)
   local level = UnitLevel("player")
   local xpMax = UnitXPMax("player") or 0
-  local atMaxLevel = (xpMax == 0) or (level >= 80)
+  local maxLevel = (GetMaxPlayerLevel and GetMaxPlayerLevel()) or 80
+  local atMaxLevel = (xpMax == 0) or (level >= maxLevel)
 
   if atMaxLevel then
     if not xpbar.showAtMaxLevel then
