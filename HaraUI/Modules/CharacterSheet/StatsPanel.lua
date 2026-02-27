@@ -161,6 +161,11 @@ local function ApplyMythicPanelPreference()
   if not rpRoot then
     return shouldShow
   end
+  -- rpRoot is parented to CharacterFrame; Hide/Show are blocked during combat.
+  -- Skip and let PLAYER_REGEN_ENABLED reapply when lockdown lifts.
+  if InCombatLockdown and InCombatLockdown() then
+    return shouldShow
+  end
   if shouldShow then
     if rpRoot.Show then rpRoot:Show() end
   else
@@ -1769,6 +1774,7 @@ function StatsPanel:_EnsureEventFrame()
   pcall(state.eventFrame.RegisterEvent, state.eventFrame, "PLAYER_TITLE_CHANGED") -- removed in WoW 12.0
   state.eventFrame:RegisterEvent("KNOWN_TITLES_UPDATE")
   state.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+  state.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
   -- PLAYER_AVG_ITEM_LEVEL_UPDATE fires *after* ilvl recalculation completes;
   -- PLAYER_EQUIPMENT_CHANGED alone fires too early (stale GetAverageItemLevel).
   pcall(state.eventFrame.RegisterEvent, state.eventFrame, "PLAYER_AVG_ITEM_LEVEL_UPDATE")
@@ -1776,6 +1782,11 @@ function StatsPanel:_EnsureEventFrame()
     if (event == "UNIT_STATS" or event == "UNIT_MAXHEALTH" or event == "UNIT_MAXPOWER") and unit and unit ~= "player" then return end
     if event == "PLAYER_TITLE_CHANGED" or event == "KNOWN_TITLES_UPDATE" then
       RequestTitleResync(self, state, "event:" .. tostring(event))
+      return
+    end
+    if event == "PLAYER_REGEN_ENABLED" then
+      -- Combat ended; apply any deferred MythicPanel visibility change.
+      ApplyMythicPanelPreference()
       return
     end
     self:RequestUpdate("event:" .. tostring(event))
