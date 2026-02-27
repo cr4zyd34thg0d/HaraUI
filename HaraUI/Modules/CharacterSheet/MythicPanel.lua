@@ -955,6 +955,7 @@ function MythicPanel:Create()
   f:SetFrameStrata("HIGH")
   f:SetFrameLevel((CharacterFrame:GetFrameLevel() or 1) + 80)
   f:EnableMouse(true)
+  f:Hide() -- start hidden; ApplyMythicPanelPreference will Show() if enabled
 
   -- Black-to-purple vertical gradient background
   f.bgGradient = f:CreateTexture(nil, "BACKGROUND")

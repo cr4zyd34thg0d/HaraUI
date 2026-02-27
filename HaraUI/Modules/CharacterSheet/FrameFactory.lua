@@ -408,9 +408,9 @@ function FrameFactory.PresetFrameAttributes()
       defined = cf:GetAttribute("UIPanelLayout-defined"),
     }
   end
-  -- WoW 12.0: SetAttribute on CharacterFrame from addon code taints the
-  -- UIPanelLayout attribute table, causing ShowUIPanel to skip positioning.
-  -- Capture-only; do not write.
+  cf:SetAttribute("UIPanelLayout-width",   EXPANDED_WIDTH)
+  cf:SetAttribute("UIPanelLayout-height",  EXPANDED_HEIGHT)
+  cf:SetAttribute("UIPanelLayout-defined", true)
 end
 
 -- Synchronously enforce expanded size. Called directly from CharacterFrame:OnShow.
@@ -432,11 +432,6 @@ function FrameFactory.SyncExpandSize()
   _sizeGuardActive = false
   parent:SetSize(EXPANDED_WIDTH, EXPANDED_HEIGHT)
   _sizeGuardActive = true
-  if not parent:GetLeft() and UIParent then
-    -- WoW 12.0: ShowUIPanel skipped positioning (taint); place manually.
-    parent:ClearAllPoints()
-    parent:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 20, -100)
-  end
   if not _sizeGuardInstalled and hooksecurefunc then
     _sizeGuardInstalled = true
     hooksecurefunc(parent, "SetSize", function(_, w, h)
@@ -478,7 +473,9 @@ local function ExpandCharacterFrame(state, parent)
         defined = parent:GetAttribute("UIPanelLayout-defined"),
       }
     end
-    -- WoW 12.0: do not write UIPanelLayout-* attributes; capture only.
+    parent:SetAttribute("UIPanelLayout-width",   EXPANDED_WIDTH)
+    parent:SetAttribute("UIPanelLayout-height",  EXPANDED_HEIGHT)
+    parent:SetAttribute("UIPanelLayout-defined", true)
   end
   _sizeGuardActive = false
   if not (InCombatLockdown and InCombatLockdown()) then
@@ -498,10 +495,6 @@ local function ExpandCharacterFrame(state, parent)
       if leftAbs and topAbs and UIParent then
         parent:ClearAllPoints()
         parent:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", leftAbs, topAbs)
-      elseif UIParent then
-        -- WoW 12.0: ShowUIPanel skipped positioning (taint); place manually.
-        parent:ClearAllPoints()
-        parent:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 20, -100)
       end
     end
   end
@@ -537,8 +530,21 @@ local function RestoreCharacterFrame(state)
   local orig   = state and state.originalFrameSize or nil
   local isTransfer = Utils.IsAccountTransferBuild()
 
-  -- WoW 12.0: do not restore UIPanelLayout-* attributes via SetAttribute;
-  -- writing them from addon code taints the table and breaks ShowUIPanel.
+  -- Restore UIPanelLayout attributes in all cases (covers pre-set-only path
+  -- where frame was never visually expanded but attributes were changed).
+  if not isTransfer and parent and parent.SetAttribute then
+    local blizzOrig = state and state.blizzardPanelAttributes
+    if blizzOrig then
+      -- Prefer true Blizzard originals captured before our first SetAttribute.
+      if blizzOrig.width  then parent:SetAttribute("UIPanelLayout-width",  blizzOrig.width)  end
+      if blizzOrig.height then parent:SetAttribute("UIPanelLayout-height", blizzOrig.height) end
+      parent:SetAttribute("UIPanelLayout-defined", blizzOrig.defined or false)
+    elseif orig then
+      -- Fall back to values captured at first expand (pre-set was not run).
+      if orig.panelWidth  then parent:SetAttribute("UIPanelLayout-width",  orig.panelWidth)  end
+      if orig.panelHeight then parent:SetAttribute("UIPanelLayout-height", orig.panelHeight) end
+    end
+  end
 
   if not (parent and orig and parent.SetSize) then return end
   parent:SetSize(orig.w, orig.h)
@@ -827,7 +833,7 @@ function FrameFactory:Apply(reason)
   local csDB = NS:GetDB() and NS:GetDB().charsheet
   local scale = csDB and csDB.scale or 1.0
   local parent = state.parent or CharacterFrame
-  if parent and parent.SetScale then parent:SetScale(scale) end
+  if parent and parent.SetScale and not (InCombatLockdown and InCombatLockdown()) then parent:SetScale(scale) end
 
   ApplyAnchors(state)
 
