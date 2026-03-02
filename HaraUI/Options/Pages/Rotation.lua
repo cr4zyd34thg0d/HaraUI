@@ -41,8 +41,8 @@ function NS.OptionsPages.BuildRotationPage(ctx)
     local scale = BuildStandardSliderRow(
       cards.sizing.content,
       "Scale",
-      0.6,
-      2.0,
+      0.5,
+      2.5,
       0.05,
       db.rotationhelper.scale or 1.0,
       "%.2f",

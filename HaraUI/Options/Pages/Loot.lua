@@ -28,8 +28,8 @@ function NS.OptionsPages.BuildLootPage(ctx)
     local scale = BuildStandardSliderRow(
       cards.sizing.content,
       "Scale",
-      0.6,
-      1.5,
+      0.5,
+      2.5,
       0.05,
       db.loot.scale or 1.0,
       "%.2f",

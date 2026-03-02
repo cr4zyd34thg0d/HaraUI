@@ -35,7 +35,7 @@ local function GetDevVersionFallback()
   if type(meta) == "string" and meta ~= "" and not meta:find("@project-version@", 1, true) then
     return meta
   end
-  return "0.0.0-dev"
+  return "2.3.1-1"
 end
 
 local function GetVersionString()
@@ -44,7 +44,8 @@ local function GetVersionString()
   end
 
   local version = GetAddonMetadataField("Version")
-  if type(version) ~= "string" or version == "" then
+  if type(version) ~= "string" or version == ""
+  or version:find("@project-version@", 1, true) then
     return GetDevVersionFallback()
   end
   return version

@@ -75,8 +75,8 @@ function NS.OptionsPages.BuildCastPage(ctx)
     local scale = BuildStandardSliderRow(
       cards.sizing.content,
       "Scale",
-      0.6,
-      1.8,
+      0.5,
+      2.5,
       0.05,
       db.castbar.scale or 1.0,
       "%.2f",

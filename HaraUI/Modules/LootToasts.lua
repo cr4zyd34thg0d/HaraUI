@@ -280,12 +280,13 @@ end
 local function LayoutToasts()
   local db = NS:GetDB()
   local point, x, y = db.loot.anchor, db.loot.x, db.loot.y
+  local scale = db.loot.scale or 1.0
   local anchor = EnsureAnchor()
   anchor:ClearAllPoints()
   anchor:SetPoint(point, UIParent, point, x, y)
   for i, t in ipairs(state.active) do
     t:ClearAllPoints()
-    t:SetPoint(point, anchor, point, 0, -((i - 1) * 54))
+    t:SetPoint(point, anchor, point, 0, -((i - 1) * 54 * scale))
   end
 end
 

@@ -299,7 +299,7 @@ local function Update(forceQuest)
   local unlocked = IsFramesUnlocked(db)
   local level = UnitLevel("player")
   local xpMax = UnitXPMax("player") or 0
-  local atMaxLevel = (level >= 90)
+  local atMaxLevel = (xpMax == 0)
 
   if atMaxLevel then
     if not xpbar.showAtMaxLevel then

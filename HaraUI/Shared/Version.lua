@@ -1,6 +1,6 @@
 local ADDON, NS = ...
 
-local DEV_VERSION = "2.3.1"
+local DEV_VERSION = "2.3.1-4"
 local VERSION_TOKEN = "v2.3.1"
 
 local function ReadAddonVersion()
@@ -16,6 +16,10 @@ end
 local function GetVersionString()
   local version = ReadAddonVersion()
   if type(version) ~= "string" or version == "" then
+    return DEV_VERSION
+  end
+  -- Unpackaged build: TOC still has the @project-version@ placeholder.
+  if version:find("@", 1, true) then
     return DEV_VERSION
   end
   if version:find(VERSION_TOKEN, 1, true) then
