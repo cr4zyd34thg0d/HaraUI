@@ -76,6 +76,18 @@ World of Warcraft/_retail_/Interface/AddOns/
 
 ## :spiral_notepad: Changelog (Recent)
 
+### v2.4.0 - 2026-03-02
+- **Fixed:** Character panel, reputation panel, and currency panel now respond to keybinds and button presses in WoW 12.0 — root cause was `SetAttribute` on CharacterFrame tainting the UIPanelLayout system.
+- **Fixed:** CharacterFrame correctly positions on screen in WoW 12.0 when ShowUIPanel skips native positioning due to taint; fallback anchor applied automatically.
+- **Fixed:** `CharacterFrame:SetScale()` guarded behind `InCombatLockdown()` — prevents ADDON_ACTION_BLOCKED in WoW 12.0.
+- **Fixed:** MythicPanel and StatsPanel no longer bleed through the combat view when CharacterFrame opens during combat.
+- **Fixed:** Removed registration of events removed in WoW 12.0 (`LEARNED_SPELL_IN_TAB`, `PLAYER_TITLE_CHANGED`) — wrapped in pcall with safe fallback.
+- **Fixed:** Combat panel bleed — reputation and currency content no longer overlaps with the gear overlay when switching tabs during combat. Overlay correctly suppresses/restores per active tab using custom HaraUI tab hooks (no taint near currency transfer).
+- **Fixed:** XP bar max level detection now uses `UnitXPMax() == 0` instead of a hardcoded level cap — future-proof for any level squish or cap change.
+- **Fixed:** Loot toast stack spacing now scales with the scale slider — toasts no longer overlap at scale > 1.0.
+- **Improved:** Scale slider range expanded to 0.5–2.5 on Cast Bar, Loot Toasts, Rotation Helper, and XP Bar options pages.
+- **Improved:** Combat panel overlay refactored — all suppression/restore calls grouped into single helper functions; active tab detected from native frame visibility at show time.
+
 ### v2.3.0 - 2026-02-20
 - **Added:** Alt Tracker module — cross-character dashboard with item level, M+ rating, keystones, Great Vault progress, raid lockouts, seasonal currencies, and equipment inspection popup. Toggle with `/haralt`.
 - **Improved:** Cache `IsAccountTransferBuild()` as session-constant; deduplicate shared utilities across CharacterSheet modules.
