@@ -43,6 +43,7 @@ local GetTime = GetTime
 local UnitLevel = UnitLevel
 local UnitXP = UnitXP
 local UnitXPMax = UnitXPMax
+local GetMaxPlayerLevel = GetMaxPlayerLevel
 local GetXPExhaustion = GetXPExhaustion
 local math_min = math.min
 local math_max = math.max
@@ -236,6 +237,19 @@ local function IsFramesUnlocked(db)
   return db and db.general and db.general.framesLocked == false
 end
 
+local function IsAtMaxLevel(level, xpMax)
+  if (xpMax or 0) == 0 then
+    return true
+  end
+  if GetMaxPlayerLevel then
+    local maxLevel = GetMaxPlayerLevel()
+    if type(maxLevel) == "number" and maxLevel > 0 and (level or 0) >= maxLevel then
+      return true
+    end
+  end
+  return false
+end
+
 local function ShowUnlockPlaceholder()
   local bar = state.bar
   if not bar then return end
@@ -299,7 +313,7 @@ local function Update(forceQuest)
   local unlocked = IsFramesUnlocked(db)
   local level = UnitLevel("player")
   local xpMax = UnitXPMax("player") or 0
-  local atMaxLevel = (xpMax == 0)
+  local atMaxLevel = IsAtMaxLevel(level, xpMax)
 
   if atMaxLevel then
     local rep = WatchedReputationInfo()
