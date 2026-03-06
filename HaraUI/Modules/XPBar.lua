@@ -302,16 +302,6 @@ local function Update(forceQuest)
   local atMaxLevel = (xpMax == 0)
 
   if atMaxLevel then
-    if not xpbar.showAtMaxLevel then
-      if unlocked then
-        ShowUnlockPlaceholder()
-      else
-        bar._huiUnlockPlaceholder = nil
-        bar:Hide()
-      end
-      return
-    end
-
     local rep = WatchedReputationInfo()
     if rep then
       bar._huiUnlockPlaceholder = nil
