@@ -252,7 +252,7 @@ local function ApplyToastLayout(t, db)
   t.text:SetPoint("BOTTOM", t, "BOTTOM", textCenterX - (w / 2), 6)
   t.text:SetWidth(textAreaWidth)
   t.textBG:ClearAllPoints()
-  t.textBG:SetPoint("TOPLEFT", t, "TOPLEFT", textAreaLeft - 2 + textOffset, -5)
+  t.textBG:SetPoint("TOPLEFT", t, "TOPLEFT", textAreaLeft - 2, -5)
   t.textBG:SetPoint("BOTTOMRIGHT", t, "BOTTOMRIGHT", -textAreaRight, 5)
   if t.accentBar then
     t.accentBar:ClearAllPoints()
