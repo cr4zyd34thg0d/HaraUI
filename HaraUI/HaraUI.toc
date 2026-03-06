@@ -68,6 +68,5 @@ Modules/MoveOptions.lua
 Modules/SmallerGameMenu.lua
 Modules/LootToasts.lua
 Modules/MinimapBar.lua
-Modules/Summons.lua
 Modules/CopyBattleTag.lua
 

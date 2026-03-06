@@ -128,9 +128,6 @@ NS.DEFAULTS = {
       popoutStay = 2.0,
     },
 
-    summons = {
-      enabled = true,
-    },
 
     altpanel = {
       enabled = true,

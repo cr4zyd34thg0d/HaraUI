@@ -76,15 +76,6 @@ local function RunDBMigrations(dbRoot)
     general.themeColor.b = NS.DEFAULTS.profile.general.themeColor.b
   end
 
-  -- Rule 4: ensure summons container exists for legacy profiles.
-  -- No removals; only additive keys required by runtime toggle paths.
-  if type(profile.summons) ~= "table" then
-    profile.summons = {}
-  end
-  if profile.summons.enabled == nil then
-    profile.summons.enabled = NS.DEFAULTS.profile.summons.enabled
-  end
-
   state.version = DB_MIGRATION_VERSION
 end
 

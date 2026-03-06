@@ -33,7 +33,6 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
   local ApplyUIFont = ctx.ApplyUIFont
   return function(cards)
     -- ── DB defaults ──────────────────────────────────────────────────────────
-    db.summons        = db.summons        or {}
     db.charsheet      = db.charsheet      or {}
     db.gamemenu       = db.gamemenu       or {}
     db.altpanel       = db.altpanel       or {}
@@ -44,7 +43,6 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
     db.rotationhelper = db.rotationhelper or {}
     db.minimapbar     = db.minimapbar     or {}
 
-    if db.summons.enabled        == nil then db.summons.enabled        = true  end
     if db.charsheet.enabled      == nil then db.charsheet.enabled      = true  end
     if db.gamemenu.enabled       == nil then db.gamemenu.enabled       = true  end
     if db.altpanel.enabled       == nil then db.altpanel.enabled       = true  end
@@ -224,7 +222,7 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
     noSizing:SetTextColor(0.78, 0.78, 0.80)
 
     local commands = Small(cards.advanced.content,
-      "Quick Commands\n\n- /hui (options)\n- /hui lock (toggle Unlock Frames)\n- /hui xp | cast | loot | summon")
+      "Quick Commands\n\n- /hui (options)\n- /hui lock (toggle Unlock Frames)\n- /hui xp | cast | loot")
     commands:SetPoint("TOPLEFT", leftX, -10)
     commands:SetTextColor(0.92, 0.92, 0.94)
   end

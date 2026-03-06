@@ -41,16 +41,6 @@ local function HandleSlash(msg)
     return
   end
 
-  if msg == "summon" or msg == "summons" then
-    local db = NS:GetDB()
-    db.summons = db.summons or {}
-    db.summons.enabled = not (db.summons.enabled == true)
-    NS.Print("Auto Summon Accept: " .. (db.summons.enabled and "On" or "Off"))
-    NS:ApplyAll()
-    return
-  end
-
-
   if msg == "debug" then
     local db = NS:GetDB(); db.general.debug = not db.general.debug
     NS.Print("Debug: " .. (db.general.debug and "On" or "Off"))
@@ -76,7 +66,7 @@ local function HandleSlash(msg)
     ))
     return
   end
-  NS.Print("Commands: /hui (options) | lock | xp | cast | loot | summon | debug | version")
+  NS.Print("Commands: /hui (options) | lock | xp | cast | loot | debug | version")
 end
 
 NS._huiHandleSlash = HandleSlash

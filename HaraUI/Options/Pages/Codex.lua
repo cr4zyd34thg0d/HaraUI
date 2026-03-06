@@ -39,7 +39,6 @@ local CODEX_MODS = {
   -- Right page (slots 7–11) — FORBIDDEN RITES
   { name = "Game Menu",       dbKey = "gamemenu",       rune = "rune_menu"      },
   { name = "Skin Bars",       special = "tbs",          rune = "rune_skinbars"  },
-  { name = "Auto Summons",    dbKey = "summons",        rune = "rune_summons"   },
   { name = "Rotation Helper", dbKey = "rotationhelper", rune = "rune_rotation", settingsKey = "rotation" },
   { name = "Friendly Plates", dbKey = "friendlyplates", rune = "rune_plates",   settingsKey = "friendly" },
 }
