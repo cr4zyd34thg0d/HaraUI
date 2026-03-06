@@ -33,6 +33,9 @@ Options/Pages/Friendly.lua
 Options/Pages/Rotation.lua
 Options/Pages/Minimap.lua
 Options/Pages/Loot.lua
+Options/Pages/Merchant.lua
+Options/Pages/QuestReward.lua
+Options/Pages/AutoEquip.lua
 Options.lua
 Core/Slash.lua
 Core/GlobalsShim.lua
@@ -69,4 +72,8 @@ Modules/SmallerGameMenu.lua
 Modules/LootToasts.lua
 Modules/MinimapBar.lua
 Modules/CopyBattleTag.lua
+Modules/Merchant.lua
+Modules/QuestReward.lua
+Modules/AutoEquip.lua
+Modules/BagUpgrades.lua
 

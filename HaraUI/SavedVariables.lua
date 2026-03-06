@@ -128,13 +128,30 @@ NS.DEFAULTS = {
       popoutStay = 2.0,
     },
 
-
     altpanel = {
       enabled = true,
       characters = {},
       weeklyReset = 0,
       showRealms = true,
       showZeroRated = true,
+    },
+
+    merchant = {
+      enabled    = true,
+      autoRepair = true,
+      autoSell   = true,
+    },
+
+    questreward = {
+      enabled = true,
+    },
+
+    autoequip = {
+      enabled = true,
+    },
+
+    bagupgrades = {
+      enabled = true,
     },
   },
 }

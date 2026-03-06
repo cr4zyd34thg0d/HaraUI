@@ -22,7 +22,6 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
   local MakeCheckbox = ctx.MakeCheckbox
   local NS = ctx.NS
   local UpdateNavIndicators = ctx.UpdateNavIndicators
-  local ApplyToggleSkin = ctx.ApplyToggleSkin
   local MakeButton = ctx.MakeButton
   local MakeColorSwatch = ctx.MakeColorSwatch
   local SetThemeColor = ctx.SetThemeColor
@@ -31,6 +30,10 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
   local Round2 = ctx.Round2
   local RegisterTheme = ctx.RegisterTheme
   local ApplyUIFont = ctx.ApplyUIFont
+  -- Compact rune-themed skin for the top-section checkboxes.
+  local ApplyRuneToggleSkin = NS.OptionsWidgets and NS.OptionsWidgets.ApplyRuneToggleSkin
+    or ctx.ApplyToggleSkin  -- graceful fallback
+
   return function(cards)
     -- ── DB defaults ──────────────────────────────────────────────────────────
     db.charsheet      = db.charsheet      or {}
@@ -42,6 +45,10 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
     db.friendlyplates = db.friendlyplates or {}
     db.rotationhelper = db.rotationhelper or {}
     db.minimapbar     = db.minimapbar     or {}
+    db.merchant       = db.merchant       or {}
+    db.questreward    = db.questreward    or {}
+    db.autoequip      = db.autoequip      or {}
+    db.bagupgrades    = db.bagupgrades    or {}
 
     if db.charsheet.enabled      == nil then db.charsheet.enabled      = true  end
     if db.gamemenu.enabled       == nil then db.gamemenu.enabled       = true  end
@@ -52,15 +59,19 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
     if db.friendlyplates.enabled == nil then db.friendlyplates.enabled = true  end
     if db.rotationhelper.enabled == nil then db.rotationhelper.enabled = true  end
     if db.minimapbar.enabled     == nil then db.minimapbar.enabled     = true  end
+    if db.merchant.enabled       == nil then db.merchant.enabled       = true  end
+    if db.questreward.enabled    == nil then db.questreward.enabled    = true  end
+    if db.autoequip.enabled      == nil then db.autoequip.enabled      = true  end
+    if db.bagupgrades.enabled    == nil then db.bagupgrades.enabled    = true  end
 
     if db.general.showSpellIDs    == nil then db.general.showSpellIDs    = false end
     if db.general.trackedBarsSkin == nil then db.general.trackedBarsSkin = false end
     db.general.themeColor = db.general.themeColor
       or { r = ORANGE[1], g = ORANGE[2], b = ORANGE[3] }
 
-    local leftX  = 6    -- col 1 (also used in Visuals/Advanced tabs)
-    local col2   = 226  -- col 2
-    local col3   = 446  -- col 3
+    local leftX = 6    -- col 1
+    local col2  = 226  -- col 2
+    local col3  = 446  -- col 3
 
     -- ── Row 1: Enable HaraUI | Unlock Frames | Move Options ──────────────────
     local enable = MakeCheckbox(cards.general.content, "Enable HaraUI", "Toggle the whole UI suite on/off.")
@@ -71,7 +82,7 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
       NS:ApplyAll()
       UpdateNavIndicators()
     end)
-    ApplyToggleSkin(enable)
+    ApplyRuneToggleSkin(enable)
 
     local unlock = MakeCheckbox(cards.general.content, "Unlock Frames", "Show simple drag outlines for movable UI elements.")
     unlock:SetPoint("TOPLEFT", col2, -4)
@@ -80,7 +91,7 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
       db.general.framesLocked = not unlock:GetChecked()
       if NS.SetFramesLocked then NS:SetFramesLocked(db.general.framesLocked) end
     end)
-    ApplyToggleSkin(unlock)
+    ApplyRuneToggleSkin(unlock)
 
     local moveOptions = MakeCheckbox(cards.general.content, "Move Options", "Drag the Blizzard Settings window.")
     moveOptions:SetPoint("TOPLEFT", col3, -4)
@@ -89,67 +100,51 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
       db.general.moveOptions = moveOptions:GetChecked()
       NS:ApplyAll()
     end)
-    ApplyToggleSkin(moveOptions)
+    ApplyRuneToggleSkin(moveOptions)
 
-    -- ── Row 2: Minimap Button | Show Spell IDs | Reset All Positions ──────────
+    -- ── Row 2: Minimap Button | Show Spell IDs (26 px below row 1) ───────────
     local minimapBtn = MakeCheckbox(cards.general.content, "Minimap Button", "Show or hide the HaraUI minimap button.")
-    minimapBtn:SetPoint("TOPLEFT", leftX, -34)
+    minimapBtn:SetPoint("TOPLEFT", leftX, -30)
     minimapBtn:SetChecked(not (db.general.minimapButton and db.general.minimapButton.hide))
     minimapBtn:SetScript("OnClick", function()
       db.general.minimapButton = db.general.minimapButton or {}
       db.general.minimapButton.hide = not minimapBtn:GetChecked()
       if NS.UpdateMinimapButton then NS:UpdateMinimapButton() end
     end)
-    ApplyToggleSkin(minimapBtn)
+    ApplyRuneToggleSkin(minimapBtn)
 
     local spellIdsCB = MakeCheckbox(cards.general.content, "Show Spell IDs", "Append spell IDs to spell tooltips.")
-    spellIdsCB:SetPoint("TOPLEFT", col2, -34)
+    spellIdsCB:SetPoint("TOPLEFT", col2, -30)
     spellIdsCB:SetChecked(db.general.showSpellIDs == true)
     spellIdsCB:SetScript("OnClick", function()
       db.general.showSpellIDs = spellIdsCB:GetChecked()
     end)
-    ApplyToggleSkin(spellIdsCB)
+    ApplyRuneToggleSkin(spellIdsCB)
 
     local autoRepair = MakeCheckbox(cards.general.content, "Auto Repair", "Automatically repair gear when opening a repair merchant.")
-    autoRepair:SetPoint("TOPLEFT", leftX, -64)
-    autoRepair:SetChecked(db.merchant and db.merchant.autoRepair ~= false)
+    autoRepair:SetPoint("TOPLEFT", col3, -30)
+    autoRepair:SetChecked(db.merchant.autoRepair ~= false)
     autoRepair:SetScript("OnClick", function()
-      db.merchant = db.merchant or {}
       db.merchant.autoRepair = autoRepair:GetChecked()
     end)
-    ApplyToggleSkin(autoRepair)
+    ApplyRuneToggleSkin(autoRepair)
 
     local autoSell = MakeCheckbox(cards.general.content, "Auto Sell Junk", "Automatically sell grey items when opening a merchant.")
+    autoSell:SetPoint("TOPLEFT", leftX, -56)
+    autoSell:SetChecked(db.merchant.autoSell ~= false)
     autoSell:SetScript("OnClick", function()
-      db.merchant = db.merchant or {}
       db.merchant.autoSell = autoSell:GetChecked()
     end)
-    ApplyToggleSkin(autoSell)
-    autoSell:SetPoint("TOPLEFT", col2, -64)
-    autoSell:SetChecked(db.merchant and db.merchant.autoSell ~= false)
+    ApplyRuneToggleSkin(autoSell)
 
-    local resetAll = MakeButton(cards.general.content, "Reset All Positions", 170, 24)
-    resetAll:SetPoint("TOPLEFT", col3, -34)
-    resetAll:SetScript("OnClick", function()
-      NS:ResetFramePosition("xpbar",   NS.DEFAULTS.profile.xpbar)
-      NS:ResetFramePosition("castbar", NS.DEFAULTS.profile.castbar)
-      if NS.SetFramesLocked then NS:SetFramesLocked(db.general.framesLocked) end
+    local bagUpgrades = MakeCheckbox(cards.general.content, "Bag Upgrade Arrows", "Show a small green arrow on bag items that are upgrades for your equipped gear.")
+    bagUpgrades:SetPoint("TOPLEFT", col2, -56)
+    bagUpgrades:SetChecked(db.bagupgrades.enabled ~= false)
+    bagUpgrades:SetScript("OnClick", function()
+      db.bagupgrades.enabled = bagUpgrades:GetChecked()
+      NS:ApplyAll()
     end)
-
-    -- ── Row 3: Codex Theme ────────────────────────────────────────────────────
-    db.general.codexTheme = db.general.codexTheme or "necromancer"
-    local THEME_LABELS  = { none = "None", necromancer = "Necromancer", arcane = "Arcane", faction = "Faction" }
-    local THEME_CYCLE   = { none = "necromancer", necromancer = "arcane", arcane = "faction", faction = "none" }
-    local themeBtn = MakeButton(cards.general.content,
-      "Theme: " .. (THEME_LABELS[db.general.codexTheme] or "Necromancer"), 170, 24)
-    themeBtn:SetPoint("TOPLEFT", col3, -64)
-    themeBtn:SetScript("OnClick", function()
-      local cur  = db.general.codexTheme or "necromancer"
-      local next = THEME_CYCLE[cur] or "necromancer"
-      db.general.codexTheme = next
-      themeBtn:SetText("Theme: " .. THEME_LABELS[next])
-      if NS.OptionsPages.SetCodexTheme then NS.OptionsPages.SetCodexTheme(next) end
-    end)
+    ApplyRuneToggleSkin(bagUpgrades)
 
     -- ════════════════════════════════════════════════════════════════════════
     --  MODULE DASHBOARD — Necromancer's Codex
@@ -158,8 +153,18 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
       cards.general.content, db, NS, ORANGE,
       RegisterTheme, ApplyUIFont, UpdateNavIndicators)
 
-    --  VISUALS / SIZING / ADVANCED tabs (unchanged)
     -- ════════════════════════════════════════════════════════════════════════
+    --  VISUALS tab
+    -- ════════════════════════════════════════════════════════════════════════
+    -- Reset All Positions moved here from the General top section.
+    local resetAll = MakeButton(cards.visuals.content, "Reset All Positions", 170, 24)
+    resetAll:SetPoint("TOPLEFT", leftX, -10)
+    resetAll:SetScript("OnClick", function()
+      NS:ResetFramePosition("xpbar",   NS.DEFAULTS.profile.xpbar)
+      NS:ResetFramePosition("castbar", NS.DEFAULTS.profile.castbar)
+      if NS.SetFramesLocked then NS:SetFramesLocked(db.general.framesLocked) end
+    end)
+
     local themeLabel, themeSwatch = MakeColorSwatch(
       cards.visuals.content,
       "Theme Color",
@@ -169,14 +174,14 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
         SetThemeColor(r, g, b)
       end
     )
-    themeLabel:SetPoint("TOPLEFT", leftX, -10)
+    themeLabel:SetPoint("TOPLEFT", leftX, -46)
     themeLabel:SetWidth(96)
     themeLabel:SetJustifyH("LEFT")
     themeSwatch:ClearAllPoints()
     themeSwatch:SetPoint("LEFT", themeLabel, "RIGHT", 12, 0)
 
     local themeHint = Small(cards.visuals.content, "Adjusts the accent color used across HaraUI.")
-    themeHint:SetPoint("TOPLEFT", leftX, -40)
+    themeHint:SetPoint("TOPLEFT", leftX, -76)
     themeHint:SetTextColor(0.78, 0.78, 0.80)
 
     db.charsheet = db.charsheet or {}
@@ -194,8 +199,8 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
         NS:ApplyAll()
       end
     )
-    csScale:SetPoint("TOPLEFT",  leftX, -70)
-    csScale:SetPoint("TOPRIGHT", -6,    -70)
+    csScale:SetPoint("TOPLEFT",  leftX, -106)
+    csScale:SetPoint("TOPRIGHT", -6,    -106)
 
     db.altpanel = db.altpanel or {}
     if db.altpanel.scale == nil then db.altpanel.scale = 1.0 end
