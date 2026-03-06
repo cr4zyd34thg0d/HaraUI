@@ -552,6 +552,7 @@ local function AcquireToast()
   end
 
   t.introAnim = t:CreateAnimationGroup()
+  t.introAnim:SetToFinalAlpha(true)
   local introAlpha = t.introAnim:CreateAnimation("Alpha")
   introAlpha:SetOrder(1)
   introAlpha:SetFromAlpha(0)
