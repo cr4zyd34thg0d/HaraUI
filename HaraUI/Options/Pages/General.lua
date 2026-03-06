@@ -112,6 +112,24 @@ function NS.OptionsPages.CreateBuildGeneralPageCards(ctx)
     end)
     ApplyToggleSkin(spellIdsCB)
 
+    local autoRepair = MakeCheckbox(cards.general.content, "Auto Repair", "Automatically repair gear when opening a repair merchant.")
+    autoRepair:SetPoint("TOPLEFT", leftX, -64)
+    autoRepair:SetChecked(db.merchant and db.merchant.autoRepair ~= false)
+    autoRepair:SetScript("OnClick", function()
+      db.merchant = db.merchant or {}
+      db.merchant.autoRepair = autoRepair:GetChecked()
+    end)
+    ApplyToggleSkin(autoRepair)
+
+    local autoSell = MakeCheckbox(cards.general.content, "Auto Sell Junk", "Automatically sell grey items when opening a merchant.")
+    autoSell:SetScript("OnClick", function()
+      db.merchant = db.merchant or {}
+      db.merchant.autoSell = autoSell:GetChecked()
+    end)
+    ApplyToggleSkin(autoSell)
+    autoSell:SetPoint("TOPLEFT", col2, -64)
+    autoSell:SetChecked(db.merchant and db.merchant.autoSell ~= false)
+
     local resetAll = MakeButton(cards.general.content, "Reset All Positions", 170, 24)
     resetAll:SetPoint("TOPLEFT", col3, -34)
     resetAll:SetScript("OnClick", function()
