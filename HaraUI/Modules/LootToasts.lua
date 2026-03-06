@@ -26,6 +26,9 @@ local state = {
   eventFrame = nil,
 }
 local ShowItemTooltip
+local LayoutToasts
+local ReleaseToast
+local RemoveActiveToast
 local PLAYER_GUID = UnitGUID and UnitGUID("player") or nil
 local issecretvalue = issecretvalue
 
@@ -603,11 +606,32 @@ local function AcquireToast()
   shineOut:SetStartDelay(0.18)
   shineOut:SetDuration(0.45)
 
+  t.outroAnim = t:CreateAnimationGroup()
+  t.outroAnim:SetToFinalAlpha(true)
+
+  local outroAlpha = t.outroAnim:CreateAnimation("Alpha")
+  outroAlpha:SetOrder(1)
+  outroAlpha:SetFromAlpha(1)
+  outroAlpha:SetToAlpha(0)
+  outroAlpha:SetDuration(0.28)
+
+  local outroMove = t.outroAnim:CreateAnimation("Translation")
+  outroMove:SetOrder(1)
+  outroMove:SetOffset(12, 0)
+  outroMove:SetDuration(0.28)
+
+  t.outroAnim:SetScript("OnFinished", function(anim)
+    local toast = anim:GetParent()
+    RemoveActiveToast(toast)
+    ReleaseToast(toast)
+    LayoutToasts()
+  end)
+
   t:Hide()
   return t
 end
 
-local function LayoutToasts()
+LayoutToasts = function()
   local db = NS:GetDB()
   local point, x, y = db.loot.anchor, db.loot.x, db.loot.y
   local scale = db.loot.scale or 1.0
@@ -622,7 +646,7 @@ local function LayoutToasts()
 end
 
 -- Timer
-local function ReleaseToast(t)
+ReleaseToast = function(t)
   if t and t.SetScript then
     t:SetScript("OnUpdate", nil)
   end
@@ -636,6 +660,9 @@ local function ReleaseToast(t)
   end
   if t and t.introAnim then
     t.introAnim:Stop()
+  end
+  if t and t.outroAnim then
+    t.outroAnim:Stop()
   end
   if t and t.arrowAnim then
     t.arrowAnim:Stop()
@@ -661,6 +688,8 @@ local function ReleaseToast(t)
     t.countText:SetText("")
   end
   if t then
+    t:SetAlpha(1)
+    t._huiIsFading = nil
     t._huiTooltipLink = nil
     t._huiItemStyle = nil
     t._huiQuality = nil
@@ -797,12 +826,35 @@ ShowItemTooltip = function(owner, toast)
   GameTooltip:Show()
 end
 
-local function RemoveActiveToast(toast)
+RemoveActiveToast = function(toast)
   for i = #state.active, 1, -1 do
     if state.active[i] == toast then
       table.remove(state.active, i)
       return
     end
+  end
+end
+
+local function FadeToastOut(toast)
+  if not toast or toast._huiIsFading then return end
+  toast._huiIsFading = true
+  if state.toastTimers[toast] then
+    state.toastTimers[toast]:Cancel()
+    state.toastTimers[toast] = nil
+  end
+  if toast.introAnim then
+    toast.introAnim:Stop()
+  end
+  if toast.arrowAnim then
+    toast.arrowAnim:Stop()
+  end
+  if toast.outroAnim then
+    toast.outroAnim:Stop()
+    toast.outroAnim:Play()
+  else
+    RemoveActiveToast(toast)
+    ReleaseToast(toast)
+    LayoutToasts()
   end
 end
 
@@ -814,9 +866,7 @@ local function RefreshToastTimer(toast, durationOverride)
     state.toastTimers[toast]:Cancel()
   end
   state.toastTimers[toast] = C_Timer.NewTimer(duration, function()
-    RemoveActiveToast(toast)
-    ReleaseToast(toast)
-    LayoutToasts()
+    FadeToastOut(toast)
   end)
 end
 
@@ -1002,6 +1052,11 @@ end
 local function ApplyPayloadToToast(toast, payload)
   if not toast or not payload then return end
   local db = NS:GetDB()
+  toast._huiIsFading = nil
+  toast:SetAlpha(1)
+  if toast.outroAnim then
+    toast.outroAnim:Stop()
+  end
   ApplyToastLayout(toast, db.loot)
   toast:SetScale(db.loot.scale or 1.0)
   ApplyToastFont(toast.title, 12)
