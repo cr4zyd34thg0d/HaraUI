@@ -227,6 +227,7 @@ local function ApplyToastLayout(t, db)
   if not t or not db then return end
   local w = db.width or 224
   local h = db.height or 48
+  local textOffset = 5
   t:SetSize(w, h)
 
   local iconSize = math.max(34, math.min(h - 6, 42))
@@ -242,7 +243,7 @@ local function ApplyToastLayout(t, db)
   local textAreaLeft = iconOffset + iconSize + 8
   local textAreaRight = 6
   local textAreaWidth = math.max(120, w - textAreaLeft - textAreaRight)
-  local textCenterX = (textAreaLeft + (w - textAreaRight)) / 2
+  local textCenterX = ((textAreaLeft + (w - textAreaRight)) / 2) + textOffset
 
   t.title:ClearAllPoints()
   t.title:SetPoint("TOP", t, "TOP", textCenterX - (w / 2), -6)
@@ -251,7 +252,7 @@ local function ApplyToastLayout(t, db)
   t.text:SetPoint("BOTTOM", t, "BOTTOM", textCenterX - (w / 2), 6)
   t.text:SetWidth(textAreaWidth)
   t.textBG:ClearAllPoints()
-  t.textBG:SetPoint("TOPLEFT", t, "TOPLEFT", textAreaLeft - 2, -5)
+  t.textBG:SetPoint("TOPLEFT", t, "TOPLEFT", textAreaLeft - 2 + textOffset, -5)
   t.textBG:SetPoint("BOTTOMRIGHT", t, "BOTTOMRIGHT", -textAreaRight, 5)
   if t.accentBar then
     t.accentBar:ClearAllPoints()
