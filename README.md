@@ -76,6 +76,19 @@ World of Warcraft/_retail_/Interface/AddOns/
 
 ## :spiral_notepad: Changelog (Recent)
 
+### v2.5.0 - 2026-03-14
+- **New:** Merchant module — automatically repairs all gear and sells grey items when you open a merchant. Toggles for each action in General settings.
+- **New:** Quest Reward module — automatically selects the best quest reward 1.5s after the completion screen appears. Prioritises same armor type + primary stat + ilvl upgrade, falling back to highest vendor value.
+- **New:** Auto Equip module — scans bags on `BAG_UPDATE_DELAYED` and equips any soulbound item level upgrade that matches your class armor type and spec primary stat. Accessories (neck, cloak, ring, trinket) only require an ilvl upgrade.
+- **New:** Bag Upgrade Arrows — shows a small green arrow indicator on bag slots that contain an item level upgrade for your currently equipped gear.
+- **New:** Codex panel — Merchant, Quest Reward, and Auto Equip added as rune entries with custom on/off icons. Left-click toggles; enable/disable all button updated.
+- **Fixed:** XP bar max-level visibility logic hardened — bar now correctly hides at max level when `hideAtMaxIfNoRep` is set and no tracked reputation is active.
+- **Improved:** Loot toasts refactored — text block detached from accent rail, intro alpha preserved through the full animation, fade-out timing restored, and stack layout aligned with upgraded loot data.
+- **Improved:** Merchant auto-repair and auto-sell toggles promoted to General settings row for quick access without navigating to a separate page.
+- **Removed:** Auto Summons module removed.
+- **Optimised:** `CLASS_ARMOR_TYPE`, `PRIMARY_STAT_KEY`, and `ACCESSORY_EQUIP_LOCS` constants consolidated into `Constants.lua` — shared by AutoEquip and QuestReward, eliminating duplicate definitions.
+- **Optimised:** Dead option page files (Merchant, QuestReward, AutoEquip pages were defined but never wired into the options system) removed from load order.
+
 ### v2.4.0 - 2026-03-02
 - **Fixed:** Character panel, reputation panel, and currency panel now respond to keybinds and button presses in WoW 12.0 — root cause was `SetAttribute` on CharacterFrame tainting the UIPanelLayout system.
 - **Fixed:** CharacterFrame correctly positions on screen in WoW 12.0 when ShowUIPanel skips native positioning due to taint; fallback anchor applied automatically.

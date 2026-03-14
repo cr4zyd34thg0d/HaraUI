@@ -26,21 +26,24 @@ local GLYPH_THEMES = {
   },
 }
 
--- Module definitions — ordered left-page (6) then right-page (5).
+-- Module definitions — ordered left-page (6) then right-page (8).
 -- dbKey/special must match the existing SavedVariables structure exactly.
 local CODEX_MODS = {
   -- Left page (slots 1–6) — DARK BINDINGS
-  { name = "XP / Rep Bar",    dbKey = "xpbar",         rune = "rune_xp",       settingsKey = "xp"       },
-  { name = "Cast Bar",        dbKey = "castbar",        rune = "rune_cast",     settingsKey = "cast"     },
-  { name = "Loot Toasts",     dbKey = "loot",           rune = "rune_loot",     settingsKey = "loot"     },
-  { name = "Minimap Bar",     dbKey = "minimapbar",     rune = "rune_minimap",  settingsKey = "minimap"  },
-  { name = "Alt Panel",       dbKey = "altpanel",       rune = "rune_altpanel"  },
-  { name = "Char Sheet",      dbKey = "charsheet",      rune = "rune_charsheet" },
-  -- Right page (slots 7–11) — FORBIDDEN RITES
-  { name = "Game Menu",       dbKey = "gamemenu",       rune = "rune_menu"      },
-  { name = "Skin Bars",       special = "tbs",          rune = "rune_skinbars"  },
-  { name = "Rotation Helper", dbKey = "rotationhelper", rune = "rune_rotation", settingsKey = "rotation" },
-  { name = "Friendly Plates", dbKey = "friendlyplates", rune = "rune_plates",   settingsKey = "friendly" },
+  { name = "XP / Rep Bar",    dbKey = "xpbar",         rune = "rune_xp",          settingsKey = "xp"          },
+  { name = "Cast Bar",        dbKey = "castbar",        rune = "rune_cast",        settingsKey = "cast"        },
+  { name = "Loot Toasts",     dbKey = "loot",           rune = "rune_loot",        settingsKey = "loot"        },
+  { name = "Minimap Bar",     dbKey = "minimapbar",     rune = "rune_minimap",     settingsKey = "minimap"     },
+  { name = "Alt Panel",       dbKey = "altpanel",       rune = "rune_altpanel"                                 },
+  { name = "Char Sheet",      dbKey = "charsheet",      rune = "rune_charsheet"                                },
+  -- Right page (slots 7–14) — FORBIDDEN RITES
+  { name = "Game Menu",       dbKey = "gamemenu",       rune = "rune_menu"                                     },
+  { name = "Skin Bars",       special = "tbs",          rune = "rune_skinbars"                                 },
+  { name = "Rotation Helper", dbKey = "rotationhelper", rune = "rune_rotation",    settingsKey = "rotation"    },
+  { name = "Friendly Plates", dbKey = "friendlyplates", rune = "rune_plates",      settingsKey = "friendly"    },
+  { name = "Merchant",        dbKey = "merchant",       rune = "rune_merchant"                                 },
+  { name = "Quest Reward",    dbKey = "questreward",    rune = "rune_questreward"                              },
+  { name = "Auto Equip",      dbKey = "autoequip",      rune = "rune_autoequip"                                },
 }
 
 -- ============================================================
@@ -60,10 +63,10 @@ function NS.OptionsPages.BuildCodexPanel(parent, db, NS, ORANGE, RegisterTheme, 
   local CODEX_W    = 660         -- content frame width (window 720 - 36 card margin - 24 inset)
   local SPINE_W    = 24
   local PAGE_W     = math.floor((CODEX_W - SPINE_W) / 2)  -- 323
-  local ROW_H      = 38          -- entry row height
+  local ROW_H      = 33          -- entry row height
   local CHAIN_PAD  = 14          -- vertical space taken by the chain at the top
   local HDR_H      = 20          -- combined page-header text + divider height
-  local RUNE_SZ    = 36          -- rendered rune icon size (px)
+  local RUNE_SZ    = 30          -- rendered rune icon size (px)
   local RUNE_PAD   = 5           -- px from page left edge to rune frame left
   local ACCENT_W   = 3
   local BAR_W      = 38
@@ -603,6 +606,61 @@ function NS.OptionsPages.BuildCodexPanel(parent, db, NS, ORANGE, RegisterTheme, 
     UpdateCount()
     NS:ApplyAll()
     if UpdateNavIndicators then UpdateNavIndicators() end
+  end)
+
+  -- ── Footer: Theme cycle button ─────────────────────────────────────────────
+  local THEME_LABELS = { none = "None", necromancer = "Necromancer", arcane = "Arcane", faction = "Faction" }
+  local THEME_CYCLE  = { necromancer = "arcane", arcane = "faction", faction = "none", none = "necromancer" }
+
+  local themeFooterBtn = CreateFrame("Button", nil, footer, "BackdropTemplate")
+  themeFooterBtn:SetSize(140, 18)
+  themeFooterBtn:SetPoint("RIGHT", disableBtn, "LEFT", -6, 0)
+  themeFooterBtn:SetBackdrop({
+    bgFile   = "Interface/Buttons/WHITE8x8",
+    edgeFile = "Interface/Buttons/WHITE8x8",
+    edgeSize = 1,
+    insets   = { left = 1, right = 1, top = 1, bottom = 1 },
+  })
+  themeFooterBtn:SetBackdropColor(0.08, 0.04, 0.14, 0.90)
+  themeFooterBtn:SetBackdropBorderColor(COL_PURPLE[1], COL_PURPLE[2], COL_PURPLE[3], 0.50)
+
+  local themeFooterTex = themeFooterBtn:CreateTexture(nil, "BACKGROUND")
+  themeFooterTex:SetAllPoints(true)
+  themeFooterTex:SetTexture(TX .. "btn_disable_normal.tga")
+
+  local themeFooterLabel = themeFooterBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  themeFooterLabel:SetPoint("CENTER", 0, 0)
+  ApplyUIFont(themeFooterLabel, 10, "OUTLINE", COL_PURPLE)
+  themeFooterLabel:SetTextColor(COL_PURPLE[1], COL_PURPLE[2], COL_PURPLE[3], 0.90)
+
+  local function RefreshThemeFooterLabel()
+    local cur = (db.general and db.general.codexTheme) or "necromancer"
+    themeFooterLabel:SetText("THEME: " .. (THEME_LABELS[cur] or cur):upper())
+  end
+  RefreshThemeFooterLabel()
+
+  themeFooterBtn:SetScript("OnEnter", function()
+    themeFooterTex:SetTexture(TX .. "btn_disable_hover.tga")
+    themeFooterLabel:SetTextColor(ORANGE[1], ORANGE[2], ORANGE[3], 1)
+  end)
+  themeFooterBtn:SetScript("OnLeave", function()
+    themeFooterTex:SetTexture(TX .. "btn_disable_normal.tga")
+    themeFooterLabel:SetTextColor(COL_PURPLE[1], COL_PURPLE[2], COL_PURPLE[3], 0.90)
+  end)
+  themeFooterBtn:SetScript("OnMouseDown", function()
+    themeFooterTex:SetTexture(TX .. "btn_disable_pressed.tga")
+  end)
+  themeFooterBtn:SetScript("OnMouseUp", function()
+    themeFooterTex:SetTexture(TX .. "btn_disable_hover.tga")
+  end)
+  themeFooterBtn:SetScript("OnClick", function()
+    local cur  = (db.general and db.general.codexTheme) or "necromancer"
+    local next = THEME_CYCLE[cur] or "necromancer"
+    if db.general then db.general.codexTheme = next end
+    RefreshThemeFooterLabel()
+    if NS.OptionsPages.SetCodexTheme then
+      NS.OptionsPages.SetCodexTheme(next)
+    end
   end)
 
   -- ── Glyph theme switcher ──────────────────────────────────────────────────

@@ -214,6 +214,7 @@ function NS:BuildOptionsWindow(BuildFullUI, db)
   end
   window:EnableKeyboard(true)
   window:SetScript("OnKeyDown", function(self, key)
+    if InCombatLockdown() then return end
     if key == "ESCAPE" then
       if NS.CloseOptionsWindow then
         NS:CloseOptionsWindow()

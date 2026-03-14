@@ -494,6 +494,109 @@ local function MakeValueChip(parent, width, height)
   return chip
 end
 
+-- =========================================================
+-- Compact arcane-themed toggle — used by the General page top section.
+-- Smaller footprint (28×12 track) and styled to match the cursed tome:
+--   ON  → orange border + fill, orange knob, lavender label
+--   OFF → purple border,  dark fill, muted knob, dim label
+-- =========================================================
+local COL_LAVLIVE = { 0.72, 0.60, 0.92 }
+local COL_DIMTEXT = { 0.38, 0.30, 0.52 }
+local COL_PURPLE  = { 0.42, 0.29, 0.55 }
+
+local function ApplyRuneToggleSkin(cb)
+  if not cb or cb._huiRuneToggleSkinned then return cb end
+  cb._huiRuneToggleSkinned = true
+
+  -- Hide all native checkbox textures.
+  for _, getter in ipairs({
+    "GetNormalTexture", "GetPushedTexture", "GetHighlightTexture",
+    "GetCheckedTexture", "GetDisabledCheckedTexture", "GetDisabledTexture",
+  }) do
+    local fn = cb[getter]
+    if fn then
+      local tex = fn(cb)
+      if tex and tex.SetAlpha then tex:SetAlpha(0) end
+    end
+  end
+
+  -- Compact 28×12 track.
+  local toggle = CreateFrame("Frame", nil, cb, "BackdropTemplate")
+  toggle:SetPoint("LEFT", cb, "LEFT", 0, 0)
+  toggle:SetSize(28, 12)
+  toggle:SetBackdrop({
+    bgFile   = "Interface/Buttons/WHITE8x8",
+    edgeFile = "Interface/Buttons/WHITE8x8",
+    edgeSize = 1,
+    insets   = { left = 1, right = 1, top = 1, bottom = 1 },
+  })
+  toggle:SetFrameLevel(cb:GetFrameLevel() + 1)
+
+  toggle.fill = toggle:CreateTexture(nil, "ARTWORK")
+  toggle.fill:SetPoint("TOPLEFT",     1, -1)
+  toggle.fill:SetPoint("BOTTOMRIGHT", -1, 1)
+  toggle.fill:SetTexture("Interface/Buttons/WHITE8x8")
+
+  -- 8×8 knob.
+  toggle.knob = toggle:CreateTexture(nil, "OVERLAY")
+  toggle.knob:SetSize(8, 8)
+  toggle.knob:SetTexture("Interface/Buttons/WHITE8x8")
+
+  cb._huiRuneToggle = toggle
+
+  -- Reposition label text to the right of the track.
+  if cb.Text then
+    cb.Text:ClearAllPoints()
+    cb.Text:SetPoint("LEFT", toggle, "RIGHT", 7, 0)
+    cb.Text:SetJustifyH("LEFT")
+    ApplyUIFont(cb.Text, 11, "OUTLINE", { COL_LAVLIVE[1], COL_LAVLIVE[2], COL_LAVLIVE[3] })
+  end
+
+  local function Refresh()
+    local isChecked = cb:GetChecked()
+    if isChecked then
+      toggle:SetBackdropColor(0.10, 0.05, 0.16, 0.96)
+      toggle:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.90)
+      toggle.fill:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 0.22)
+      toggle.knob:ClearAllPoints()
+      toggle.knob:SetPoint("RIGHT", toggle, "RIGHT", -2, 0)
+      toggle.knob:SetColorTexture(ORANGE[1], ORANGE[2], ORANGE[3], 1)
+      if cb.Text then
+        cb.Text:SetTextColor(COL_LAVLIVE[1], COL_LAVLIVE[2], COL_LAVLIVE[3])
+      end
+    else
+      toggle:SetBackdropColor(0.08, 0.04, 0.14, 0.96)
+      toggle:SetBackdropBorderColor(COL_PURPLE[1], COL_PURPLE[2], COL_PURPLE[3], 0.55)
+      toggle.fill:SetColorTexture(COL_PURPLE[1], COL_PURPLE[2], COL_PURPLE[3], 0.10)
+      toggle.knob:ClearAllPoints()
+      toggle.knob:SetPoint("LEFT", toggle, "LEFT", 2, 0)
+      toggle.knob:SetColorTexture(COL_PURPLE[1], COL_PURPLE[2], COL_PURPLE[3], 0.60)
+      if cb.Text then
+        cb.Text:SetTextColor(COL_DIMTEXT[1], COL_DIMTEXT[2], COL_DIMTEXT[3])
+      end
+    end
+    toggle:SetAlpha(cb:IsEnabled() and 1 or 0.45)
+  end
+
+  RegisterTheme(function()
+    Refresh()
+  end)
+
+  cb:HookScript("OnClick",  Refresh)
+  cb:HookScript("OnShow",   Refresh)
+  if cb.HasScript and cb:HasScript("OnEnable")  then cb:HookScript("OnEnable",  Refresh) end
+  if cb.HasScript and cb:HasScript("OnDisable") then cb:HookScript("OnDisable", Refresh) end
+  cb:HookScript("OnEnter", function()
+    if not cb:GetChecked() then
+      toggle:SetBackdropBorderColor(ORANGE[1], ORANGE[2], ORANGE[3], 0.60)
+    end
+  end)
+  cb:HookScript("OnLeave", Refresh)
+
+  Refresh()
+  return cb
+end
+
 NS.OptionsWidgets = NS.OptionsWidgets or {}
 NS.OptionsWidgets.ApplyDarkBackdrop = ApplyDarkBackdrop
 NS.OptionsWidgets.MakeSection = MakeSection
@@ -503,7 +606,8 @@ NS.OptionsWidgets.Title = Title
 NS.OptionsWidgets.Small = Small
 NS.OptionsWidgets.MakeButton = MakeButton
 NS.OptionsWidgets.MakeCheckbox = MakeCheckbox
-NS.OptionsWidgets.ApplyToggleSkin = ApplyToggleSkin
+NS.OptionsWidgets.ApplyToggleSkin     = ApplyToggleSkin
+NS.OptionsWidgets.ApplyRuneToggleSkin = ApplyRuneToggleSkin
 NS.OptionsWidgets.MakeSlider = MakeSlider
 NS.OptionsWidgets.Round2 = Round2
 NS.OptionsWidgets.OpenColorPickerRGB = OpenColorPickerRGB

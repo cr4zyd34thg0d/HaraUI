@@ -31,6 +31,37 @@ NS.TEXTURES = {
   CAST_SHIELD = "Interface\\CastingBar\\UI-CastingBar-Small-Shield",
 }
 
+-- Shared item constants (used by AutoEquip and QuestReward modules)
+NS.ITEM_CLASS_ARMOR_TYPE = {
+  WARRIOR     = "Plate",
+  PALADIN     = "Plate",
+  DEATHKNIGHT = "Plate",
+  HUNTER      = "Mail",
+  SHAMAN      = "Mail",
+  EVOKER      = "Mail",
+  DRUID       = "Leather",
+  MONK        = "Leather",
+  ROGUE       = "Leather",
+  DEMONHUNTER = "Leather",
+  MAGE        = "Cloth",
+  PRIEST      = "Cloth",
+  WARLOCK     = "Cloth",
+}
+
+NS.ITEM_PRIMARY_STAT_KEY = {
+  [1] = "ITEM_MOD_STRENGTH_SHORT",
+  [2] = "ITEM_MOD_AGILITY_SHORT",
+  [3] = "ITEM_MOD_INTELLECT_SHORT",
+}
+
+-- Equip locations that skip armor-type and primary-stat checks
+NS.ITEM_ACCESSORY_EQUIP_LOCS = {
+  INVTYPE_NECK    = true,
+  INVTYPE_FINGER  = true,
+  INVTYPE_CLOAK   = true,
+  INVTYPE_TRINKET = true,
+}
+
 -- Default font
 NS.DEFAULT_FONT = "Tahoma Bold"
 NS.DEFAULT_FONT_OUTLINE = "OUTLINE"

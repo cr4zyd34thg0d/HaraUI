@@ -632,6 +632,10 @@ end
 
 function GearDisplay:_ApplySpecFromState(state)
   if not state or not state.specPanel or not state.specButtons or not state.specButtonRow then return end
+  -- Don't show spec panel on non-character panes.
+  local pm = CS and CS.PaneManager or nil
+  local pane = pm and pm:GetActivePane() or "character"
+  if pane ~= "character" then return end
   local panel = state.specPanel
   local row = state.specButtonRow
   local buttons = state.specButtons
@@ -663,6 +667,10 @@ end
 
 function GearDisplay:_ApplyLootSpecFromState(state)
   if not state or not state.specPanel or not state.lootSpecButtonRow or not state.lootSpecButtons then return end
+  -- Don't show loot spec panel on non-character panes.
+  local pm = CS and CS.PaneManager or nil
+  local pane = pm and pm:GetActivePane() or "character"
+  if pane ~= "character" then return end
   local panel = state.specPanel
   local row = state.lootSpecButtonRow
   local buttons = state.lootSpecButtons
@@ -787,6 +795,23 @@ end
 function GearDisplay:_EnsureEventFrame()
   local state = EnsureState(self)
   if state.eventFrame then return end
+
+  -- Safety net: PaperDollFrame hide/show catches all tab-switch paths
+  -- regardless of whether CharacterFrame_ShowSubFrame exists in 12.0.
+  if PaperDollFrame and PaperDollFrame.HookScript then
+    PaperDollFrame:HookScript("OnHide", function()
+      if state.root then state.root:Hide() end
+      if state.specPanel then state.specPanel:Hide() end
+    end)
+    PaperDollFrame:HookScript("OnShow", function()
+      local pm = CS and CS.PaneManager or nil
+      local pane = pm and pm:GetActivePane() or "character"
+      if pane == "character" and state.root then
+        state.root:Show()
+        self:RequestUpdate("PaperDollFrame.OnShow")
+      end
+    end)
+  end
 
   state.eventFrame = CreateFrame("Frame")
   state.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")

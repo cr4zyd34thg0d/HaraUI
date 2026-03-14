@@ -33,9 +33,6 @@ Options/Pages/Friendly.lua
 Options/Pages/Rotation.lua
 Options/Pages/Minimap.lua
 Options/Pages/Loot.lua
-Options/Pages/Merchant.lua
-Options/Pages/QuestReward.lua
-Options/Pages/AutoEquip.lua
 Options.lua
 Core/Slash.lua
 Core/GlobalsShim.lua

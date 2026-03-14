@@ -596,13 +596,13 @@ function NS:InitOptions()
     local NAV_GAP      = 4
 
     local navDefs = {
-      { key = "general",  label = "General",          icon = "rune_charsheet" },
-      { key = "xp",       label = "XP / Rep Bar",     icon = "rune_xp"        },
-      { key = "cast",     label = "Cast Bar",          icon = "rune_cast"      },
-      { key = "loot",     label = "Loot Toasts",       icon = "rune_loot"      },
-      { key = "minimap",  label = "Minimap Bar",       icon = "rune_minimap"   },
-      { key = "rotation", label = "Rotation Helper",   icon = "rune_rotation"  },
-      { key = "friendly", label = "Friendly Plates",   icon = "rune_plates"    },
+      { key = "general",     label = "General",          icon = "rune_charsheet"  },
+      { key = "xp",          label = "XP / Rep Bar",     icon = "rune_xp"         },
+      { key = "cast",        label = "Cast Bar",          icon = "rune_cast"       },
+      { key = "loot",        label = "Loot Toasts",       icon = "rune_loot"       },
+      { key = "minimap",     label = "Minimap Bar",       icon = "rune_minimap"    },
+      { key = "rotation",    label = "Rotation Helper",   icon = "rune_rotation"   },
+      { key = "friendly",    label = "Friendly Plates",   icon = "rune_plates"     },
     }
 
     local navRow = CreateFrame("Frame", nil, content)
